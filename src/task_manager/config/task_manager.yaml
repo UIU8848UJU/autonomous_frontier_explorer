@@ -1,0 +1,13 @@
+task_manager_node:
+  ros__parameters:
+    use_sim_time: true
+    auto_advance: true
+
+    waypoint_names: ["start_a", "start_b", "start_c"]
+
+    waypoint_values:
+      [
+        0.5,  0.0, 1.0,
+        1.2,  0.3, 1.0,
+        1.8, -0.2, 1.0
+      ]
