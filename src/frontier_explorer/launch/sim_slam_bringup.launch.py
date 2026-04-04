@@ -8,7 +8,7 @@ import os
 def generate_launch_description():
     task_pkg = get_package_share_directory("task_manager")
     frontier_pkg = get_package_share_directory("frontier_explorer")
-
+    
 
     sim_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -31,10 +31,12 @@ def generate_launch_description():
 
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(task_pkg, "launch", "nav2_bringup.launch.py")
-        )
+            os.path.join(frontier_pkg, "launch", "nav2_exploration_bringup.launch.py")
+        ),
+        launch_arguments={
+            "use_sim_time": "true"
+        }.items()
     )
-    
     rviz_config = os.path.join(task_pkg, "rviz", "slam.rviz")
 
     rviz_node = Node(
@@ -44,8 +46,7 @@ def generate_launch_description():
         output="screen",
         arguments=["-d", rviz_config]
     )
-    
-    
+
     frontier_params = os.path.join(
         frontier_pkg, "config", "frontier_explorer.yaml"
     )

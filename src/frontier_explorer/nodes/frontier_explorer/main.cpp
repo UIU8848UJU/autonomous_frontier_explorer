@@ -1,5 +1,5 @@
 #include "rclcpp/rclcpp.hpp"
-#include "frontier_explorer/frontier_explorer_node.hpp"
+#include "frontier_explorer_node.hpp"
 
 int main(int argc, char ** argv)
 {
