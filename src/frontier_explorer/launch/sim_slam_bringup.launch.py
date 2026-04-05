@@ -37,7 +37,7 @@ def generate_launch_description():
             "use_sim_time": "true"
         }.items()
     )
-    rviz_config = os.path.join(task_pkg, "rviz", "slam.rviz")
+    rviz_config = os.path.join(frontier_pkg, "rviz", "slam.rviz")
 
     rviz_node = Node(
         package="rviz2",

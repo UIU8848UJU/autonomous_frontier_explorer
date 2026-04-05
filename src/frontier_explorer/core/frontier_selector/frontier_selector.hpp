@@ -30,6 +30,11 @@ public:
         const FrontierCluster & cluster,
         const GridCell & robot_grid,
         double resolution) const;
+
+
+    void mark_cluster_failed(const GridCell & cluster_id);
+    void mark_cluster_succeeded(const GridCell & cluster_id);
+
 private:
     double distance_in_meters(
         const GridCell & a,
@@ -39,10 +44,14 @@ private:
 private:
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
+    int max_cluster_retry_count_{3};
 
     std::optional<GridCell> last_goal_grid_;
     std::unordered_map<GridCell, int, GridCellHash> failed_goal_counts_;
     std::unordered_set<GridCell, GridCellHash> blacklist_;
+    /// @note:暂时拉黑整个组防止局部来回循环，后续增加多种选择策略
+    std::unordered_map<GridCell, int, GridCellHash> failed_cluster_counts_;
+    std::unordered_set<GridCell, GridCellHash> cluster_blacklist_;
 };
 
 }  // namespace frontier_explorer

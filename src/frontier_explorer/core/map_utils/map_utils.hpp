@@ -21,4 +21,17 @@ geometry_msgs::msg::PoseStamped grid_to_goal_pose(
     const GridCell & cell,
     const rclcpp::Time & stamp);
 
+/// @brief 地图坐标转换为格子
+std::optional<GridCell> world_to_grid(
+    const geometry_msgs::msg::Point & pos,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr & map_msg);
+
+std::optional<geometry_msgs::msg::Point> grid_to_world(
+    const GridCell & cell,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr & map_msg);
+
+double distance_in_meters(const geometry_msgs::msg::Point & p1,
+                          const geometry_msgs::msg::Point & p2);
+
+
 }  // namespace frontier_explorer

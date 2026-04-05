@@ -104,11 +104,12 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
 
             for (int dr = -1; dr <= 1; ++dr) {
                 for (int dc = -1; dc <= 1; ++dc) {
+
                     if (dr == 0 && dc == 0) {
-                    continue;
+                        continue;
                     }
 
-                GridCell next{current.row + dr, current.col + dc};
+                    GridCell next{current.row + dr, current.col + dc};
 
                     if (frontier_set.count(next) > 0 && visited.count(next) == 0) {
                         visited.insert(next);
@@ -133,7 +134,7 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
             static_cast<int>(std::round(sum_row / cluster.cells.size())),
             static_cast<int>(std::round(sum_col / cluster.cells.size()))
         };
-
+        // 出去前确保这个中心点是可探测的，这里暂时没有判断是否可达
         if (is_frontier_cell_safe(map, cluster.centroid)) {
             clusters.push_back(cluster);
         }

@@ -7,6 +7,11 @@
 #include <queue>
 #include <unordered_set>
 
+#include <tf2/utils.hpp> //给 getYaw
+#include <tf2/LinearMath/Quaternion.h>            //处理四元数
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+
 namespace frontier_explorer
 {
 
@@ -16,24 +21,16 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
   selector_(min_goal_distance_m_, max_retry_count_)
 {
     declare_params();
-    detector_ = FrontierDetector(
-        obstacle_search_radius_cells_,
-        min_frontier_cluster_size_);
-
-    selector_ = FrontierSelector(
-        min_goal_distance_m_,
-        max_retry_count_);
-
     create_interfaces();
 
     explore_timer_ = this->create_wall_timer(
         std::chrono::duration<double>(explore_period_sec_),
         std::bind(&FrontierExplorerNode::explore_timer_callback, this));
 
-    state_ = ExplorationState::IDLE;
+    set_state(ExplorationState::RUNNING);
     publish_state();
 
-    RCLCPP_INFO(this->get_logger(), "FrontierExplorerNode started.");
+    LOG_INFO_ONCE(this->get_logger(), "FrontierExplorerNode started.");
 }
 
 void FrontierExplorerNode::declare_params()
@@ -54,14 +51,16 @@ void FrontierExplorerNode::declare_params()
         this->get_parameter("min_goal_distance_m").as_double();
     max_retry_count_ =
         this->get_parameter("max_retry_count").as_int();
+
+    detector_ = FrontierDetector(obstacle_search_radius_cells_, min_frontier_cluster_size_);
+    selector_ = FrontierSelector(min_goal_distance_m_, max_retry_count_);
+
 }
 
 void FrontierExplorerNode::create_interfaces()
 {
-    // map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-    //     "/map", rclcpp::QoS(10),
-    //     std::bind(&FrontierExplorerNode::map_callback, this, std::placeholders::_1));
 
+    // 控制面
     state_pub_ = this->create_publisher<std_msgs::msg::String>(
         "/exploration_state", 10);
 
@@ -74,6 +73,7 @@ void FrontierExplorerNode::create_interfaces()
             std::placeholders::_1, std::placeholders::_2));
 
 
+    // map->odom
     auto map_qos = rclcpp::QoS(rclcpp::KeepLast(1))
                 .reliable() .transient_local();
 
@@ -93,14 +93,14 @@ void FrontierExplorerNode::map_callback(
 {
 
     if (!msg) {
-        RCLCPP_INFO(this->get_logger(), "Received null map message");
+        RCLCPP_INFO_WITH_CONTEXT(this->get_logger(), "Received null map message");
         return;
     }
 
     if (!map_msg_) {
-        RCLCPP_INFO(
+        RCLCPP_WARN_WITH_CONTEXT(
             this->get_logger(),
-            "First map received: width=%u, height=%u, resolution=%.3f",
+            "map have'n updating, waitting rcovery: width=%u, height=%u, resolution=%.3f",
             msg->info.width,
             msg->info.height,
             msg->info.resolution);
@@ -109,7 +109,7 @@ void FrontierExplorerNode::map_callback(
         map_msg_->info.width != msg->info.width ||
         map_msg_->info.height != msg->info.height)
     {
-        RCLCPP_WARN(
+        RCLCPP_WARN_WITH_CONTEXT(
             this->get_logger(),
             "Map size changed: old=(%u, %u), new=(%u, %u)",
             map_msg_->info.width,
@@ -117,14 +117,22 @@ void FrontierExplorerNode::map_callback(
             msg->info.width,
             msg->info.height);
     }
+    else if(map_msg_->info.width == msg->info.width  &&
+            map_msg_->info.height == msg->info.height )
+    {
+        /// @note 止血修复，暂时不会被卡死了
+        set_state(ExplorationState::RUNNING);
+        return;
+    }
 
-    RCLCPP_INFO_THROTTLE(
+    RCLCPP_INFO_THROTTLE_WITH_CONTEXT(
         this->get_logger(),
         *this->get_clock(),
         3000,
-        "Receiving map updates..."
-    );
-
+        "Receiving map updates...new map(%u, %u)",            
+        msg->info.width,
+        msg->info.height
+        );
     map_msg_ = msg;
 }
 
@@ -137,6 +145,8 @@ void FrontierExplorerNode::odom_callback(
 bool FrontierExplorerNode::update_robot_grid_position()
 {
     if (!map_msg_ || !odom_msg_) {
+        RCLCPP_WARN_WITH_CONTEXT(
+            this->get_logger(), "have not recive map_msg or odm_msg");
         return false;
     }
 
@@ -164,30 +174,35 @@ bool FrontierExplorerNode::update_robot_grid_position()
 void FrontierExplorerNode::send_navigation_goal(const GridCell & goal_cell
         ,const geometry_msgs::msg::PoseStamped & pose)
 {
-    if (!nav_client_->wait_for_action_server(std::chrono::seconds(10))) {
-        RCLCPP_WARN(this->get_logger(), "navigate_to_pose action server not ready.");
+    if (!nav_client_->wait_for_action_server(std::chrono::seconds(2))) {
+        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "navigate_to_pose action server not ready.");
         return;
     }
     
     NavigateToPose::Goal goal;
     goal.pose = pose;
     
-    RCLCPP_INFO(
+    RCLCPP_INFO_WITH_CONTEXT(
         this->get_logger(),
         "Sending frontier goal: x=%.3f, y=%.3f",
         pose.pose.position.x, pose.pose.position.y);
 
-    auto options =
-        rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
-        
+    auto options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
+
+    
     options.goal_response_callback =
         std::bind(&FrontierExplorerNode::goal_response_callback, this,
               std::placeholders::_1);
+    options.feedback_callback  = 
+        std::bind(&FrontierExplorerNode::feedback_callback, this,
+                  std::placeholders::_1, std::placeholders::_2);
     options.result_callback =
         std::bind(&FrontierExplorerNode::result_callback, this,
               std::placeholders::_1);
 
     current_goal_grid_ = goal_cell;
+    initial_goal_distance_ = 0.0;
+    goal_progress_.store(0.0f, std::memory_order_relaxed);
     selector_.set_last_goal(goal_cell);
     is_navigating_ = true;
     nav_client_->async_send_goal(goal, options);
@@ -197,17 +212,17 @@ void FrontierExplorerNode::goal_response_callback(
     const GoalHandleNavigateToPose::SharedPtr & goal_handle)
 {
     if (!goal_handle) {
-        RCLCPP_WARN(this->get_logger(), "Frontier goal rejected.");
+        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal rejected.");
         is_navigating_ = false;
 
         if (current_goal_grid_.has_value()) {
-        selector_.mark_goal_failed(current_goal_grid_.value());
+            selector_.mark_goal_failed(current_goal_grid_.value());
         }
         return;
     }
 
     goal_handle_ = goal_handle;
-    RCLCPP_INFO(this->get_logger(), "Frontier goal accepted.");
+    RCLCPP_INFO_WITH_CONTEXT(this->get_logger(), "Frontier goal accepted.");
 }
 
 void FrontierExplorerNode::result_callback(
@@ -217,41 +232,127 @@ void FrontierExplorerNode::result_callback(
 
     switch (result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
-            RCLCPP_INFO(this->get_logger(), "Frontier goal succeeded.");
-              if (current_goal_grid_.has_value()) {
-                selector_.mark_goal_succeeded(current_goal_grid_.value());
+            set_state(ExplorationState::COMPLETED);
+  
+            if (current_goal_grid_.has_value()) {
+                    selector_.mark_goal_succeeded(current_goal_grid_.value());
                 }
+            RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal SUCCEEDED, state is:%s",
+                state_to_string().c_str());
+    
         break;
         case rclcpp_action::ResultCode::ABORTED:
-            RCLCPP_WARN(this->get_logger(), "Frontier goal aborted.");
-                if (current_goal_grid_.has_value()) {
-                    selector_.mark_goal_failed(current_goal_grid_.value());
-                }
+            set_state(ExplorationState::STOPPED);
+            if (current_goal_grid_.has_value()) {
+                selector_.mark_goal_failed(current_goal_grid_.value());
+            }
+            RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal ABORTED,  state is:%s", 
+                state_to_string().c_str());
 
         break;
         case rclcpp_action::ResultCode::CANCELED:
-            RCLCPP_WARN(this->get_logger(), "Frontier goal canceled.");
+            set_state(ExplorationState::STOPPED);
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
             }
+            RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal CANCELED,  state is:%s.",
+                state_to_string().c_str());
+    
         break;
         default:
-            RCLCPP_WARN(this->get_logger(), "Frontier goal unknown result.");
+            set_state(ExplorationState::STOPPED);
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
             }
+            RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal unknown result. state is:%s",
+                state_to_string().c_str());
         break;
+    }
+    publish_state();
+}
+
+
+// 异步反馈回调
+void FrontierExplorerNode::feedback_callback(GoalHandleNavigateToPose::SharedPtr,
+                                             const std::shared_ptr<const NavigateToPose::Feedback> feedback)
+{
+
+    // 传回来的机器坐标
+    const auto & global_robot_pos = feedback->current_pose.pose;
+    const auto & global_goal_pos = grid_to_world(*current_goal_grid_, map_msg_);
+    double theta = tf2::getYaw(global_robot_pos.orientation);
+
+    RCLCPP_INFO_THROTTLE_WITH_CONTEXT(this->get_logger(), *this->get_clock(), 
+                3000, "robot:x=%.3f y=%.3f theta=%.3f, target:robot:x=%.3f y=%.3f",
+                global_robot_pos.position.x, global_robot_pos.position.y, theta,
+                global_goal_pos.value().x, global_goal_pos.value().y);
+
+    // 更新内部 robot_grid_（当前网格坐标）
+    robot_grid_ = world_to_grid(global_robot_pos.position, map_msg_);  
+
+    if (!robot_grid_.has_value()) {
+        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Position out of map bounds!");
+        return;  
+    }
+
+    if (current_goal_grid_) {
+        // 计算到目标点的距离
+        double dist_to_goal = distance_in_meters(
+            global_robot_pos.position,
+            global_goal_pos.value());
+
+        if (initial_goal_distance_ <= 0.0) {
+            initial_goal_distance_ = std::max(dist_to_goal, 1e-3);
+        }
+        double progress_ratio = 1.0 - dist_to_goal / initial_goal_distance_;
+        progress_ratio = std::clamp(progress_ratio, 0.0, 1.0);
+        goal_progress_.store(static_cast<float>(progress_ratio), std::memory_order_relaxed);
+        RCLCPP_DEBUG_WITH_CONTEXT(
+            this->get_logger(),
+            "goal progress: %.1f%% (remaining %.3fm)",
+            progress_ratio * 100.0,
+            dist_to_goal);
+
+        if (dist_to_goal < 0.05) {
+            set_state(ExplorationState::COMPLETED);
+        } 
+        else {
+            set_state(ExplorationState::RUNNING);
+        }
+
+        // fallback 处理：如果长时间没有明显进展
+        auto now = this->now();
+        if (!last_progress_time_) {
+            last_progress_time_ = now;
+            last_progress_distance_ = dist_to_goal;
+        } 
+        else {
+            double delta = std::abs(dist_to_goal - last_progress_distance_);
+            if (delta < 0.01 && (now - *last_progress_time_).seconds() > 5.0) {
+                RCLCPP_WARN_WITH_CONTEXT(this->get_logger(),
+                            "Goal seems stuck! triggering fallback.");
+                set_state(ExplorationState::STUCK);
+                last_progress_time_ = now;
+                last_progress_distance_ = dist_to_goal;  // 重置防止重复触发
+            } 
+            else if (delta >= 0.01) {
+                last_progress_time_ = now;
+                last_progress_distance_ = dist_to_goal;
+            }
+        }
+
+        publish_state();  // 每次反馈更新状态
     }
 }
 
 void FrontierExplorerNode::explore_timer_callback()
 {
-    if (!running_) {
+    if(get_state() != ExplorationState::RUNNING)
+    {
         RCLCPP_DEBUG(this->get_logger(), "[explore_timer_callback] controll is not running");
         return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "tick: enter");
     if (is_navigating_) {
         RCLCPP_DEBUG(this->get_logger(), "Still navigating, skip exploration tick.");
         return;
@@ -264,34 +365,28 @@ void FrontierExplorerNode::explore_timer_callback()
         return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "tick: before update_robot_grid_position");
-
     if (!update_robot_grid_position()) {
         RCLCPP_WARN_THROTTLE(
-        this->get_logger(), *this->get_clock(), 3000,
-        "Robot grid position unavailable.");
+            this->get_logger(), *this->get_clock(), 3000,
+            "Robot grid position unavailable.");
         return;
     }
 
-    RCLCPP_INFO(this->get_logger(), "tick: before detect_frontier_cells");
     const auto frontier_cells = detector_.detect_frontier_cells(*map_msg_);
-    RCLCPP_INFO(this->get_logger(), "tick: before cluster_frontiers");
     const auto clusters = detector_.cluster_frontiers(*map_msg_, frontier_cells);
 
-    RCLCPP_INFO(
+    RCLCPP_INFO_WITH_CONTEXT(
         this->get_logger(),
         "Detected frontier cells: %zu, clusters: %zu",
         frontier_cells.size(), clusters.size());
 
-    RCLCPP_INFO(this->get_logger(), "tick: before choose_best_frontier");
     const auto best_frontier = selector_.choose_best_frontier(
         clusters,
         robot_grid_.value(),
         map_msg_->info.resolution);
 
-    RCLCPP_INFO(this->get_logger(), "tick: before grid_to_goal_pose");
     if (!best_frontier.has_value()) {
-        RCLCPP_WARN(
+        RCLCPP_WARN_WITH_CONTEXT(
             this->get_logger(),
             "No valid frontier selected. robot_grid=(%d, %d), clusters=%zu",
             robot_grid_->row,
@@ -300,9 +395,9 @@ void FrontierExplorerNode::explore_timer_callback()
         return;
     }
     else{
-        RCLCPP_INFO(
+        RCLCPP_INFO_WITH_CONTEXT(
             this->get_logger(),
-            "Chosen frontier: row=%d, col=%d, robot=(%d, %d)",
+            "Chosen frontier: row=%d, col=%d, robot=(%d, %d)", 
             best_frontier->row,
             best_frontier->col,
             robot_grid_->row,
@@ -310,14 +405,13 @@ void FrontierExplorerNode::explore_timer_callback()
     }
 
     const auto goal_pose = grid_to_goal_pose( *map_msg_, best_frontier.value(), this->now());
-    RCLCPP_INFO(this->get_logger(), "tick: before send_navigation_goal");
     send_navigation_goal(best_frontier.value(), goal_pose);
 }
 
 
 std::string FrontierExplorerNode::state_to_string() const
 {
-    switch (state_) {
+    switch (get_state()) {
         case ExplorationState::IDLE: return "IDLE";
         case ExplorationState::RUNNING: return "RUNNING";
         case ExplorationState::STOPPED: return "STOPPED";
@@ -330,7 +424,7 @@ std::string FrontierExplorerNode::state_to_string() const
 void FrontierExplorerNode::publish_state()
 {
     if (!state_pub_) {
-        RCLCPP_WARN(this->get_logger(), "state_pub_ is null");
+        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "state_pub_ is null");
         return;
     }
 
@@ -342,8 +436,7 @@ void FrontierExplorerNode::publish_state()
 void FrontierExplorerNode::handle_start( const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
-    running_ = true;
-    state_ = ExplorationState::RUNNING;
+    set_state(ExplorationState::RUNNING);
     publish_state();
 
     response->success = true;
@@ -353,12 +446,13 @@ void FrontierExplorerNode::handle_start( const std::shared_ptr<std_srvs::srv::Tr
 void FrontierExplorerNode::handle_stop( const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
-    running_ = false;
-    state_ = ExplorationState::STOPPED;
+    set_state(ExplorationState::STOPPED);
     publish_state();
 
     response->success = true;
     response->message = "Exploration stopped.";
 }
+
+
 
 }  // namespace frontier_explorer

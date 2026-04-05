@@ -1,5 +1,9 @@
 #pragma once
 
+// 日志宏
+#define __CLASS_NAME__ "FrontierExplorerNode"
+
+#include <atomic>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -19,6 +23,8 @@
 // 状态节点
 #include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/trigger.hpp"
+
+#include "friendly_logging/logging.h"
 
 namespace frontier_explorer
 {
@@ -47,21 +53,32 @@ private:
     bool update_robot_grid_position();
 
     void send_navigation_goal(const GridCell & goal_cell
-        ,const geometry_msgs::msg::PoseStamped & pose);
-    void goal_response_callback(
-        const GoalHandleNavigateToPose::SharedPtr & goal_handle);
-    void result_callback(const GoalHandleNavigateToPose::WrappedResult & result);
+            ,const geometry_msgs::msg::PoseStamped & pose);
 
+    void goal_response_callback(
+            const GoalHandleNavigateToPose::SharedPtr & goal_handle);
+    void result_callback(const GoalHandleNavigateToPose::WrappedResult & result);
+    void feedback_callback(GoalHandleNavigateToPose::SharedPtr,
+            const std::shared_ptr<const NavigateToPose::Feedback> feedback);
+
+    /// @brief 控制面部分
     void publish_state();
-    std::string state_to_string() const;
+        std::string state_to_string() const;
 
     void handle_start(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
     void handle_stop(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+    void set_state(ExplorationState new_state){
+        state_.store(new_state);
+    };
+    ExplorationState get_state()const{
+        return state_.load();;
+    };
 
 private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
@@ -87,12 +104,17 @@ private:
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
     
-    ExplorationState state_{ExplorationState::IDLE};
+    /// @note:后续可以设计为多机控制
+    std::atomic<ExplorationState> state_{ExplorationState::IDLE};
+
+    std::optional<rclcpp::Time> last_progress_time_;
+    double last_progress_distance_{0.0};
+    double initial_goal_distance_{0.0};
+    std::atomic<float> goal_progress_{0.0f};
 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
-    bool running_{true};
 };
 
 

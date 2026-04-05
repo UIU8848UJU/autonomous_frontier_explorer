@@ -11,8 +11,10 @@ find_package(rclcpp_action REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(util_package REQUIRED)
 
 include_directories(include)
 
@@ -25,7 +27,7 @@ add_executable(frontier_explorer_node
 )
 
 target_include_directories(frontier_explorer_node PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/
   ${CMAKE_CURRENT_SOURCE_DIR}/nodes/frontier_explorer
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/core/map_utils
@@ -42,6 +44,9 @@ ament_target_dependencies(frontier_explorer_node
     geometry_msgs
     std_srvs
     std_msgs
+    tf2_geometry_msgs
+    tf2
+    util_package
 )
 
 install(TARGETS

@@ -78,4 +78,39 @@ geometry_msgs::msg::PoseStamped grid_to_goal_pose(
     return pose;
 }
 
+std::optional<GridCell> world_to_grid(
+    const geometry_msgs::msg::Point & pos,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr & map_msg)
+{
+    if (!map_msg)  return std::nullopt;
+
+    int col = static_cast<int>(
+            (pos.x - map_msg->info.origin.position.x)/ map_msg->info.resolution);
+    int row = static_cast<int>(
+            (pos.y - map_msg->info.origin.position.y) / map_msg->info.resolution);
+
+    if(!in_bounds(*map_msg, row, col)) return std::nullopt;
+
+    return GridCell{row, col};
+}
+
+std::optional<geometry_msgs::msg::Point> grid_to_world(
+    const GridCell & cell,
+    const nav_msgs::msg::OccupancyGrid::SharedPtr & map_msg)
+{
+    if(!map_msg)  return std::nullopt; 
+    geometry_msgs::msg::Point p;
+    p.x = cell.col * map_msg->info.resolution + map_msg->info.origin.position.x + map_msg->info.resolution/2.0;
+    p.y = cell.row * map_msg->info.resolution + map_msg->info.origin.position.y + map_msg->info.resolution/2.0;
+    p.z = 0.0;
+    return p;
+}
+
+double distance_in_meters(const geometry_msgs::msg::Point & p1,
+                          const geometry_msgs::msg::Point & p2)
+{
+    return std::hypot(p2.x - p1.x, p2.y - p1.y);
+}
+
+
 }  // namespace frontier_explorer

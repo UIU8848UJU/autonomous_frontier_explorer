@@ -48,10 +48,17 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
   const GridCell & robot_grid,
   double resolution)
 {
+
     double best_dist = std::numeric_limits<double>::max();
     std::optional<GridCell> best_cell;
 
     for (const auto & cluster : clusters) {
+
+        /// @note 暂定为这样黑名单组
+        if (cluster_blacklist_.count(cluster.centroid) > 0) {
+            continue;
+        } 
+
         GridCell candidate = cluster.centroid;
         double dist_m = distance_in_meters(robot_grid, candidate, resolution);
 
@@ -64,7 +71,8 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
                     "Centroid skip=(%d,%d), reason=blacklist_or_retry",
                     candidate.row, candidate.col);
             centroid_invalid = true;
-        } else if (dist_m < min_goal_distance_m_) 
+        } 
+        else if (dist_m < min_goal_distance_m_) 
         {
             RCLCPP_INFO(
                 rclcpp::get_logger("frontier_selector"),
@@ -86,10 +94,12 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
                 cluster, robot_grid, resolution);
 
             if (!fallback.has_value()) {
+
                 RCLCPP_INFO(
                     rclcpp::get_logger("frontier_selector"),
                     "Cluster fallback failed for centroid=(%d,%d)",
                     candidate.row, candidate.col);
+                    mark_cluster_failed(cluster.centroid);
                 continue;
             }
 
@@ -166,6 +176,21 @@ std::optional<GridCell> FrontierSelector::find_fallback_goal_in_cluster(
     }
 
     return best_cell;
+}
+
+void FrontierSelector::mark_cluster_failed(const GridCell & cluster_id)
+{
+    auto & count = failed_cluster_counts_[cluster_id];
+    ++count;
+    if (count >= max_cluster_retry_count_) {
+        cluster_blacklist_.insert(cluster_id);
+    }
+}
+
+void FrontierSelector::mark_cluster_succeeded(const GridCell & cluster_id)
+{
+    if(failed_cluster_counts_.count(cluster_id)) failed_cluster_counts_.erase(cluster_id);
+    if(cluster_blacklist_.count(cluster_id))cluster_blacklist_.erase(cluster_id);
 }
 
 }  // namespace frontier_explorer
