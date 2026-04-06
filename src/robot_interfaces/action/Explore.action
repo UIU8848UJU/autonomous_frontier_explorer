@@ -1,0 +1,13 @@
+# Goal definition
+geometry_msgs/PoseStamped target_pose
+bool use_existing_map
+
+---
+# Result definition
+bool success
+string message
+
+---
+# Feedback definition
+string phase
+float32 progress

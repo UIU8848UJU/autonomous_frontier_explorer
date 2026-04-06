@@ -1,0 +1,4 @@
+bool reset_map
+---
+bool accepted
+string message

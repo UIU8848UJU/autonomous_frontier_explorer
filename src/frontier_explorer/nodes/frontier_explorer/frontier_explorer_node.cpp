@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <queue>
 #include <unordered_set>
 
@@ -11,9 +12,55 @@
 #include <tf2/LinearMath/Quaternion.h>            //处理四元数
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
+namespace
+{
+constexpr double kEpsilon = 1e-6;
+
+double distance_to_map_edge_m(
+    const nav_msgs::msg::OccupancyGrid & map,
+    const frontier_explorer::GridCell & cell)
+{
+    if (map.info.width == 0 || map.info.height == 0) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const int max_row = static_cast<int>(map.info.height) - 1;
+    const int max_col = static_cast<int>(map.info.width) - 1;
+
+    const int dist_top = std::max(0, cell.row);
+    const int dist_bottom = std::max(0, max_row - cell.row);
+    const int dist_left = std::max(0, cell.col);
+    const int dist_right = std::max(0, max_col - cell.col);
+
+    const int min_cells = std::min(std::min(dist_top, dist_bottom), std::min(dist_left, dist_right));
+    if (min_cells < 0) {
+        return 0.0;
+    }
+
+    return static_cast<double>(min_cells) * map.info.resolution;
+}
+
+bool near_map_edge(
+    const nav_msgs::msg::OccupancyGrid & map,
+    const frontier_explorer::GridCell & cell,
+    double tolerance_m)
+{
+    if (tolerance_m <= kEpsilon) {
+        return false;
+    }
+
+    const double distance = distance_to_map_edge_m(map, cell);
+    return std::isfinite(distance) && distance <= tolerance_m;
+}
+}  // namespace
+
 
 namespace frontier_explorer
 {
+namespace
+{
+constexpr size_t kStatePublisherDepth = 10;
+}
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
@@ -27,10 +74,36 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
         std::chrono::duration<double>(explore_period_sec_),
         std::bind(&FrontierExplorerNode::explore_timer_callback, this));
 
-    set_state(ExplorationState::RUNNING);
+    set_state(ExplorationState::IDLE);
     publish_state();
 
     LOG_INFO_ONCE(this->get_logger(), "FrontierExplorerNode started.");
+}
+
+void FrontierExplorerNode::set_state(ExplorationState new_state, const std::string & detail)
+{
+    state_.store(new_state);
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    if (!detail.empty()) {
+        state_detail_ = detail;
+    } else if (new_state == ExplorationState::RUNNING ||
+        new_state == ExplorationState::IDLE ||
+        new_state == ExplorationState::COMPLETED ||
+        new_state == ExplorationState::STOPPED)
+    {
+        state_detail_.clear();
+    }
+}
+
+ExplorationState FrontierExplorerNode::get_state() const
+{
+    return state_.load();
+}
+
+std::string FrontierExplorerNode::state_detail() const
+{
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    return state_detail_;
 }
 
 void FrontierExplorerNode::declare_params()
@@ -40,6 +113,11 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<int>("min_frontier_cluster_size", 5);
     this->declare_parameter<double>("min_goal_distance_m", 0.5);
     this->declare_parameter<int>("max_retry_count", 2);
+    this->declare_parameter<int>(
+        "map_stale_timeout_ms", static_cast<int>(map_stale_timeout_.count()));
+    this->declare_parameter<int>(
+        "max_frontier_failures", static_cast<int>(max_frontier_failures_));
+    this->declare_parameter<double>("edge_tolerance_m", edge_tolerance_m_);
 
     explore_period_sec_ = 
         this->get_parameter("explore_period_sec").as_double();
@@ -51,6 +129,13 @@ void FrontierExplorerNode::declare_params()
         this->get_parameter("min_goal_distance_m").as_double();
     max_retry_count_ =
         this->get_parameter("max_retry_count").as_int();
+    
+    const auto stale_timeout_ms = this->get_parameter("map_stale_timeout_ms").as_int();
+    map_stale_timeout_ = std::chrono::milliseconds(std::max(1000L, stale_timeout_ms));
+    const auto frontier_failures = this->get_parameter("max_frontier_failures").as_int();
+    max_frontier_failures_ = static_cast<std::size_t>(std::max(1L, frontier_failures));
+    edge_tolerance_m_ =
+        std::max(0.05, this->get_parameter("edge_tolerance_m").as_double());
 
     detector_ = FrontierDetector(obstacle_search_radius_cells_, min_frontier_cluster_size_);
     selector_ = FrontierSelector(min_goal_distance_m_, max_retry_count_);
@@ -61,8 +146,9 @@ void FrontierExplorerNode::create_interfaces()
 {
 
     // 控制面
-    state_pub_ = this->create_publisher<std_msgs::msg::String>(
-        "/exploration_state", 10);
+    const auto state_qos = rclcpp::QoS(rclcpp::KeepLast(kStatePublisherDepth)).reliable();
+    state_pub_ = this->create_publisher<robot_interfaces::msg::ExplorationState>(
+        "/exploration_state", state_qos);
 
     start_srv_ = this->create_service<std_srvs::srv::Trigger>("/start_exploration",
         std::bind(&FrontierExplorerNode::handle_start, this,
@@ -100,7 +186,7 @@ void FrontierExplorerNode::map_callback(
     if (!map_msg_) {
         RCLCPP_WARN_WITH_CONTEXT(
             this->get_logger(),
-            "map have'n updating, waitting rcovery: width=%u, height=%u, resolution=%.3f",
+            "map have'n updating, waitting recovery: width=%u, height=%u, resolution=%.3f",
             msg->info.width,
             msg->info.height,
             msg->info.resolution);
@@ -117,13 +203,6 @@ void FrontierExplorerNode::map_callback(
             msg->info.width,
             msg->info.height);
     }
-    else if(map_msg_->info.width == msg->info.width  &&
-            map_msg_->info.height == msg->info.height )
-    {
-        /// @note 止血修复，暂时不会被卡死了
-        set_state(ExplorationState::RUNNING);
-        return;
-    }
 
     RCLCPP_INFO_THROTTLE_WITH_CONTEXT(
         this->get_logger(),
@@ -134,6 +213,7 @@ void FrontierExplorerNode::map_callback(
         msg->info.height
         );
     map_msg_ = msg;
+    last_map_update_time_ = this->now();
 }
 
 void FrontierExplorerNode::odom_callback(
@@ -349,7 +429,7 @@ void FrontierExplorerNode::explore_timer_callback()
 {
     if(get_state() != ExplorationState::RUNNING)
     {
-        RCLCPP_DEBUG(this->get_logger(), "[explore_timer_callback] controll is not running");
+        RCLCPP_DEBUG(this->get_logger(), "controll is not running");
         return;
     }
 
@@ -365,6 +445,20 @@ void FrontierExplorerNode::explore_timer_callback()
         return;
     }
 
+    const auto now = this->now();
+    if (last_map_update_time_.nanoseconds() > 0) {
+        const auto elapsed = now - last_map_update_time_;
+        if (elapsed > rclcpp::Duration(map_stale_timeout_)) {
+            RCLCPP_WARN_THROTTLE_WITH_CONTEXT(
+                this->get_logger(), *this->get_clock(), 2000,
+                "Map has not updated for %.2f seconds, marking STUCK.",
+                elapsed.seconds());
+            set_state(ExplorationState::STUCK, "map_stale");
+            publish_state();
+            return;
+        }
+    }
+
     if (!update_robot_grid_position()) {
         RCLCPP_WARN_THROTTLE(
             this->get_logger(), *this->get_clock(), 3000,
@@ -375,7 +469,7 @@ void FrontierExplorerNode::explore_timer_callback()
     const auto frontier_cells = detector_.detect_frontier_cells(*map_msg_);
     const auto clusters = detector_.cluster_frontiers(*map_msg_, frontier_cells);
 
-    RCLCPP_INFO_WITH_CONTEXT(
+    RCLCPP_DEBUG_WITH_CONTEXT(
         this->get_logger(),
         "Detected frontier cells: %zu, clusters: %zu",
         frontier_cells.size(), clusters.size());
@@ -392,9 +486,25 @@ void FrontierExplorerNode::explore_timer_callback()
             robot_grid_->row,
             robot_grid_->col,
             clusters.size());
+        ++consecutive_frontier_failures_;
+        if (consecutive_frontier_failures_ >= max_frontier_failures_) {
+            const bool near_edge = robot_grid_.has_value() &&
+                near_map_edge(*map_msg_, robot_grid_.value(), edge_tolerance_m_);
+            const std::string reason = near_edge ?
+                "no_frontier_near_edge" : "no_valid_frontier";
+            RCLCPP_WARN_WITH_CONTEXT(
+                this->get_logger(),
+                "Frontier selection failed %zu times (near_edge=%s).",
+                consecutive_frontier_failures_,
+                near_edge ? "true" : "false");
+            set_state(ExplorationState::STUCK, reason);
+            publish_state();
+            consecutive_frontier_failures_ = 0;
+        }
         return;
     }
     else{
+        consecutive_frontier_failures_ = 0;
         RCLCPP_INFO_WITH_CONTEXT(
             this->get_logger(),
             "Chosen frontier: row=%d, col=%d, robot=(%d, %d)", 
@@ -411,7 +521,12 @@ void FrontierExplorerNode::explore_timer_callback()
 
 std::string FrontierExplorerNode::state_to_string() const
 {
-    switch (get_state()) {
+    return state_to_string(get_state());
+}
+
+std::string FrontierExplorerNode::state_to_string(ExplorationState state) const
+{
+    switch (state) {
         case ExplorationState::IDLE: return "IDLE";
         case ExplorationState::RUNNING: return "RUNNING";
         case ExplorationState::STOPPED: return "STOPPED";
@@ -428,8 +543,19 @@ void FrontierExplorerNode::publish_state()
         return;
     }
 
-    std_msgs::msg::String msg;
-    msg.data = state_to_string();
+    robot_interfaces::msg::ExplorationState msg;
+    msg.stamp = this->now();
+    const auto current_state = get_state();
+    switch (current_state) {
+        case ExplorationState::IDLE: msg.state = msg.IDLE; break;
+        case ExplorationState::RUNNING: msg.state = msg.RUNNING; break;
+        case ExplorationState::STOPPED: msg.state = msg.STOPPED; break;
+        case ExplorationState::COMPLETED: msg.state = msg.COMPLETED; break;
+        case ExplorationState::STUCK: msg.state = msg.STUCK; break;
+        default: msg.state = msg.IDLE; break;
+    }
+    const auto detail = state_detail();
+    msg.detail = detail.empty() ? state_to_string(current_state) : detail;
     state_pub_->publish(msg);
 }
 

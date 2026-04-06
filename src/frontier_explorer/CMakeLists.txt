@@ -13,7 +13,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
-find_package(std_msgs REQUIRED)
+find_package(robot_interfaces REQUIRED)
 find_package(util_package REQUIRED)
 
 include_directories(include)
@@ -43,7 +43,7 @@ ament_target_dependencies(frontier_explorer_node
     nav2_msgs
     geometry_msgs
     std_srvs
-    std_msgs
+    robot_interfaces
     tf2_geometry_msgs
     tf2
     util_package

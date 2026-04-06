@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.8)
 project(task_manager)
 
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -8,26 +11,29 @@ endif()
 # find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(rclcpp_action REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(nav2_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
-find_package(std_msgs REQUIRED)
+find_package(robot_interfaces REQUIRED)
+find_package(util_package REQUIRED)
 
-include_directories(include)
 
 add_executable(task_manager_node
-  src/main.cpp
-  src/task_manager_node.cpp
+  nodes/task_manager/main.cpp
+  nodes/task_manager/task_manager_node.cpp
+  core/task_flow/task_flow.cpp
 )
 
 ament_target_dependencies(task_manager_node
   rclcpp
-  rclcpp_action
-  geometry_msgs
-  nav2_msgs
+  robot_interfaces
   std_srvs
-  std_msgs
+  util_package
+)
+
+target_include_directories(task_manager_node
+  PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/src/util_package/include
 )
 
 install(DIRECTORY launch config rviz

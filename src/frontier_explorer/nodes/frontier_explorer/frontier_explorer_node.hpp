@@ -4,6 +4,8 @@
 #define __CLASS_NAME__ "FrontierExplorerNode"
 
 #include <atomic>
+#include <chrono>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -21,8 +23,8 @@
 #include "frontier_selector.hpp"
 #include "map_utils.hpp"
 // 状态节点
-#include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/trigger.hpp"
+#include "robot_interfaces/msg/exploration_state.hpp"
 
 #include "friendly_logging/logging.h"
 
@@ -73,12 +75,10 @@ private:
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
-    void set_state(ExplorationState new_state){
-        state_.store(new_state);
-    };
-    ExplorationState get_state()const{
-        return state_.load();;
-    };
+    void set_state(ExplorationState new_state, const std::string & detail = {});
+    ExplorationState get_state() const;
+    std::string state_to_string(ExplorationState state) const;
+    std::string state_detail() const;
 
 private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
@@ -103,18 +103,25 @@ private:
     int min_frontier_cluster_size_{5};
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
+    std::chrono::milliseconds map_stale_timeout_{std::chrono::milliseconds(5000)};
+    std::size_t max_frontier_failures_{3};
+    double edge_tolerance_m_{0.3};
     
     /// @note:后续可以设计为多机控制
     std::atomic<ExplorationState> state_{ExplorationState::IDLE};
+    mutable std::mutex state_mutex_;
+    std::string state_detail_;
 
     std::optional<rclcpp::Time> last_progress_time_;
     double last_progress_distance_{0.0};
     double initial_goal_distance_{0.0};
     std::atomic<float> goal_progress_{0.0f};
+    rclcpp::Time last_map_update_time_;
+    std::size_t consecutive_frontier_failures_{0};
 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
-    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_pub_;
+    rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr state_pub_;
 };
 
 
