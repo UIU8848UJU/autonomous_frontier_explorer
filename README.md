@@ -124,8 +124,8 @@ mk_nav2/
 **卡死在柱子上**
   
 目前按还是有卡死的问题，更多来自于local和global的cost_map，后续会通过调参+退避策略解决。
-![alt text](image/image.png )
-![alt text](image/image-1.png )
+![alt text](image/global_c.png )
+![alt text](image/local_c.png )
   
 **开始的时候map不会更新**
   
