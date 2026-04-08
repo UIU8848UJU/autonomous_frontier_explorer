@@ -121,14 +121,11 @@ mk_nav2/
   
 ## 问题
   
-**卡死在柱子上**
-  
-目前按还是有卡死的问题，更多来自于local和global的cost_map，后续会通过调参+退避策略解决。
+**可以正常建图，但是全靠`fallback`算法来救**
+
+目前按还是有卡死的问题，更多来自于local和global的cost_map。
 ![alt text](image/global_c.png )
 ![alt text](image/local_c.png )
-  
-**开始的时候map不会更新**
-  
-机器人最开始的时候会导出走，迫使map更新而后继续开始建模。
+
   
   

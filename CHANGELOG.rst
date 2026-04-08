@@ -32,3 +32,9 @@ Bringup 工程
 ----
 - `config/task_manager.yaml` 同步了心跳与接口参数，同时保留原 waypoint 配置。
 - 调整 CMake/package 依赖，确保 `task_manager`/`frontier_explorer` 依赖 `robot_interfaces`。
+
+
+
+2026-04-03
+==========
+- 完成初版的MVP

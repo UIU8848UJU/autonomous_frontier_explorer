@@ -45,6 +45,7 @@ void TaskManagerNode::declare_parameters()
         "start_exploration_service_name", interface_config_.start_exploration_service_name);
     interface_config_.stop_exploration_service_name = this->declare_parameter<std::string>(
         "stop_exploration_service_name", interface_config_.stop_exploration_service_name);
+
     const auto timeout_ms = this->declare_parameter<int>(
         "exploration_state_timeout_ms",
         static_cast<int>(exploration_timeout_.count()));
@@ -89,6 +90,7 @@ void TaskManagerNode::create_interfaces()
 
     start_exploration_client_ = this->create_client<Trigger>(
         interface_config_.start_exploration_service_name);
+        
     stop_exploration_client_ = this->create_client<Trigger>(
         interface_config_.stop_exploration_service_name);
 
