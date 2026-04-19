@@ -23,6 +23,7 @@ add_executable(frontier_explorer_node
   nodes/frontier_explorer/frontier_explorer_node.cpp
   core/map_utils/map_utils.cpp
   core/frontier_detector/frontier_detector.cpp
+  core/frontier_selector/frontier_selection_strategy.cpp
   core/frontier_selector/frontier_selector.cpp
 )
 

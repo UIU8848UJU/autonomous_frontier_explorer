@@ -65,7 +65,7 @@ constexpr size_t kStatePublisherDepth = 10;
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
   detector_(obstacle_search_radius_cells_, min_frontier_cluster_size_),
-  selector_(min_goal_distance_m_, max_retry_count_)
+  selector_(min_goal_distance_m_, max_retry_count_, selection_strategy_)
 {
     declare_params();
     create_interfaces();
@@ -113,6 +113,7 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<int>("min_frontier_cluster_size", 5);
     this->declare_parameter<double>("min_goal_distance_m", 0.5);
     this->declare_parameter<int>("max_retry_count", 2);
+    this->declare_parameter<std::string>("selection_strategy", selection_strategy_);
     this->declare_parameter<int>(
         "map_stale_timeout_ms", static_cast<int>(map_stale_timeout_.count()));
     this->declare_parameter<int>(
@@ -129,6 +130,8 @@ void FrontierExplorerNode::declare_params()
         this->get_parameter("min_goal_distance_m").as_double();
     max_retry_count_ =
         this->get_parameter("max_retry_count").as_int();
+    selection_strategy_ =
+        this->get_parameter("selection_strategy").as_string();
     
     const auto stale_timeout_ms = this->get_parameter("map_stale_timeout_ms").as_int();
     map_stale_timeout_ = std::chrono::milliseconds(std::max(1000L, stale_timeout_ms));
@@ -138,7 +141,7 @@ void FrontierExplorerNode::declare_params()
         std::max(0.05, this->get_parameter("edge_tolerance_m").as_double());
 
     detector_ = FrontierDetector(obstacle_search_radius_cells_, min_frontier_cluster_size_);
-    selector_ = FrontierSelector(min_goal_distance_m_, max_retry_count_);
+    selector_ = FrontierSelector(min_goal_distance_m_, max_retry_count_, selection_strategy_);
 
 }
 

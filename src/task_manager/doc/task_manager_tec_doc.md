@@ -50,5 +50,3 @@
 3. **Recovery/Fallback**：根据 `ExplorationState::STUCK` 或导航失败计数自动切换 recovery 流程。
 4. **更细粒度参数**：把 cooldown、frontier 策略参数暴露到 YAML，并在 `TaskFlow` 里使用。
 5. **Action 接口**：利用 `robot_interfaces/action/Explore` 对外提供长流程接口，统一 start/stop/result。
-
-该文档可用于快速向新同事或面试者讲解当前实现，并指导下一阶段迭代。

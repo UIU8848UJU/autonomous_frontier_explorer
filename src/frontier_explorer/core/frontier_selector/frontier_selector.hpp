@@ -1,8 +1,16 @@
 #pragma once
 
+#include <memory>
+#include <optional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "frontier_selection_strategy.hpp"
 #include "types.h"
 
 namespace frontier_explorer
@@ -11,7 +19,10 @@ namespace frontier_explorer
 class FrontierSelector
 {
 public:
-    FrontierSelector(double min_goal_distance_m, int max_retry_count = 2);
+    FrontierSelector(
+        double min_goal_distance_m,
+        int max_retry_count = 2,
+        const std::string & strategy_name = "nearest");
 
     std::optional<GridCell> choose_best_frontier(
         const std::vector<FrontierCluster> & clusters,
@@ -45,6 +56,8 @@ private:
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
     int max_cluster_retry_count_{3};
+    std::string selection_strategy_name_{"nearest"};
+    std::unique_ptr<IFrontierSelectionStrategy> strategy_;
 
     std::optional<GridCell> last_goal_grid_;
     std::unordered_map<GridCell, int, GridCellHash> failed_goal_counts_;

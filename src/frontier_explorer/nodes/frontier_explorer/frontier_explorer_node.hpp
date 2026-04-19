@@ -103,6 +103,7 @@ private:
     int min_frontier_cluster_size_{5};
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
+    std::string selection_strategy_{"nearest"};
     std::chrono::milliseconds map_stale_timeout_{std::chrono::milliseconds(5000)};
     std::size_t max_frontier_failures_{3};
     double edge_tolerance_m_{0.3};

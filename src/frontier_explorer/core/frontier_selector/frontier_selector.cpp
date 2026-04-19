@@ -8,10 +8,17 @@ namespace frontier_explorer
 
 FrontierSelector::FrontierSelector(
     double min_goal_distance_m,
-    int max_retry_count)
+    int max_retry_count,
+    const std::string & strategy_name)
 : min_goal_distance_m_(min_goal_distance_m),
-  max_retry_count_(max_retry_count)
+  max_retry_count_(max_retry_count),
+  selection_strategy_name_(strategy_name),
+  strategy_(create_frontier_selection_strategy(strategy_name))
 {
+    if (!strategy_) {
+        selection_strategy_name_ = "nearest";
+        strategy_ = create_frontier_selection_strategy(selection_strategy_name_);
+    }
 }
 
 double FrontierSelector::distance_in_meters( 
@@ -48,9 +55,8 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
   const GridCell & robot_grid,
   double resolution)
 {
-
-    double best_dist = std::numeric_limits<double>::max();
-    std::optional<GridCell> best_cell;
+    std::vector<FrontierSelectionCandidate> valid_candidates;
+    valid_candidates.reserve(clusters.size());
 
     for (const auto & cluster : clusters) {
 
@@ -111,13 +117,31 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
                     candidate.row, candidate.col, dist_m);
         }
 
-        if (dist_m < best_dist) {
-            best_dist = dist_m;
-            best_cell = candidate;
+        valid_candidates.push_back(FrontierSelectionCandidate{
+            candidate,
+            cluster.centroid,
+            cluster.cells.size(),
+            dist_m
+        });
+    }
+
+    if (valid_candidates.empty() || !strategy_) {
+        return std::nullopt;
+    }
+
+    const auto selected_goal = strategy_->select_goal(valid_candidates);
+    if (!selected_goal.has_value()) {
+        return std::nullopt;
+    }
+
+    for (const auto & candidate : valid_candidates) {
+        if (candidate.goal == selected_goal.value()) {
+            mark_cluster_succeeded(candidate.cluster_centroid);
+            break;
         }
     }
 
-    return best_cell;
+    return selected_goal;
 }
 void FrontierSelector::set_last_goal(const GridCell & goal)
 {

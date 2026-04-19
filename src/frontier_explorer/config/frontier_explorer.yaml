@@ -6,6 +6,7 @@ frontier_explorer_node:
     min_frontier_cluster_size: 5
     min_goal_distance_m: 0.5
     max_retry_count: 2
+    selection_strategy: nearest
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3

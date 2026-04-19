@@ -119,6 +119,7 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
             }
         }
 
+        // 这里是为了除去一些离散点的噪声
         if (static_cast<int>(cluster.cells.size()) < min_frontier_cluster_size_) {
             continue;
         }
