@@ -1,7 +1,10 @@
 #include "frontier_selector.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
+
+#include "rclcpp/rclcpp.hpp"
 
 namespace frontier_explorer
 {
@@ -9,19 +12,88 @@ namespace frontier_explorer
 FrontierSelector::FrontierSelector(
     double min_goal_distance_m,
     int max_retry_count,
-    const std::string & strategy_name)
+    const FrontierScoringWeights & scoring_weights,
+    std::size_t min_cluster_size,
+    int max_cluster_retry_count,
+    int candidate_unknown_margin_cells,
+    double candidate_max_unknown_ratio)
 : min_goal_distance_m_(min_goal_distance_m),
   max_retry_count_(max_retry_count),
-  selection_strategy_name_(strategy_name),
-  strategy_(create_frontier_selection_strategy(strategy_name))
+  max_cluster_retry_count_(max_cluster_retry_count),
+  min_cluster_size_(std::max<std::size_t>(1U, min_cluster_size)),
+  pruner_(
+      min_goal_distance_m_,
+      max_retry_count_,
+      max_cluster_retry_count_,
+      min_cluster_size_,
+      candidate_unknown_margin_cells,
+      candidate_max_unknown_ratio),
+  scorer_(scoring_weights, max_retry_count_)
 {
-    if (!strategy_) {
-        selection_strategy_name_ = "nearest";
-        strategy_ = create_frontier_selection_strategy(selection_strategy_name_);
-    }
 }
 
-double FrontierSelector::distance_in_meters( 
+FrontierSelector::FrontierSelector(
+    double min_goal_distance_m,
+    int max_retry_count,
+    const std::string & strategy_name)
+: FrontierSelector(
+      min_goal_distance_m,
+      max_retry_count,
+      strategy_name,
+      1U,
+      3,
+      2,
+      0.4)
+{
+}
+
+FrontierSelector::FrontierSelector(
+    double min_goal_distance_m,
+    int max_retry_count,
+    const std::string & strategy_name,
+    std::size_t min_cluster_size,
+    int max_cluster_retry_count,
+    int candidate_unknown_margin_cells,
+    double candidate_max_unknown_ratio)
+: FrontierSelector(
+      min_goal_distance_m,
+      max_retry_count,
+      scoring_weights_from_strategy(strategy_name),
+      min_cluster_size,
+      max_cluster_retry_count,
+      candidate_unknown_margin_cells,
+      candidate_max_unknown_ratio)
+{
+    RCLCPP_WARN(
+        rclcpp::get_logger("frontier_selector"),
+        "selection_strategy='%s' is deprecated. Use frontier_decision weights instead.",
+        strategy_name.c_str());
+}
+
+FrontierScoringWeights FrontierSelector::scoring_weights_from_strategy(
+    const std::string & strategy_name)
+{
+    FrontierScoringWeights weights;
+
+    if (strategy_name == "nearest") {
+        weights.weight_distance = 1.0;
+        weights.weight_cluster_size = 0.0;
+        return weights;
+    }
+
+    if (strategy_name == "largest_cluster") {
+        weights.weight_distance = 0.0;
+        weights.weight_cluster_size = 1.0;
+        return weights;
+    }
+
+    // Default hybrid-like balance.
+    weights.weight_distance = 1.0;
+    weights.weight_cluster_size = 1.0;
+    return weights;
+}
+
+double FrontierSelector::distance_in_meters(
     const GridCell & a,
     const GridCell & b,
     double resolution) const
@@ -51,98 +123,75 @@ bool FrontierSelector::should_skip_goal(const GridCell & goal) const
 }
 
 std::optional<GridCell> FrontierSelector::choose_best_frontier(
-  const std::vector<FrontierCluster> & clusters,
-  const GridCell & robot_grid,
-  double resolution)
+    const std::vector<FrontierCluster> & clusters,
+    const GridCell & robot_grid,
+    double resolution)
 {
-    std::vector<FrontierSelectionCandidate> valid_candidates;
-    valid_candidates.reserve(clusters.size());
-
-    for (const auto & cluster : clusters) {
-
-        /// @note 暂定为这样黑名单组
-        if (cluster_blacklist_.count(cluster.centroid) > 0) {
-            continue;
-        } 
-
-        GridCell candidate = cluster.centroid;
-        double dist_m = distance_in_meters(robot_grid, candidate, resolution);
-
-        bool centroid_invalid = false;
-
-        if (should_skip_goal(candidate)) 
-        {
-            RCLCPP_INFO(
-                rclcpp::get_logger("frontier_selector"),
-                    "Centroid skip=(%d,%d), reason=blacklist_or_retry",
-                    candidate.row, candidate.col);
-            centroid_invalid = true;
-        } 
-        else if (dist_m < min_goal_distance_m_) 
-        {
-            RCLCPP_INFO(
-                rclcpp::get_logger("frontier_selector"),
-                    "Centroid skip=(%d,%d), reason=too_close dist=%.3f",
-                    candidate.row, candidate.col, dist_m);
-            centroid_invalid = true;
-        } 
-        else if (is_same_as_last_goal(candidate)) 
-        {
-            RCLCPP_INFO(
-                rclcpp::get_logger("frontier_selector"),
-                    "Centroid skip=(%d,%d), reason=same_as_last_goal",
-                    candidate.row, candidate.col);
-            centroid_invalid = true;
-        }
-
-        if (centroid_invalid) {
-            const auto fallback = find_fallback_goal_in_cluster(
-                cluster, robot_grid, resolution);
-
-            if (!fallback.has_value()) {
-
-                RCLCPP_INFO(
-                    rclcpp::get_logger("frontier_selector"),
-                    "Cluster fallback failed for centroid=(%d,%d)",
-                    candidate.row, candidate.col);
-                    mark_cluster_failed(cluster.centroid);
-                continue;
-            }
-
-            candidate = fallback.value();
-            dist_m = distance_in_meters(robot_grid, candidate, resolution);
-
-            RCLCPP_INFO(
-                rclcpp::get_logger("frontier_selector"), "Use fallback goal=(%d,%d), dist=%.3f",
-                    candidate.row, candidate.col, dist_m);
-        }
-
-        valid_candidates.push_back(FrontierSelectionCandidate{
-            candidate,
-            cluster.centroid,
-            cluster.cells.size(),
-            dist_m
-        });
-    }
-
-    if (valid_candidates.empty() || !strategy_) {
-        return std::nullopt;
-    }
-
-    const auto selected_goal = strategy_->select_goal(valid_candidates);
-    if (!selected_goal.has_value()) {
-        return std::nullopt;
-    }
-
-    for (const auto & candidate : valid_candidates) {
-        if (candidate.goal == selected_goal.value()) {
-            mark_cluster_succeeded(candidate.cluster_centroid);
-            break;
-        }
-    }
-
-    return selected_goal;
+    return choose_best_frontier_impl(clusters, robot_grid, resolution, nullptr);
 }
+
+std::optional<GridCell> FrontierSelector::choose_best_frontier(
+    const std::vector<FrontierCluster> & clusters,
+    const GridCell & robot_grid,
+    double resolution,
+    const nav_msgs::msg::OccupancyGrid & map)
+{
+    return choose_best_frontier_impl(clusters, robot_grid, resolution, &map);
+}
+
+std::optional<GridCell> FrontierSelector::choose_best_frontier_impl(
+    const std::vector<FrontierCluster> & clusters,
+    const GridCell & robot_grid,
+    double resolution,
+    const nav_msgs::msg::OccupancyGrid * map)
+{
+    const FrontierPruningContext context{
+        last_goal_grid_,
+        &failed_goal_counts_,
+        &blacklist_,
+        &failed_cluster_counts_,
+        &cluster_blacklist_};
+
+    std::vector<GridCell> fallback_failed_clusters;
+    auto valid_candidates = pruner_.prune_clusters(
+        clusters,
+        robot_grid,
+        resolution,
+        map,
+        context,
+        &fallback_failed_clusters);
+
+    for (const auto & cluster_id : fallback_failed_clusters) {
+        mark_cluster_failed(cluster_id);
+    }
+
+    if (valid_candidates.empty()) {
+        return std::nullopt;
+    }
+
+    const auto scored_candidates = scorer_.score_candidates(valid_candidates, last_goal_grid_);
+    if (scored_candidates.empty()) {
+        return std::nullopt;
+    }
+
+    const auto best_it = std::max_element(
+        scored_candidates.begin(),
+        scored_candidates.end(),
+        [](const ScoredFrontierCandidate & lhs, const ScoredFrontierCandidate & rhs) {
+            if (lhs.total_score == rhs.total_score) {
+                return lhs.candidate.distance_m > rhs.candidate.distance_m;
+            }
+            return lhs.total_score < rhs.total_score;
+        });
+
+    if (best_it == scored_candidates.end()) {
+        return std::nullopt;
+    }
+
+    mark_cluster_succeeded(best_it->candidate.cluster_centroid);
+    return best_it->candidate.goal;
+}
+
 void FrontierSelector::set_last_goal(const GridCell & goal)
 {
     last_goal_grid_ = goal;
@@ -169,12 +218,14 @@ void FrontierSelector::clear_history()
     last_goal_grid_.reset();
     failed_goal_counts_.clear();
     blacklist_.clear();
+    failed_cluster_counts_.clear();
+    cluster_blacklist_.clear();
 }
 
 std::optional<GridCell> FrontierSelector::find_fallback_goal_in_cluster(
-  const FrontierCluster & cluster,
-  const GridCell & robot_grid,
-  double resolution) const
+    const FrontierCluster & cluster,
+    const GridCell & robot_grid,
+    double resolution) const
 {
     double best_dist = std::numeric_limits<double>::max();
     std::optional<GridCell> best_cell;
@@ -213,8 +264,8 @@ void FrontierSelector::mark_cluster_failed(const GridCell & cluster_id)
 
 void FrontierSelector::mark_cluster_succeeded(const GridCell & cluster_id)
 {
-    if(failed_cluster_counts_.count(cluster_id)) failed_cluster_counts_.erase(cluster_id);
-    if(cluster_blacklist_.count(cluster_id))cluster_blacklist_.erase(cluster_id);
+    failed_cluster_counts_.erase(cluster_id);
+    cluster_blacklist_.erase(cluster_id);
 }
 
 }  // namespace frontier_explorer

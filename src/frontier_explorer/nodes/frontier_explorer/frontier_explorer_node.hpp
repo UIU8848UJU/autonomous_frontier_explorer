@@ -104,6 +104,9 @@ private:
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
     std::string selection_strategy_{"nearest"};
+    FrontierScoringWeights frontier_decision_weights_{};
+    int candidate_unknown_margin_cells_{2};
+    double candidate_max_unknown_ratio_{0.4};
     std::chrono::milliseconds map_stale_timeout_{std::chrono::milliseconds(5000)};
     std::size_t max_frontier_failures_{3};
     double edge_tolerance_m_{0.3};

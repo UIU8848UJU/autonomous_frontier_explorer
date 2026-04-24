@@ -1,23 +1,15 @@
 #pragma once
 
-#include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "frontier_decision_types.hpp"
 #include "types.h"
 
 namespace frontier_explorer
 {
-
-struct FrontierSelectionCandidate
-{
-    GridCell goal{};
-    GridCell cluster_centroid{};
-    std::size_t cluster_size{0U};
-    double distance_m{0.0};
-};
 
 class IFrontierSelectionStrategy
 {

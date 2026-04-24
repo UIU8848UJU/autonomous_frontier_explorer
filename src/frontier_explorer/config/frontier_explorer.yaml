@@ -7,6 +7,16 @@ frontier_explorer_node:
     min_goal_distance_m: 0.5
     max_retry_count: 2
     selection_strategy: nearest
+    frontier_decision:
+      weight_distance: 1.0
+      weight_cluster_size: 1.0
+      weight_clearance: 0.0
+      weight_revisit_penalty: 1.0
+      weight_retry_penalty: 1.0
+      enable_clearance_score: false
+      enable_revisit_penalty: false
+      candidate_unknown_margin_cells: 2
+      candidate_max_unknown_ratio: 0.4
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3

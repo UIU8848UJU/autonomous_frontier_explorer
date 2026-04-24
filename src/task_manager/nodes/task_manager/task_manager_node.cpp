@@ -14,6 +14,7 @@ namespace
 constexpr int kDefaultHeartbeatPeriodMs = 1000;
 constexpr size_t kStatePublisherDepth = 10;
 constexpr size_t kExplorationSubDepth = 10;
+constexpr auto kServiceCallTimeout = 3s;
 }  // namespace
 
 TaskManagerNode::TaskManagerNode(const rclcpp::NodeOptions & options)
@@ -286,7 +287,7 @@ bool TaskManagerNode::call_trigger_service(
     }
 
     if (!client->service_is_ready()) {
-        if (!client->wait_for_service(1s)) {
+        if (!client->wait_for_service(kServiceCallTimeout)) {
             RCLCPP_WARN_WITH_CONTEXT(
                 this->get_logger(),
                 "Service %s not available.",
@@ -297,7 +298,7 @@ bool TaskManagerNode::call_trigger_service(
 
     auto request = std::make_shared<Trigger::Request>();
     auto future = client->async_send_request(request);
-    const auto status = future.wait_for(1s);
+    const auto status = future.wait_for(kServiceCallTimeout);
     if (status != std::future_status::ready) {
         RCLCPP_WARN_WITH_CONTEXT(
             this->get_logger(),

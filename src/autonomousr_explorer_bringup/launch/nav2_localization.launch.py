@@ -15,10 +15,8 @@ from bringup_utils import resolve_map_file
 def generate_launch_description():
     nav2_pkg = get_package_share_directory("nav2_bringup")
     this_pkg = get_package_share_directory("autonomousr_explorer_bringup")
-    frontier_pkg = get_package_share_directory("frontier_explorer")
-
     map_file = resolve_map_file(this_pkg)
-    params_file = os.path.join(frontier_pkg, "config", "nav2_burger")
+    params_file = os.path.join(this_pkg, "config", "nav2_burger.yaml")
 
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(

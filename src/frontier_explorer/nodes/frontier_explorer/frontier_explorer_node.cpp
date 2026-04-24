@@ -65,7 +65,7 @@ constexpr size_t kStatePublisherDepth = 10;
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
   detector_(obstacle_search_radius_cells_, min_frontier_cluster_size_),
-  selector_(min_goal_distance_m_, max_retry_count_, selection_strategy_)
+  selector_(min_goal_distance_m_, max_retry_count_, frontier_decision_weights_)
 {
     declare_params();
     create_interfaces();
@@ -114,6 +114,33 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<double>("min_goal_distance_m", 0.5);
     this->declare_parameter<int>("max_retry_count", 2);
     this->declare_parameter<std::string>("selection_strategy", selection_strategy_);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_distance",
+        frontier_decision_weights_.weight_distance);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_cluster_size",
+        frontier_decision_weights_.weight_cluster_size);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_clearance",
+        frontier_decision_weights_.weight_clearance);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_revisit_penalty",
+        frontier_decision_weights_.weight_revisit_penalty);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_retry_penalty",
+        frontier_decision_weights_.weight_retry_penalty);
+    this->declare_parameter<bool>(
+        "frontier_decision.enable_clearance_score",
+        frontier_decision_weights_.enable_clearance_score);
+    this->declare_parameter<bool>(
+        "frontier_decision.enable_revisit_penalty",
+        frontier_decision_weights_.enable_revisit_penalty);
+    this->declare_parameter<int>(
+        "frontier_decision.candidate_unknown_margin_cells",
+        candidate_unknown_margin_cells_);
+    this->declare_parameter<double>(
+        "frontier_decision.candidate_max_unknown_ratio",
+        candidate_max_unknown_ratio_);
     this->declare_parameter<int>(
         "map_stale_timeout_ms", static_cast<int>(map_stale_timeout_.count()));
     this->declare_parameter<int>(
@@ -132,6 +159,24 @@ void FrontierExplorerNode::declare_params()
         this->get_parameter("max_retry_count").as_int();
     selection_strategy_ =
         this->get_parameter("selection_strategy").as_string();
+    frontier_decision_weights_.weight_distance =
+        this->get_parameter("frontier_decision.weight_distance").as_double();
+    frontier_decision_weights_.weight_cluster_size =
+        this->get_parameter("frontier_decision.weight_cluster_size").as_double();
+    frontier_decision_weights_.weight_clearance =
+        this->get_parameter("frontier_decision.weight_clearance").as_double();
+    frontier_decision_weights_.weight_revisit_penalty =
+        this->get_parameter("frontier_decision.weight_revisit_penalty").as_double();
+    frontier_decision_weights_.weight_retry_penalty =
+        this->get_parameter("frontier_decision.weight_retry_penalty").as_double();
+    frontier_decision_weights_.enable_clearance_score =
+        this->get_parameter("frontier_decision.enable_clearance_score").as_bool();
+    frontier_decision_weights_.enable_revisit_penalty =
+        this->get_parameter("frontier_decision.enable_revisit_penalty").as_bool();
+    candidate_unknown_margin_cells_ =
+        this->get_parameter("frontier_decision.candidate_unknown_margin_cells").as_int();
+    candidate_max_unknown_ratio_ =
+        this->get_parameter("frontier_decision.candidate_max_unknown_ratio").as_double();
     
     const auto stale_timeout_ms = this->get_parameter("map_stale_timeout_ms").as_int();
     map_stale_timeout_ = std::chrono::milliseconds(std::max(1000L, stale_timeout_ms));
@@ -141,7 +186,19 @@ void FrontierExplorerNode::declare_params()
         std::max(0.05, this->get_parameter("edge_tolerance_m").as_double());
 
     detector_ = FrontierDetector(obstacle_search_radius_cells_, min_frontier_cluster_size_);
-    selector_ = FrontierSelector(min_goal_distance_m_, max_retry_count_, selection_strategy_);
+    selector_ = FrontierSelector(
+        min_goal_distance_m_,
+        max_retry_count_,
+        frontier_decision_weights_,
+        static_cast<std::size_t>(std::max(1, min_frontier_cluster_size_)),
+        3,
+        candidate_unknown_margin_cells_,
+        candidate_max_unknown_ratio_);
+
+    RCLCPP_WARN_WITH_CONTEXT(
+        this->get_logger(),
+        "selection_strategy parameter is deprecated and ignored for scoring. "
+        "Use frontier_decision.* weights instead.");
 
 }
 
@@ -480,7 +537,8 @@ void FrontierExplorerNode::explore_timer_callback()
     const auto best_frontier = selector_.choose_best_frontier(
         clusters,
         robot_grid_.value(),
-        map_msg_->info.resolution);
+        map_msg_->info.resolution,
+        *map_msg_);
 
     if (!best_frontier.has_value()) {
         RCLCPP_WARN_WITH_CONTEXT(
