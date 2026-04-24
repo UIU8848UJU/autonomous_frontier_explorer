@@ -10,6 +10,19 @@
   - [后续计划（TODO）](#后续计划todo )
   - [问题](#问题 )
   
+
+![ROS 2](https://img.shields.io/badge/ROS%202-Humble-blueviolet)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-orange)
+![C++](https://img.shields.io/badge/C%2B%2B-17-blue)
+![Nav2](https://img.shields.io/badge/Nav2-Exploration-2ea44f)
+![SLAM Toolbox](https://img.shields.io/badge/SLAM-Toolbox-0f766e)
+![Gazebo](https://img.shields.io/badge/Gazebo-Simulation-brown)
+![colcon](https://img.shields.io/badge/build-colcon-informational)
+![ament_cmake](https://img.shields.io/badge/build%20system-ament__cmake-lightgrey)
+![Status](https://img.shields.io/badge/status-active%20development-yellow)
+
+
+
 # mk_nav2 项目说明
   
 面向自主探索 + 建图 + 导航的一体化 ROS2 Workspace，主要包含三大模块：
