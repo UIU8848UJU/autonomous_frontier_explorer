@@ -61,16 +61,16 @@ constexpr size_t kStatePublisherDepth = 10;
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
-  detector_(
-      params_.runtime.obstacle_search_radius_cells,
-      params_.runtime.min_frontier_cluster_size),
+  detector_(params_.runtime.obstacle_search_radius_cells),
   selector_(
       params_.pruner.min_goal_distance_m,
       params_.selection.max_retry_count,
       params_.scorer.weights,
       params_.pruner.min_cluster_size,
       params_.selection.max_cluster_retry_count,
-      params_.pruner.candidate_unknown_margin_cells)
+      params_.pruner.candidate_unknown_margin_cells,
+      params_.selection.defer_small_clusters,
+      params_.selection.small_cluster_size_threshold)
 {
     declare_params();
     load_params();
@@ -116,13 +116,19 @@ std::string FrontierExplorerNode::state_detail() const
 void FrontierExplorerNode::declare_params()
 {
     this->declare_parameter<double>("explore_period_sec", 3.0);
-    this->declare_parameter<int>("obstacle_search_radius_cells", 2);
-    this->declare_parameter<int>("min_frontier_cluster_size", 5);
-    this->declare_parameter<double>("min_goal_distance_m", 0.5);
+    this->declare_parameter<int>("obstacle_search_radius_cells", 1);
+    this->declare_parameter<int>("min_frontier_cluster_size", 1);
+    this->declare_parameter<double>("min_goal_distance_m", 0.45);
     this->declare_parameter<int>("max_retry_count", 2);
     this->declare_parameter<int>(
         "frontier_decision.max_cluster_retry_count",
         params_.selection.max_cluster_retry_count);
+    this->declare_parameter<bool>(
+        "frontier_decision.defer_small_clusters",
+        params_.selection.defer_small_clusters);
+    this->declare_parameter<int>(
+        "frontier_decision.small_cluster_size_threshold",
+        static_cast<int>(params_.selection.small_cluster_size_threshold));
     this->declare_parameter<double>(
         "frontier_decision.weight_distance",
         params_.scorer.weights.weight_distance);
@@ -183,6 +189,10 @@ void FrontierExplorerNode::load_params()
         this->get_parameter("max_retry_count").as_int();
     params_.selection.max_cluster_retry_count =
         this->get_parameter("frontier_decision.max_cluster_retry_count").as_int();
+    params_.selection.defer_small_clusters =
+        this->get_parameter("frontier_decision.defer_small_clusters").as_bool();
+    params_.selection.small_cluster_size_threshold = static_cast<std::size_t>(
+        this->get_parameter("frontier_decision.small_cluster_size_threshold").as_int());
     params_.scorer.weights.weight_distance =
         this->get_parameter("frontier_decision.weight_distance").as_double();
     params_.scorer.weights.weight_cluster_size =
@@ -241,17 +251,20 @@ void FrontierExplorerNode::apply_params()
 
     params_.pruner.min_cluster_size =
         static_cast<std::size_t>(params_.runtime.min_frontier_cluster_size);
+    params_.selection.small_cluster_size_threshold = std::max<std::size_t>(
+        params_.pruner.min_cluster_size + 1U,
+        params_.selection.small_cluster_size_threshold);
 
-    detector_ = FrontierDetector(
-        params_.runtime.obstacle_search_radius_cells,
-        params_.runtime.min_frontier_cluster_size);
+    detector_ = FrontierDetector(params_.runtime.obstacle_search_radius_cells);
     selector_ = FrontierSelector(
         params_.pruner.min_goal_distance_m,
         params_.selection.max_retry_count,
         params_.scorer.weights,
         params_.pruner.min_cluster_size,
         params_.selection.max_cluster_retry_count,
-        params_.pruner.candidate_unknown_margin_cells);
+        params_.pruner.candidate_unknown_margin_cells,
+        params_.selection.defer_small_clusters,
+        params_.selection.small_cluster_size_threshold);
 }
 
 void FrontierExplorerNode::create_interfaces()
@@ -596,10 +609,14 @@ void FrontierExplorerNode::explore_timer_callback()
     const auto frontier_cells = detector_.detect_frontier_cells(*map_msg_);
     const auto clusters = detector_.cluster_frontiers(*map_msg_, frontier_cells);
 
-    RCLCPP_DEBUG_WITH_CONTEXT(
+    RCLCPP_INFO_THROTTLE_WITH_CONTEXT(
         this->get_logger(),
-        "Detected frontier cells: %zu, clusters: %zu",
-        frontier_cells.size(), clusters.size());
+        *this->get_clock(),
+        3000,
+        "Detected frontier cells: %zu, raw clusters: %zu, min_cluster_size=%zu",
+        frontier_cells.size(),
+        clusters.size(),
+        params_.pruner.min_cluster_size);
 
     const auto best_frontier = selector_.choose_best_frontier(
         clusters,

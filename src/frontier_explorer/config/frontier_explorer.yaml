@@ -2,12 +2,14 @@ frontier_explorer_node:
   ros__parameters:
     use_sim_time: true
     explore_period_sec: 3.0
-    obstacle_search_radius_cells: 2
-    min_frontier_cluster_size: 5
-    min_goal_distance_m: 0.5
+    obstacle_search_radius_cells: 1
+    min_frontier_cluster_size: 1
+    min_goal_distance_m: 0.45
     max_retry_count: 2
     frontier_decision:
       max_cluster_retry_count: 3
+      defer_small_clusters: true
+      small_cluster_size_threshold: 3
       weight_distance: 1.0
       weight_cluster_size: 1.0
       weight_clearance: 0.0

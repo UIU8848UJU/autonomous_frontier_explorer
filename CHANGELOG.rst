@@ -2,6 +2,31 @@
 autonomous_frontier_explorer 项目更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2026-04-26
+==========
+
+阶段性探索成果
+--------------
+- 顶层 README 重写为阶段性项目首页，保留原有徽章并新增 frontier_explorer 文档入口徽章。
+- 新增 ``media/激进探索.mp4`` 与 ``media/保守探索.mp4`` 两个 6 倍速演示入口。
+- README 明确当前演示采用 RPP 控制器，并说明 DWB 在当前场景下更容易抖动、停滞或依赖决策兜底。
+
+Frontier 决策演进
+-----------------
+- 删除旧 ``frontier_selection_strategy`` 扩展路线，策略改由 score component 和 YAML 权重组合表达。
+- ``FrontierDetector`` 只负责检测和聚类，不再在 detector 阶段丢弃小 cluster。
+- ``FrontierPruner`` 负责硬过滤和候选修复，并保留局部 unknown window 统计。
+- ``FrontierScorer`` 统一组合 distance、cluster size、retry penalty、unknown risk、information gain、clearance 等分项。
+- ``FrontierSelector`` 新增小 cluster 延后选择机制，避免碎片小边界在正常候选存在时抢先被选。
+- 新增 ``frontier_decision.defer_small_clusters`` 与 ``frontier_decision.small_cluster_size_threshold`` 参数。
+- 当前 ``clearance_score`` 结构已接入，但 ``clearance_m`` 仍未接入真实 costmap/最近障碍距离统计。
+
+Nav2 与运行配置
+---------------
+- 探索模式 Nav2 控制器切换为 RPP（Regulated Pure Pursuit），用于降低 DWB 在 frontier 场景中的抖动和卡顿。
+- 调整 ``min_goal_distance_m`` 与 Nav2 ``xy_goal_tolerance`` 的关系，避免目标过近导致 FollowPath 立即 SUCCESS、机器人不移动。
+- ``GridBased.allow_unknown`` 在探索配置中可设置为 false，用于禁止 planner 穿越真正 unknown cell；灰色 inflation/cost 区仍可能被规划器贴边经过。
+
 2026-04-24
 ==========
 
@@ -11,7 +36,7 @@ Frontier 决策系统重构
 - 新增 `FrontierPruner`，集中处理 cluster size、last goal、blacklist、retry、最小距离、fallback goal、候选点地图合法性等硬过滤。
 - 新增 `FrontierScorer`，通过 YAML 权重统一计算 distance、cluster size、clearance、revisit、retry 等分项分数和总分。
 - `FrontierSelector` 改为持有长期状态，并通过 pruner/scorer 选择总分最高的候选目标。
-- 保留旧 `frontier_selection_strategy.*` 作为兼容壳，后续不再作为主要扩展点。
+- 旧 `frontier_selection_strategy.*` 后续不再作为主要扩展点，并在后续重构中删除。
 
 探索候选点约束
 --------------

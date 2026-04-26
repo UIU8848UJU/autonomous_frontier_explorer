@@ -2,21 +2,31 @@ frontier_explorer_node:
   ros__parameters:
     use_sim_time: true
     explore_period_sec: 3.0
-    obstacle_search_radius_cells: 2
-    min_frontier_cluster_size: 5
-    min_goal_distance_m: 0.6
+    obstacle_search_radius_cells: 1
+    min_frontier_cluster_size: 1
+    min_goal_distance_m: 0.45
     max_retry_count: 2
-    selection_strategy: nearest
     frontier_decision:
-      weight_distance: 0.3
-      weight_cluster_size: 1.5
+      max_cluster_retry_count: 3
+      defer_small_clusters: true
+      small_cluster_size_threshold: 3
+      weight_distance: 1.0
+      # weight_distance: 1.4
+      weight_cluster_size: 1.0
+      # weight_cluster_size: 0.3
       weight_clearance: 0.0
-      weight_revisit_penalty: 1.0
       weight_retry_penalty: 1.0
+      weight_unknown_risk_penalty: 1.0
+      # weight_unknown_risk_penalty: 3.0
+      weight_information_gain: 0.0
+      weight_revisit_penalty: 0.0
       enable_clearance_score: false
+      enable_unknown_risk_penalty: true
+      enable_information_gain_score: false
       enable_revisit_penalty: false
       candidate_unknown_margin_cells: 2
-      candidate_max_unknown_ratio: 0.75
+      candidate_max_unknown_ratio: 0.4
+      # candidate_max_unknown_ratio: 0.15
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3

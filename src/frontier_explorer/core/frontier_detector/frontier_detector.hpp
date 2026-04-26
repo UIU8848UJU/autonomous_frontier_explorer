@@ -13,12 +13,14 @@ namespace frontier_explorer
 class FrontierDetector
 {
 public:
-  FrontierDetector( int obstacle_search_radius_cells, int min_frontier_cluster_size);
+  explicit FrontierDetector(int obstacle_search_radius_cells);
 
-    /// @brief 找到一个格子满足三个条件：当前的格子没有探测过，这个格子周围有未知点，且这个格子是安全的
+    /// @brief 找到满足条件的 frontier cell：当前格子已知且空闲，邻域存在未知点，并且没有贴近障碍。
     std::vector<GridCell> detect_frontier_cells(
         const nav_msgs::msg::OccupancyGrid & map) const;
 
+    /// @brief 只负责把 frontier cell 聚成簇，不在这里按簇大小过滤。
+    ///        簇大小过滤属于 FrontierPruner 的职责，便于运行时通过 YAML 放宽小边界。
     std::vector<FrontierCluster> cluster_frontiers(
         const nav_msgs::msg::OccupancyGrid & map,
         const std::vector<GridCell> & frontier_cells) const;
@@ -30,7 +32,6 @@ private:
 
 private:
     int obstacle_search_radius_cells_{2};
-    int min_frontier_cluster_size_{5};
 };
 
 }  // namespace frontier_explorer

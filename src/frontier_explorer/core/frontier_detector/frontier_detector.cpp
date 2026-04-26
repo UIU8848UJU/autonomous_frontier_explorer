@@ -7,10 +7,8 @@
 namespace frontier_explorer
 {
 
-FrontierDetector::FrontierDetector( int obstacle_search_radius_cells,
-    int min_frontier_cluster_size)
-: obstacle_search_radius_cells_(obstacle_search_radius_cells),
-  min_frontier_cluster_size_(min_frontier_cluster_size)
+FrontierDetector::FrontierDetector(int obstacle_search_radius_cells)
+: obstacle_search_radius_cells_(obstacle_search_radius_cells)
 {
 
 }
@@ -117,11 +115,6 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
                     }
                 }
             }
-        }
-
-        // 这里是为了除去一些离散点的噪声
-        if (static_cast<int>(cluster.cells.size()) < min_frontier_cluster_size_) {
-            continue;
         }
 
         double sum_row = 0.0;

@@ -1,7 +1,22 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 frontier_explorer 包更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-0.0.03(2026-04-05)
+0.0.4(2026-04-26)
+------------------
+* 将 frontier 选择链路重构为 ``FrontierPruner``、``FrontierScorer``、``score_components``、``FrontierSelector``。
+* 删除旧的 ``frontier_selection_strategy`` 扩展路线，后续策略通过 score component 和 YAML 权重组合表达。
+* 新增 ``DistanceScore``、``ClusterSizeScore``、``RetryPenaltyScore``、``UnknownRiskPenaltyScore``、``InformationGainScore``、``ClearanceScore`` 等普通 C++ 打分组件。
+* ``unknown_ratio`` 不再作为硬过滤直接丢弃候选，改为通过 ``UnknownRiskPenaltyScore`` 参与扣分。
+* ``FrontierDetector`` 不再按 cluster size 丢弃小边界，只负责 frontier cell 检测和 8 邻域聚类。
+* ``FrontierPruner`` 负责 cluster size、retry、blacklist、last goal、min distance、centroid fallback、候选点地图合法性和局部 unknown window 统计。
+* ``FrontierSelector`` 新增小 cluster 延后选择机制：正常候选存在时，小 cluster 不参与竞争；正常候选耗尽后再作为兜底目标。
+* 新增 ``frontier_decision.defer_small_clusters`` 和 ``frontier_decision.small_cluster_size_threshold`` 参数。
+* 调整默认参数，保留小边界探索能力：``min_frontier_cluster_size`` 默认为 1，``min_goal_distance_m`` 调整为 0.45。
+* 保留了保守策略的调参数值，后续可通过解除 ``bringup`` 里 ``frontier_explorer.yaml`` 注释掉的参数来转换。
+* 重构参数结构，新增 ``FrontierExplorerParams`` 及 runtime/pruner/scorer/selection 分组。
+* 将地图工具函数迁移到 ``utils/map``，frontier 选择辅助工具迁移到 ``utils/frontier``。
+
+0.0.3(2026-04-05)
 ------------------
 * 添加了更好的黑名单机制，防止机器人在一个地方来回踱步，导致陷入局部死循环。
 * 添加了完整的feedback，对于卡死，或者长时间目标没有变化重新选择 ``frontier``。

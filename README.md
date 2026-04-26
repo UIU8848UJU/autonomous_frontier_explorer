@@ -1,135 +1,262 @@
-  
-  
-- [mk_nav2 项目说明](#mk_nav2-项目说明 )
-  - [环境（Environment）](#环境environment )
-  - [仓库结构（Repository Layout）](#仓库结构repository-layout )
-  - [快速开始（Quick Start）](#快速开始quick-start )
-    - [依赖包](#依赖包 )
-  - [运行时控制（Runtime Controls）](#运行时控制runtime-controls )
-  - [常见问题 & 调试（Troubleshooting）](#常见问题--调试troubleshooting )
-  - [后续计划（TODO）](#后续计划todo )
-  - [问题](#问题 )
-  
+# mk_nav2
 
-![ROS 2](https://img.shields.io/badge/ROS%202-Humble-blueviolet)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-orange)
-![C++](https://img.shields.io/badge/C%2B%2B-17-blue)
-![Nav2](https://img.shields.io/badge/Nav2-Exploration-2ea44f)
-![SLAM Toolbox](https://img.shields.io/badge/SLAM-Toolbox-0f766e)
-![Gazebo](https://img.shields.io/badge/Gazebo-Simulation-brown)
-![colcon](https://img.shields.io/badge/build-colcon-informational)
-![ament_cmake](https://img.shields.io/badge/build%20system-ament__cmake-lightgrey)
-![Status](https://img.shields.io/badge/status-active%20development-yellow)
+<p align="center">
+  <img alt="ROS 2" src="https://img.shields.io/badge/ROS%202-Humble-blueviolet">
+  <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-22.04-orange">
+  <img alt="C++" src="https://img.shields.io/badge/C%2B%2B-17-blue">
+  <img alt="Nav2" src="https://img.shields.io/badge/Nav2-Exploration-2ea44f">
+  <img alt="SLAM Toolbox" src="https://img.shields.io/badge/SLAM-Toolbox-0f766e">
+  <img alt="Gazebo" src="https://img.shields.io/badge/Gazebo-Simulation-brown">
+</p>
 
+<p align="center">
+  <img alt="colcon" src="https://img.shields.io/badge/build-colcon-informational">
+  <img alt="ament_cmake" src="https://img.shields.io/badge/build%20system-ament__cmake-lightgrey">
+  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-yellow">
+  <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
+    <img alt="Frontier Explorer Docs" src="https://img.shields.io/badge/docs-frontier_explorer-0ea5e9">
+  </a>
+</p>
 
+面向自主探索、在线建图和导航验证的一体化 ROS 2 Workspace。当前阶段已经完成了基于 frontier 的自主探索闭环：Gazebo 仿真、SLAM Toolbox 建图、Nav2 路径规划与控制、frontier 目标决策、TaskManager 任务编排可以通过 bringup 一起运行。
 
-# mk_nav2 项目说明
-  
-面向自主探索 + 建图 + 导航的一体化 ROS2 Workspace，主要包含三大模块：
-  
-- **autonomousr_explorer_bringup**：集中启动 Gazebo / SLAM Toolbox / Nav2 / RViz / FrontierExplorer / TaskManager 的 bringup 工程。
-- **frontier_explorer**：负责 frontier 检测、目标选择、发送 `navigate_to_pose` 任务，并通过 `/exploration_state` 汇报状态。
-- **task_manager**：编排高层任务流（建图启动、失败恢复、切换导航模式等），提供 `/start_mapping` / `/start_navigation` / `/stop_all` 等服务，并发布 `/task_manager_state`。
-  
-![result](image/result.png )
-  
----
-  
-## 环境（Environment）
-  
-- Ubuntu 22.04 + ROS 2 Humble
-- Nav2 + Gazebo（默认 TurtleBot3 Burger 模型）
-- C++14，构建工具 colcon
-  
----
-  
-## 仓库结构（Repository Layout）
-  
-```
+当前演示使用 **RPP（Regulated Pure Pursuit）控制器**。DWB 在本仓库当前场景下更容易出现抖动、原地调整或短暂停滞，依赖决策层兜底恢复；因此阶段性演示主要采用 RPP，并展示不同探索策略风格下的效果。
+
+## 演示
+
+> 两段视频均为 6 倍速。
+
+| 策略风格 | 视频 | 说明 |
+| --- | --- | --- |
+| 激进探索 | [media/激进探索.mp4](media/激进探索.mp4) | 更偏向高收益 frontier，探索推进更快，但会更贴近未知边界。 |
+| 保守探索 | [media/保守探索.mp4](media/保守探索.mp4) | 更强调风险抑制和候选兜底，路径选择更稳。 |
+
+<video src="media/激进探索.mp4" controls muted width="100%"></video>
+
+<video src="media/保守探索.mp4" controls muted width="100%"></video>
+
+## 当前能力
+
+- 一键 bringup：仿真、SLAM、Nav2、RViz、FrontierExplorer、TaskManager 分阶段启动。
+- 自主探索：基于 OccupancyGrid 检测 frontier，并通过 Nav2 `navigate_to_pose` 连续发送目标。
+- 决策分层：frontier 决策拆成 Pruning、Scoring、Selection 三段，便于调参与扩展。
+- 权重策略：通过 YAML 权重组合表达探索风格，不再依赖字符串策略类切换。
+- 小边界兜底：小 frontier 不会被直接删除，但会延后到正常候选耗尽后再选择。
+- 状态发布：探索节点发布 `/exploration_state`，TaskManager 汇总并发布 `/task_manager_state`。
+
+探索节点这里只做概览。详细设计、状态机、参数和调试说明见：
+
+<p>
+  <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
+    <img alt="Open Frontier Explorer Docs" src="https://img.shields.io/badge/open-frontier_explorer_doc-0ea5e9">
+  </a>
+</p>
+
+## 仓库结构
+
+```text
 mk_nav2/
-├── README.md                      # 本文件
-├── CHANGELOG.rst                  # 顶层变更记录
+├── README.md
+├── CHANGELOG.rst
+├── media/                              # 阶段性演示视频
+├── maps/                               # 静态地图输入/输出目录
 ├── src/
-│   ├── autonomousr_explorer_bringup/   # bringup/launch/config（Nav2、SLAM、TaskManager）
-│   ├── frontier_explorer/              # 前沿检测节点
-│   └── task_manager/                   # TaskFlow / TaskManagerNode
-├── maps/                          # 静态地图输出/输入目录
-├── log/, build/, install/         # 运行/构建产物，不会上传
-└── image/                         # 示例图片
+│   ├── autonomousr_explorer_bringup/    # 统一 launch/config/rviz
+│   ├── frontier_explorer/               # frontier 探索节点与决策模块
+│   ├── task_manager/                    # 高层任务编排
+│   ├── robot_interfaces/                # 自定义消息/服务
+│   └── util_package/                    # 日志等公共工具
+├── build/
+├── install/
+└── log/
 ```
-  
----
-  
-## 快速开始（Quick Start）
-  
-### 依赖包
-  
-构建前请确保 workspace 中包含以下自研依赖：
-  
-- `src/robot_interfaces`：定义 `/exploration_state`、`/task_manager_state` 使用的消息/服务。
-- `src/util_package`：提供 `friendly_logging` 等公共头文件。
-  
-若从其它仓库只拷贝了 `mk_nav2` 目录，记得同步这两个包，否则编译会缺少接口定义。
-  
-1. **构建**
-   ```bash
-   cd ~/mk_nav2
-   colcon build
-   ```
-2. **启动仿真 + Online SLAM**
-   ```bash
-   source install/setup.bash
-   ros2 launch autonomousr_explorer_bringup full_system.launch.py
-   ```
-   - `full_system.launch.py`：Gazebo + SLAM Toolbox + Nav2（SLAM 模式）+ Frontier Explorer + TaskManager
-   - `full_system_static.launch.py`：加载静态地图 + AMCL/Localization + Frontier Explorer + TaskManager
-3. **基础服务**
-   ```bash
-   # 开始建图探索（TaskManager 会自动触发 /start_exploration）
-   ros2 service call /start_mapping std_srvs/srv/Trigger {}
-  
-   # 切换到导航（要求 map_ready=true）
-   ros2 service call /start_navigation std_srvs/srv/Trigger {}
-  
-   # 停止所有任务
-   ros2 service call /stop_all std_srvs/srv/Trigger {}
-   ```
-4. **状态话题**
-   - `/exploration_state` (`robot_interfaces/msg/ExplorationState`)
-   - `/task_manager_state` (`robot_interfaces/msg/TaskManagerState`)
-  
----
-  
-## 运行时控制（Runtime Controls）
-  
-- **建图流程**：调用 `/start_mapping` → TaskManager 进入 `EXPLORING` → 自动触发 `/start_exploration` → FrontierExplorer 连续挑选 frontiers。若出现 `STUCK` 或心跳超时，TaskManager 会停止并进入 `FAILED`，可根据日志或服务手动恢复。
-- **探索完成**：FrontierExplorer 在某个 goal 成功后会上报 `COMPLETED`；TaskManager 会在 1 秒后自动再次调用 `/start_exploration`，直到你手动 `/stop_all` 或外部判定 `MAPPING_DONE`。
-- **导航流程**：当地图准备好 (`map_ready=true`) 后，可调用 `/start_navigation`，Nav2 切换到导航模式。静态地图模式下需要在 `explore_map.yaml` 中写入 `map_directory` 和 `map_name`。
-  
----
-  
-## 常见问题 & 调试（Troubleshooting）
-  
-1. **地图没扩张**：
-   - 观察 `/map` header 是否更新；若时间在跳但尺寸不变，说明 SLAM 仍在固定栅格内更新，可调整 SLAM Toolbox 的 `map_size_x/y`、`map_start_pose` 或增大 Nav2 costmap 以便传感器看到未知区域外的空白。
-   - 确保 `/scan` 按预期发布（`ros2 topic hz /scan`）并且 `slam_toolbox` 的 `scan_topic` 正确。
-2. **TF old / controller Failed to make progress**：
-   - 所有 Nav2 组件需要 `use_sim_time=true`。
-   - 检查 `/tf` 中 `map->odom` 是否实时刷新 (`ros2 run tf2_ros tf2_echo map odom`)。
-3. **Frontier 探索不启动**：
-   - 确认启动 log 出现 `TaskManagerNode ready.`、`FrontierExplorerNode started.`。
-   - 若 frontier 仍处于 IDLE，可以直接调用 `/start_exploration` 验证服务是否可用。
-4. **Nav2 贴墙行走**：
-   - 可调整 `nav2_exploration.yaml` 中 costmap 的 `robot_radius` / `inflation_layer` 参数，或在 DWB critic 中提高 `PathAlign`、`PathDist` 权重。
-  
----
-  
-## 后续计划（TODO）
 
-- 完备探索节点，保证且确定地图无任何未探索的区域。
-  
-欢迎基于上述结构继续扩展或调试，更多细节可参考各包下的 `config/` 与 `launch/` 目录。
-  
-## 问题
-  
-目前太过于靠近障碍我的边界节点作为低价值探索目标就不会去探索了。对于地图建立的完备性有些许缺陷。
+## 模块概览
+
+### autonomousr_explorer_bringup
+
+集中管理系统启动入口和运行参数：
+
+- `full_system.launch.py`：根据地图文件是否存在，自动选择 SLAM 探索或静态地图模式。
+- `full_system_slam.launch.py`：在线 SLAM + Nav2 + RViz + FrontierExplorer + TaskManager。
+- `full_system_static.launch.py`：静态地图定位 + Nav2 + RViz + FrontierExplorer + TaskManager。
+- `config/nav2_exploration.yaml`：探索模式 Nav2 参数，当前 FollowPath 使用 RPP。
+- `config/frontier_explorer.yaml`：frontier 决策权重与候选过滤参数。
+
+### frontier_explorer
+
+负责从 `/map` 中寻找 frontier，选择下一个探索目标，并调用 Nav2 action。当前决策链路是：
+
+```text
+FrontierDetector
+  -> FrontierPruner
+  -> FrontierScorer
+  -> FrontierSelector
+  -> NavigateToPose
+```
+
+其中 score component 以普通 C++ 类组织，不使用 ROS node、pluginlib 或动态插件。后续新增策略时，优先通过新增 score component 和调整 YAML 权重实现。
+
+### task_manager
+
+提供高层任务入口，负责把建图、探索、导航状态串起来：
+
+- `/start_mapping`
+- `/start_navigation`
+- `/stop_all`
+- `/task_manager_state`
+
+## 快速开始
+
+### 依赖
+
+目标环境：
+
+- Ubuntu 22.04
+- ROS 2 Humble
+- Nav2
+- SLAM Toolbox
+- TurtleBot3 Gazebo
+- colcon
+
+仓库内依赖：
+
+- `robot_interfaces`
+- `util_package`
+
+### 构建
+
+```bash
+cd ~/mk_nav2
+colcon build
+source install/setup.bash
+```
+
+### 启动完整系统
+
+```bash
+ros2 launch autonomousr_explorer_bringup full_system.launch.py
+```
+
+`full_system.launch.py` 会先启动 Gazebo，然后根据 `explore_map.yaml` 指向的地图文件是否存在选择：
+
+- 有地图：静态地图导航模式
+- 无地图：SLAM 探索模式
+
+### 启动探索
+
+```bash
+ros2 service call /start_mapping std_srvs/srv/Trigger {}
+```
+
+TaskManager 会进入建图流程，并触发 FrontierExplorer 开始选择 frontier 目标。
+
+### 常用控制
+
+```bash
+# 直接启动 frontier 探索节点逻辑
+ros2 service call /start_exploration std_srvs/srv/Trigger {}
+
+# 停止 frontier 探索
+ros2 service call /stop_exploration std_srvs/srv/Trigger {}
+
+# 停止任务管理器中的当前任务
+ros2 service call /stop_all std_srvs/srv/Trigger {}
+```
+
+### 常用状态话题
+
+```bash
+ros2 topic echo /exploration_state
+ros2 topic echo /task_manager_state
+ros2 topic echo /behavior_tree_log
+```
+
+## 策略配置
+
+当前 frontier 决策通过 YAML 表达探索风格：
+
+```yaml
+frontier_decision:
+  weight_distance: 1.0
+  weight_cluster_size: 1.0
+  weight_unknown_risk_penalty: 1.0
+  candidate_unknown_margin_cells: 2
+  candidate_max_unknown_ratio: 0.4
+  defer_small_clusters: true
+  small_cluster_size_threshold: 3
+```
+
+调参方向：
+
+- 更激进：提高 `weight_cluster_size` 或启用信息增益类评分。
+- 更保守：提高 `weight_unknown_risk_penalty`，降低 `candidate_max_unknown_ratio`。
+- 保留小边界完备性：保持 `min_frontier_cluster_size` 较低，同时开启 `defer_small_clusters`。
+
+当前实现中，小 cluster 不会被直接丢弃；当存在正常候选时，小 cluster 会延后选择，只有没有正常候选时才作为兜底目标。
+
+## Nav2 控制器
+
+当前探索配置使用 RPP：
+
+```yaml
+FollowPath:
+  plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+```
+
+阶段性结论：
+
+- RPP 在当前探索场景下更稳定，能更自然地对齐 path 并前进。
+- DWB 可用作对比，但在窄边界、贴近未知区域和频繁重规划时更容易抖动或短暂停滞。
+- 若看到 path 轻微贴近灰色区域，优先确认它是 unknown 还是 inflation/cost 区；`allow_unknown: false` 只禁止穿真正 unknown cell。
+
+## 调试建议
+
+### frontier 是否正常产生
+
+```bash
+ros2 topic echo /exploration_state
+```
+
+节点日志中会周期性输出 frontier cell 和 raw cluster 数量。
+
+### Nav2 是否进入 recovery
+
+```bash
+ros2 topic echo /behavior_tree_log
+```
+
+重点观察：
+
+- `ComputePathToPose`
+- `FollowPath`
+- `RecoveryActions`
+- `Wait`
+
+### 速度链路
+
+当前主速度链路：
+
+```text
+controller_server -> /cmd_vel_nav -> velocity_smoother -> /cmd_vel -> turtlebot3_diff_drive
+```
+
+检查命令：
+
+```bash
+ros2 topic info /cmd_vel_nav -v
+ros2 topic info /cmd_vel -v
+ros2 topic echo /cmd_vel
+```
+
+## 当前阶段限制
+
+- information gain 已接入 score component，但默认未启用。
+- clearance score 预留了字段和组件，但当前候选 `clearance_m` 仍未接入真实 costmap 距离统计。
+- 小边界探索已经通过延后选择保留完备性，但不同地图下可能仍然需要继续调权重。
+- 真实机器人部署前还需要重新标定 footprint、inflation、速度限制和传感器噪声参数。
+
+## 参考文档
+
+- [Frontier Explorer 详细设计](src/frontier_explorer/doc/frontier_explorer_node_doc.md)
+- [顶层变更记录](CHANGELOG.rst)

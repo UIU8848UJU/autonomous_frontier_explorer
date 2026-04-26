@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <cstddef>
 #include <vector>
 
 #include "nav_msgs/msg/occupancy_grid.hpp"
@@ -35,7 +36,9 @@ public:
         const FrontierScoringWeights & scoring_weights = FrontierScoringWeights{},
         std::size_t min_cluster_size = 1U,
         int max_cluster_retry_count = 3,
-        int candidate_unknown_margin_cells = 2);
+        int candidate_unknown_margin_cells = 2,
+        bool defer_small_clusters = true,
+        std::size_t small_cluster_size_threshold = 3U);
 
     // 在给定 OccupancyGrid 时选择最佳 frontier，会启用 unknown margin 等地图约束。
     std::optional<GridCell> choose_best_frontier(
@@ -60,12 +63,18 @@ private:
     // cluster 成功产生可用目标后，清理其失败记录。
     void mark_cluster_succeeded(const GridCell & cluster_id);
 
+    // 从一个候选池中打分并选择最高分候选。
+    std::optional<ScoredFrontierCandidate> choose_best_scored_candidate(
+        const std::vector<FrontierCandidate> & candidates) const;
+
 private:
     // 基础硬过滤参数。
     double min_goal_distance_m_{0.5};
     int max_retry_count_{2};
     int max_cluster_retry_count_{3};
     std::size_t min_cluster_size_{1U};
+    bool defer_small_clusters_{true};
+    std::size_t small_cluster_size_threshold_{3U};
 
     // 决策流水线组件：pruner 负责候选生成，scorer 负责打分。
     FrontierPruner pruner_;
