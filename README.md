@@ -1,18 +1,36 @@
 # mk_nav2
 
 <p align="center">
-  <img alt="ROS 2" src="https://img.shields.io/badge/ROS%202-Humble-blueviolet">
-  <img alt="Ubuntu" src="https://img.shields.io/badge/Ubuntu-22.04-orange">
-  <img alt="C++" src="https://img.shields.io/badge/C%2B%2B-17-blue">
-  <img alt="Nav2" src="https://img.shields.io/badge/Nav2-Exploration-2ea44f">
-  <img alt="SLAM Toolbox" src="https://img.shields.io/badge/SLAM-Toolbox-0f766e">
-  <img alt="Gazebo" src="https://img.shields.io/badge/Gazebo-Simulation-brown">
+  <a href="https://docs.ros.org/en/humble/">
+    <img alt="ROS 2 Humble" src="https://img.shields.io/badge/ROS%202-Humble-blueviolet">
+  </a>
+  <a href="https://releases.ubuntu.com/22.04/">
+    <img alt="Ubuntu 22.04" src="https://img.shields.io/badge/Ubuntu-22.04-orange">
+  </a>
+  <a href="https://en.cppreference.com/w/cpp/17">
+    <img alt="C++17" src="https://img.shields.io/badge/C%2B%2B-17-blue">
+  </a>
+  <a href="https://docs.nav2.org/">
+    <img alt="Nav2 Exploration" src="https://img.shields.io/badge/Nav2-Exploration-2ea44f">
+  </a>
+  <a href="https://github.com/SteveMacenski/slam_toolbox">
+    <img alt="SLAM Toolbox" src="https://img.shields.io/badge/SLAM-Toolbox-0f766e">
+  </a>
+  <a href="https://gazebosim.org/docs">
+    <img alt="Gazebo Simulation" src="https://img.shields.io/badge/Gazebo-Simulation-brown">
+  </a>
 </p>
 
 <p align="center">
-  <img alt="colcon" src="https://img.shields.io/badge/build-colcon-informational">
-  <img alt="ament_cmake" src="https://img.shields.io/badge/build%20system-ament__cmake-lightgrey">
-  <img alt="Status" src="https://img.shields.io/badge/status-active%20development-yellow">
+  <a href="https://colcon.readthedocs.io/en/released/">
+    <img alt="colcon" src="https://img.shields.io/badge/build-colcon-informational">
+  </a>
+  <a href="https://docs.ros.org/en/humble/How-To-Guides/Ament-CMake-Documentation.html">
+    <img alt="ament_cmake" src="https://img.shields.io/badge/build%20system-ament__cmake-lightgrey">
+  </a>
+  <a href="CHANGELOG.rst">
+    <img alt="Status" src="https://img.shields.io/badge/status-active%20development-yellow">
+  </a>
   <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
     <img alt="Frontier Explorer Docs" src="https://img.shields.io/badge/docs-frontier_explorer-0ea5e9">
   </a>
@@ -30,6 +48,21 @@
 | --- | --- | --- |
 | 激进探索 | [media/激进探索.mp4](media/激进探索.mp4) | 更偏向高收益 frontier，探索推进更快，但会更贴近未知边界。 |
 | 保守探索 | [media/保守探索.mp4](media/保守探索.mp4) | 更强调风险抑制和候选兜底，路径选择更稳。 |
+
+
+## 🎬 Demo Preview
+
+### 激进探索
+
+[![激进探索 Demo](image/aggressive_preview.png)](media/激进探索.mp4)
+
+### 保守探索
+
+[![保守探索 Demo](image/conservative_preview.png)](media/保守探索.mp4)
+
+[![Aggressive Exploration](image/aggressive_preview.png)](media/激进探索.mp4)
+
+[![Conservative Exploration](image/conservative_preview.png)](media/保守探索.mp4)
 
 <video src="media/激进探索.mp4" controls muted width="100%"></video>
 
