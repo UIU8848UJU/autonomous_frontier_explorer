@@ -54,19 +54,14 @@
 
 ### 激进探索
 
-[![激进探索 Demo](image/aggressive_preview.png)](media/激进探索.mp4)
+https://github.com/user-attachments/assets/9e4f8a30-9b6f-4366-87e5-293d407cfe1d
+
+
 
 ### 保守探索
 
-[![保守探索 Demo](image/conservative_preview.png)](media/保守探索.mp4)
+https://github.com/user-attachments/assets/4116bd11-13f0-4c1d-8bfb-4c77dc61bf0e
 
-[![Aggressive Exploration](image/aggressive_preview.png)](media/激进探索.mp4)
-
-[![Conservative Exploration](image/conservative_preview.png)](media/保守探索.mp4)
-
-<video src="media/激进探索.mp4" controls muted width="100%"></video>
-
-<video src="media/保守探索.mp4" controls muted width="100%"></video>
 
 ## 当前能力
 
