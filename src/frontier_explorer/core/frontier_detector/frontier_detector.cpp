@@ -78,7 +78,7 @@ std::vector<GridCell> FrontierDetector::detect_frontier_cells(
 }
 
 std::vector<FrontierCluster> FrontierDetector::cluster_frontiers( 
-    const nav_msgs::msg::OccupancyGrid & map,
+    const nav_msgs::msg::OccupancyGrid &,
     const std::vector<GridCell> & frontier_cells) const
 {
     std::vector<FrontierCluster> clusters;
@@ -135,10 +135,10 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
             static_cast<int>(std::round(sum_row / cluster.cells.size())),
             static_cast<int>(std::round(sum_col / cluster.cells.size()))
         };
-        // 出去前确保这个中心点是可探测的，这里暂时没有判断是否可达
-        if (is_frontier_cell_safe(map, cluster.centroid)) {
-            clusters.push_back(cluster);
-        }
+
+        // centroid 只作为 cluster id 和优先候选点；如果它不可用，
+        // FrontierPruner 会在 cluster.cells 里寻找 fallback goal。
+        clusters.push_back(cluster);
     }
 
   return clusters;

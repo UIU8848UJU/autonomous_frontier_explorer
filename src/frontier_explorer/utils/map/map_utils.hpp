@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -8,7 +10,7 @@
 namespace frontier_explorer
 {
 
-bool in_bounds( const nav_msgs::msg::OccupancyGrid & map, int row, int col);
+bool in_bounds(const nav_msgs::msg::OccupancyGrid & map, int row, int col);
 
 bool is_cell_free(const nav_msgs::msg::OccupancyGrid & map, int row, int col);
 
@@ -30,8 +32,8 @@ std::optional<geometry_msgs::msg::Point> grid_to_world(
     const GridCell & cell,
     const nav_msgs::msg::OccupancyGrid::SharedPtr & map_msg);
 
-double distance_in_meters(const geometry_msgs::msg::Point & p1,
-                          const geometry_msgs::msg::Point & p2);
-
+double distance_in_meters(
+    const geometry_msgs::msg::Point & p1,
+    const geometry_msgs::msg::Point & p2);
 
 }  // namespace frontier_explorer

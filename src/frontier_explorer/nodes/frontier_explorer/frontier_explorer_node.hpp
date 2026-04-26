@@ -8,9 +8,6 @@
 #include <mutex>
 #include <optional>
 #include <string>
-#include <unordered_set>
-#include <utility>
-#include <vector>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"   //目标位姿
 #include "nav2_msgs/action/navigate_to_pose.hpp"    //Nav2 的导航 action
@@ -20,6 +17,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "types.h"
 #include "frontier_detector.hpp"
+#include "frontier_explorer_params.hpp"
 #include "frontier_selector.hpp"
 #include "map_utils.hpp"
 // 状态节点
@@ -45,6 +43,8 @@ private:
 
     // init
     void declare_params();
+    void load_params();
+    void apply_params();
     void create_interfaces();
 
     // 回调callback
@@ -55,7 +55,7 @@ private:
     bool update_robot_grid_position();
 
     void send_navigation_goal(const GridCell & goal_cell
-            ,const geometry_msgs::msg::PoseStamped & pose);
+        ,const geometry_msgs::msg::PoseStamped & pose);
 
     void goal_response_callback(
             const GoalHandleNavigateToPose::SharedPtr & goal_handle);
@@ -65,7 +65,7 @@ private:
 
     /// @brief 控制面部分
     void publish_state();
-        std::string state_to_string() const;
+    std::string state_to_string() const;
 
     void handle_start(
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
@@ -93,23 +93,11 @@ private:
     std::optional<GridCell> current_goal_grid_;
     GoalHandleNavigateToPose::SharedPtr goal_handle_;
 
+    FrontierExplorerParams params_;
     FrontierDetector detector_;
     FrontierSelector selector_;
 
     bool is_navigating_{false};
-
-    double explore_period_sec_{3.0};
-    int obstacle_search_radius_cells_{2};
-    int min_frontier_cluster_size_{5};
-    double min_goal_distance_m_{0.5};
-    int max_retry_count_{2};
-    std::string selection_strategy_{"nearest"};
-    FrontierScoringWeights frontier_decision_weights_{};
-    int candidate_unknown_margin_cells_{2};
-    double candidate_max_unknown_ratio_{0.4};
-    std::chrono::milliseconds map_stale_timeout_{std::chrono::milliseconds(5000)};
-    std::size_t max_frontier_failures_{3};
-    double edge_tolerance_m_{0.3};
     
     /// @note:后续可以设计为多机控制
     std::atomic<ExplorationState> state_{ExplorationState::IDLE};

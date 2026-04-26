@@ -4,11 +4,20 @@
 #include <vector>
 
 #include "frontier_decision_types.hpp"
+#include "score_components/clearance_score.hpp"
+#include "score_components/cluster_size_score.hpp"
+#include "score_components/distance_score.hpp"
+#include "score_components/information_gain_score.hpp"
+#include "score_components/retry_penalty_score.hpp"
+#include "score_components/unknown_risk_penalty_score.hpp"
 #include "types.h"
 
 namespace frontier_explorer
 {
 
+// 统一打分器：调用各个独立 score component，并合成最终加权总分。
+// 本类持有策略权重；component 不持有权重，只根据 FrontierCandidate
+// 中的事实数据计算归一化分值或惩罚值。
 class FrontierScorer
 {
 public:
@@ -17,27 +26,24 @@ public:
         int max_retry_count = 2);
 
     std::vector<ScoredFrontierCandidate> score_candidates(
-        const std::vector<FrontierSelectionCandidate> & candidates,
+        const std::vector<FrontierCandidate> & candidates,
         const std::optional<GridCell> & last_goal) const;
 
     const FrontierScoringWeights & weights() const;
 
 private:
-    double normalized_distance_score(
-        double distance,
-        double min_distance,
-        double max_distance) const;
-
-    double normalized_cluster_size_score(
-        std::size_t cluster_size,
-        std::size_t min_cluster_size,
-        std::size_t max_cluster_size) const;
-
+    // 正向分项累加，惩罚分项扣减。
     double compute_total_score(const ScoredFrontierCandidate & scored) const;
 
 private:
     FrontierScoringWeights weights_{};
-    int max_retry_count_{2};
+    
+    DistanceScore distance_score_;
+    ClusterSizeScore cluster_size_score_;
+    ClearanceScore clearance_score_;
+    RetryPenaltyScore retry_penalty_score_;
+    UnknownRiskPenaltyScore unknown_risk_penalty_score_;
+    InformationGainScore information_gain_score_;
 };
 
 }  // namespace frontier_explorer

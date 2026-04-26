@@ -1,9 +1,9 @@
 #include "frontier_pruner.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <limits>
 
+#include "frontier_selector_utils.hpp"
 #include "map_utils.hpp"
 
 namespace frontier_explorer
@@ -14,25 +14,13 @@ FrontierPruner::FrontierPruner(
     int max_retry_count,
     int max_cluster_retry_count,
     std::size_t min_cluster_size,
-    int unknown_margin_cells,
-    double max_unknown_ratio)
+    int unknown_margin_cells)
 : min_goal_distance_m_(min_goal_distance_m),
   max_retry_count_(max_retry_count),
   max_cluster_retry_count_(max_cluster_retry_count),
   min_cluster_size_(min_cluster_size),
-  unknown_margin_cells_(std::max(0, unknown_margin_cells)),
-  max_unknown_ratio_(std::clamp(max_unknown_ratio, 0.0, 1.0))
+  unknown_margin_cells_(std::max(0, unknown_margin_cells))
 {
-}
-
-double FrontierPruner::distance_in_meters(
-    const GridCell & a,
-    const GridCell & b,
-    double resolution) const
-{
-    const double dr = static_cast<double>(a.row - b.row);
-    const double dc = static_cast<double>(a.col - b.col);
-    return std::sqrt(dr * dr + dc * dc) * resolution;
 }
 
 bool FrontierPruner::is_same_as_last_goal(
@@ -91,7 +79,7 @@ std::optional<GridCell> FrontierPruner::find_fallback_goal_in_cluster(
             continue;
         }
 
-        const double dist_m = distance_in_meters(robot_grid, cell, resolution);
+        const double dist_m = grid_distance_in_meters(robot_grid, cell, resolution);
         if (dist_m < min_goal_distance_m_) {
             continue;
         }
@@ -107,8 +95,13 @@ std::optional<GridCell> FrontierPruner::find_fallback_goal_in_cluster(
 
 bool FrontierPruner::pass_map_candidate_constraints(
     const GridCell & cell,
-    const nav_msgs::msg::OccupancyGrid * map) const
+    const nav_msgs::msg::OccupancyGrid * map,
+    double * unknown_ratio) const
 {
+    if (unknown_ratio != nullptr) {
+        *unknown_ratio = 0.0;
+    }
+
     if (map == nullptr) {
         return true;
     }
@@ -142,12 +135,15 @@ bool FrontierPruner::pass_map_candidate_constraints(
         return false;
     }
 
-    const double unknown_ratio =
+    const double ratio =
         static_cast<double>(unknown_count) / static_cast<double>(observed_count);
-    return unknown_ratio <= max_unknown_ratio_;
+    if (unknown_ratio != nullptr) {
+        *unknown_ratio = ratio;
+    }
+    return true;
 }
 
-std::vector<FrontierSelectionCandidate> FrontierPruner::prune_clusters(
+std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
     const std::vector<FrontierCluster> & clusters,
     const GridCell & robot_grid,
     double resolution,
@@ -155,7 +151,7 @@ std::vector<FrontierSelectionCandidate> FrontierPruner::prune_clusters(
     const FrontierPruningContext & context,
     std::vector<GridCell> * failed_cluster_ids) const
 {
-    std::vector<FrontierSelectionCandidate> valid_candidates;
+    std::vector<FrontierCandidate> valid_candidates;
     valid_candidates.reserve(clusters.size());
 
     for (std::size_t cluster_idx = 0; cluster_idx < clusters.size(); ++cluster_idx) {
@@ -181,7 +177,9 @@ std::vector<FrontierSelectionCandidate> FrontierPruner::prune_clusters(
         }
 
         GridCell candidate = cluster.centroid;
-        double dist_m = distance_in_meters(robot_grid, candidate, resolution);
+        double dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
+        double unknown_ratio = 0.0;
+        bool used_fallback = false;
 
         bool centroid_invalid = false;
         if (should_skip_goal(candidate, context)) {
@@ -190,7 +188,7 @@ std::vector<FrontierSelectionCandidate> FrontierPruner::prune_clusters(
             centroid_invalid = true;
         } else if (is_same_as_last_goal(candidate, context.last_goal)) {
             centroid_invalid = true;
-        } else if (!pass_map_candidate_constraints(candidate, map)) {
+        } else if (!pass_map_candidate_constraints(candidate, map, &unknown_ratio)) {
             centroid_invalid = true;
         }
 
@@ -205,18 +203,21 @@ std::vector<FrontierSelectionCandidate> FrontierPruner::prune_clusters(
             }
 
             candidate = fallback.value();
-            dist_m = distance_in_meters(robot_grid, candidate, resolution);
+            dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
+            pass_map_candidate_constraints(candidate, map, &unknown_ratio);
+            used_fallback = true;
         }
 
-        valid_candidates.push_back(FrontierSelectionCandidate{
+        valid_candidates.push_back(FrontierCandidate{
             candidate,
             cluster.centroid,
             cluster.cells.size(),
             dist_m,
             retry_count_of_goal(candidate, context),
-            false,
             0.0,
-            cluster_idx
+            unknown_ratio,
+            cluster_idx,
+            used_fallback
         });
     }
 

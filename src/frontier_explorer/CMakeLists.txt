@@ -15,6 +15,7 @@ find_package(rclcpp_action REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(robot_interfaces REQUIRED)
@@ -25,11 +26,16 @@ include_directories(include)
 add_executable(frontier_explorer_node
   nodes/frontier_explorer/main.cpp
   nodes/frontier_explorer/frontier_explorer_node.cpp
-  core/map_utils/map_utils.cpp
+  utils/map/map_utils.cpp
   core/frontier_detector/frontier_detector.cpp
   core/frontier_selector/frontier_pruner.cpp
   core/frontier_selector/frontier_scorer.cpp
-  core/frontier_selector/frontier_selection_strategy.cpp
+  core/frontier_selector/score_components/distance_score.cpp
+  core/frontier_selector/score_components/cluster_size_score.cpp
+  core/frontier_selector/score_components/clearance_score.cpp
+  core/frontier_selector/score_components/retry_penalty_score.cpp
+  core/frontier_selector/score_components/unknown_risk_penalty_score.cpp
+  core/frontier_selector/score_components/information_gain_score.cpp
   core/frontier_selector/frontier_selector.cpp
 )
 
@@ -37,9 +43,12 @@ target_include_directories(frontier_explorer_node PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/
   ${CMAKE_CURRENT_SOURCE_DIR}/nodes/frontier_explorer
   ${CMAKE_CURRENT_SOURCE_DIR}/core
-  ${CMAKE_CURRENT_SOURCE_DIR}/core/map_utils
   ${CMAKE_CURRENT_SOURCE_DIR}/core/frontier_detector
   ${CMAKE_CURRENT_SOURCE_DIR}/core/frontier_selector
+  ${CMAKE_CURRENT_SOURCE_DIR}/core/frontier_selector/score_components
+  ${CMAKE_CURRENT_SOURCE_DIR}/utils
+  ${CMAKE_CURRENT_SOURCE_DIR}/utils/map
+  ${CMAKE_CURRENT_SOURCE_DIR}/utils/frontier
 )
 
 

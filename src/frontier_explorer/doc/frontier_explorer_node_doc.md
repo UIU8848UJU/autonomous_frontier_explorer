@@ -27,7 +27,7 @@
 ## 4. 核心组件
 ### 4.1 FrontierDetector（`core/frontier_detector`）
 - `detect_frontier_cells`：遍历自由栅格，寻找周围存在未知（-1）单元且当前格安全的点。安全判定由 `is_frontier_cell_safe` 完成，检查 `obstacle_search_radius_cells` 范围内是否有障碍。
-- `cluster_frontiers`：对前沿点进行 8 邻域 BFS 聚类，剔除小于 `min_frontier_cluster_size` 的簇，并计算几何中心（确保中心点也安全）。输出 `FrontierCluster` 列表供选择器使用。
+- `cluster_frontiers`：对前沿点进行 8 邻域 BFS 聚类，剔除小于 `min_frontier_cluster_size` 的簇，并计算几何中心。中心点只作为优先候选和 cluster id，若不可用由 `FrontierPruner` 在簇内 fallback。
 
 ### 4.2 FrontierSelector（`core/frontier_selector`）
 - 依据机器人栅格坐标、地图分辨率与 `min_goal_distance_m` 过滤离机器人过近的目标。
@@ -75,7 +75,7 @@
 
 参数可通过 ROS 2 动态重载（例如 `ros2 param set`）调整，或创建新的 YAML 覆盖默认值。
 
-## 7. 数据转换与工具函数（`core/map_utils`）
+## 7. 数据转换与工具函数（`utils/map`）
 - `world_to_grid` / `grid_to_world`：在 OccupancyGrid 原点、分辨率下相互转换；超出范围时返回 `std::optional` 空值。
 - `grid_to_goal_pose`：将格点转换为 `PoseStamped` 并对齐朝向，供 Nav2 Action 使用。
 - `distance_in_meters`：用于反馈阶段计算进度。
@@ -99,3 +99,6 @@
 5. 用 `ros2 topic echo /exploration_state` 观察状态变化，确认能周期性发送 `navigate_to_pose` 目标。
 
 如需复位，可 `ros2 service call /stop_exploration std_srvs/srv/Trigger {}`，再重新 start。
+
+# 10. TODO
+目前硬过滤会直接把太靠近边界点，没有探索的值给丢掉，后续作为低权重分数，作为最后探索的节点。

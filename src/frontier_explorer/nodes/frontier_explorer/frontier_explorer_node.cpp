@@ -5,11 +5,8 @@
 #include <cmath>
 #include <functional>
 #include <limits>
-#include <queue>
-#include <unordered_set>
 
 #include <tf2/utils.hpp> //给 getYaw
-#include <tf2/LinearMath/Quaternion.h>            //处理四元数
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
 namespace
@@ -64,14 +61,24 @@ constexpr size_t kStatePublisherDepth = 10;
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
-  detector_(obstacle_search_radius_cells_, min_frontier_cluster_size_),
-  selector_(min_goal_distance_m_, max_retry_count_, frontier_decision_weights_)
+  detector_(
+      params_.runtime.obstacle_search_radius_cells,
+      params_.runtime.min_frontier_cluster_size),
+  selector_(
+      params_.pruner.min_goal_distance_m,
+      params_.selection.max_retry_count,
+      params_.scorer.weights,
+      params_.pruner.min_cluster_size,
+      params_.selection.max_cluster_retry_count,
+      params_.pruner.candidate_unknown_margin_cells)
 {
     declare_params();
+    load_params();
+    apply_params();
     create_interfaces();
 
     explore_timer_ = this->create_wall_timer(
-        std::chrono::duration<double>(explore_period_sec_),
+        std::chrono::duration<double>(params_.runtime.explore_period_sec),
         std::bind(&FrontierExplorerNode::explore_timer_callback, this));
 
     set_state(ExplorationState::IDLE);
@@ -113,93 +120,138 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<int>("min_frontier_cluster_size", 5);
     this->declare_parameter<double>("min_goal_distance_m", 0.5);
     this->declare_parameter<int>("max_retry_count", 2);
-    this->declare_parameter<std::string>("selection_strategy", selection_strategy_);
+    this->declare_parameter<int>(
+        "frontier_decision.max_cluster_retry_count",
+        params_.selection.max_cluster_retry_count);
     this->declare_parameter<double>(
         "frontier_decision.weight_distance",
-        frontier_decision_weights_.weight_distance);
+        params_.scorer.weights.weight_distance);
     this->declare_parameter<double>(
         "frontier_decision.weight_cluster_size",
-        frontier_decision_weights_.weight_cluster_size);
+        params_.scorer.weights.weight_cluster_size);
     this->declare_parameter<double>(
         "frontier_decision.weight_clearance",
-        frontier_decision_weights_.weight_clearance);
+        params_.scorer.weights.weight_clearance);
     this->declare_parameter<double>(
         "frontier_decision.weight_revisit_penalty",
-        frontier_decision_weights_.weight_revisit_penalty);
+        params_.scorer.weights.weight_revisit_penalty);
     this->declare_parameter<double>(
         "frontier_decision.weight_retry_penalty",
-        frontier_decision_weights_.weight_retry_penalty);
+        params_.scorer.weights.weight_retry_penalty);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_unknown_risk_penalty",
+        params_.scorer.weights.weight_unknown_risk_penalty);
+    this->declare_parameter<double>(
+        "frontier_decision.weight_information_gain",
+        params_.scorer.weights.weight_information_gain);
     this->declare_parameter<bool>(
         "frontier_decision.enable_clearance_score",
-        frontier_decision_weights_.enable_clearance_score);
+        params_.scorer.weights.enable_clearance_score);
     this->declare_parameter<bool>(
         "frontier_decision.enable_revisit_penalty",
-        frontier_decision_weights_.enable_revisit_penalty);
+        params_.scorer.weights.enable_revisit_penalty);
+    this->declare_parameter<bool>(
+        "frontier_decision.enable_unknown_risk_penalty",
+        params_.scorer.weights.enable_unknown_risk_penalty);
+    this->declare_parameter<bool>(
+        "frontier_decision.enable_information_gain_score",
+        params_.scorer.weights.enable_information_gain_score);
     this->declare_parameter<int>(
         "frontier_decision.candidate_unknown_margin_cells",
-        candidate_unknown_margin_cells_);
+        params_.pruner.candidate_unknown_margin_cells);
     this->declare_parameter<double>(
         "frontier_decision.candidate_max_unknown_ratio",
-        candidate_max_unknown_ratio_);
+        params_.scorer.weights.unknown_risk_threshold);
     this->declare_parameter<int>(
-        "map_stale_timeout_ms", static_cast<int>(map_stale_timeout_.count()));
+        "map_stale_timeout_ms", static_cast<int>(params_.runtime.map_stale_timeout.count()));
     this->declare_parameter<int>(
-        "max_frontier_failures", static_cast<int>(max_frontier_failures_));
-    this->declare_parameter<double>("edge_tolerance_m", edge_tolerance_m_);
+        "max_frontier_failures", params_.runtime.max_frontier_failures);
+    this->declare_parameter<double>("edge_tolerance_m", params_.runtime.edge_tolerance_m);
+}
 
-    explore_period_sec_ = 
+void FrontierExplorerNode::load_params()
+{
+    params_.runtime.explore_period_sec =
         this->get_parameter("explore_period_sec").as_double();
-    obstacle_search_radius_cells_ = 
+    params_.runtime.obstacle_search_radius_cells =
         this->get_parameter("obstacle_search_radius_cells").as_int();
-    min_frontier_cluster_size_ = 
+    params_.runtime.min_frontier_cluster_size =
         this->get_parameter("min_frontier_cluster_size").as_int();
-    min_goal_distance_m_ = 
+    params_.pruner.min_goal_distance_m =
         this->get_parameter("min_goal_distance_m").as_double();
-    max_retry_count_ =
+    params_.selection.max_retry_count =
         this->get_parameter("max_retry_count").as_int();
-    selection_strategy_ =
-        this->get_parameter("selection_strategy").as_string();
-    frontier_decision_weights_.weight_distance =
+    params_.selection.max_cluster_retry_count =
+        this->get_parameter("frontier_decision.max_cluster_retry_count").as_int();
+    params_.scorer.weights.weight_distance =
         this->get_parameter("frontier_decision.weight_distance").as_double();
-    frontier_decision_weights_.weight_cluster_size =
+    params_.scorer.weights.weight_cluster_size =
         this->get_parameter("frontier_decision.weight_cluster_size").as_double();
-    frontier_decision_weights_.weight_clearance =
+    params_.scorer.weights.weight_clearance =
         this->get_parameter("frontier_decision.weight_clearance").as_double();
-    frontier_decision_weights_.weight_revisit_penalty =
+    params_.scorer.weights.weight_revisit_penalty =
         this->get_parameter("frontier_decision.weight_revisit_penalty").as_double();
-    frontier_decision_weights_.weight_retry_penalty =
+    params_.scorer.weights.weight_retry_penalty =
         this->get_parameter("frontier_decision.weight_retry_penalty").as_double();
-    frontier_decision_weights_.enable_clearance_score =
+    params_.scorer.weights.weight_unknown_risk_penalty =
+        this->get_parameter("frontier_decision.weight_unknown_risk_penalty").as_double();
+    params_.scorer.weights.weight_information_gain =
+        this->get_parameter("frontier_decision.weight_information_gain").as_double();
+    params_.scorer.weights.enable_clearance_score =
         this->get_parameter("frontier_decision.enable_clearance_score").as_bool();
-    frontier_decision_weights_.enable_revisit_penalty =
+    params_.scorer.weights.enable_revisit_penalty =
         this->get_parameter("frontier_decision.enable_revisit_penalty").as_bool();
-    candidate_unknown_margin_cells_ =
+    params_.scorer.weights.enable_unknown_risk_penalty =
+        this->get_parameter("frontier_decision.enable_unknown_risk_penalty").as_bool();
+    params_.scorer.weights.enable_information_gain_score =
+        this->get_parameter("frontier_decision.enable_information_gain_score").as_bool();
+    params_.pruner.candidate_unknown_margin_cells =
         this->get_parameter("frontier_decision.candidate_unknown_margin_cells").as_int();
-    candidate_max_unknown_ratio_ =
+    params_.scorer.weights.unknown_risk_threshold =
         this->get_parameter("frontier_decision.candidate_max_unknown_ratio").as_double();
-    
-    const auto stale_timeout_ms = this->get_parameter("map_stale_timeout_ms").as_int();
-    map_stale_timeout_ = std::chrono::milliseconds(std::max(1000L, stale_timeout_ms));
-    const auto frontier_failures = this->get_parameter("max_frontier_failures").as_int();
-    max_frontier_failures_ = static_cast<std::size_t>(std::max(1L, frontier_failures));
-    edge_tolerance_m_ =
-        std::max(0.05, this->get_parameter("edge_tolerance_m").as_double());
+    params_.runtime.map_stale_timeout =
+        std::chrono::milliseconds(this->get_parameter("map_stale_timeout_ms").as_int());
+    params_.runtime.max_frontier_failures =
+        this->get_parameter("max_frontier_failures").as_int();
+    params_.runtime.edge_tolerance_m =
+        this->get_parameter("edge_tolerance_m").as_double();
+}
 
-    detector_ = FrontierDetector(obstacle_search_radius_cells_, min_frontier_cluster_size_);
+void FrontierExplorerNode::apply_params()
+{
+    params_.runtime.explore_period_sec =
+        std::max(0.1, params_.runtime.explore_period_sec);
+    params_.runtime.obstacle_search_radius_cells =
+        std::max(0, params_.runtime.obstacle_search_radius_cells);
+    params_.runtime.min_frontier_cluster_size =
+        std::max(1, params_.runtime.min_frontier_cluster_size);
+    params_.runtime.map_stale_timeout =
+        std::chrono::milliseconds(std::max<int64_t>(1000, params_.runtime.map_stale_timeout.count()));
+    params_.runtime.max_frontier_failures =
+        std::max(1, params_.runtime.max_frontier_failures);
+    params_.runtime.edge_tolerance_m =
+        std::max(0.05, params_.runtime.edge_tolerance_m);
+
+    params_.selection.max_retry_count =
+        std::max(1, params_.selection.max_retry_count);
+    params_.selection.max_cluster_retry_count =
+        std::max(1, params_.selection.max_cluster_retry_count);
+    params_.scorer.weights.unknown_risk_threshold =
+        std::clamp(params_.scorer.weights.unknown_risk_threshold, 0.0, 1.0);
+
+    params_.pruner.min_cluster_size =
+        static_cast<std::size_t>(params_.runtime.min_frontier_cluster_size);
+
+    detector_ = FrontierDetector(
+        params_.runtime.obstacle_search_radius_cells,
+        params_.runtime.min_frontier_cluster_size);
     selector_ = FrontierSelector(
-        min_goal_distance_m_,
-        max_retry_count_,
-        frontier_decision_weights_,
-        static_cast<std::size_t>(std::max(1, min_frontier_cluster_size_)),
-        3,
-        candidate_unknown_margin_cells_,
-        candidate_max_unknown_ratio_);
-
-    RCLCPP_WARN_WITH_CONTEXT(
-        this->get_logger(),
-        "selection_strategy parameter is deprecated and ignored for scoring. "
-        "Use frontier_decision.* weights instead.");
-
+        params_.pruner.min_goal_distance_m,
+        params_.selection.max_retry_count,
+        params_.scorer.weights,
+        params_.pruner.min_cluster_size,
+        params_.selection.max_cluster_retry_count,
+        params_.pruner.candidate_unknown_margin_cells);
 }
 
 void FrontierExplorerNode::create_interfaces()
@@ -369,14 +421,17 @@ void FrontierExplorerNode::result_callback(
     const GoalHandleNavigateToPose::WrappedResult & result)
 {
     is_navigating_ = false;
+    last_progress_time_.reset();
+    last_progress_distance_ = 0.0;
+    initial_goal_distance_ = 0.0;
 
     switch (result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
-            set_state(ExplorationState::COMPLETED);
+            set_state(ExplorationState::RUNNING);
   
             if (current_goal_grid_.has_value()) {
-                    selector_.mark_goal_succeeded(current_goal_grid_.value());
-                }
+                selector_.mark_goal_succeeded(current_goal_grid_.value());
+            }
             RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal SUCCEEDED, state is:%s",
                 state_to_string().c_str());
     
@@ -416,16 +471,33 @@ void FrontierExplorerNode::result_callback(
 void FrontierExplorerNode::feedback_callback(GoalHandleNavigateToPose::SharedPtr,
                                              const std::shared_ptr<const NavigateToPose::Feedback> feedback)
 {
+    if (!feedback) {
+        return;
+    }
+
+    if (!current_goal_grid_.has_value() || !map_msg_) {
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 3000,
+            "Navigation feedback received before goal or map is available.");
+        return;
+    }
 
     // 传回来的机器坐标
     const auto & global_robot_pos = feedback->current_pose.pose;
-    const auto & global_goal_pos = grid_to_world(*current_goal_grid_, map_msg_);
-    double theta = tf2::getYaw(global_robot_pos.orientation);
+    const auto global_goal_pos = grid_to_world(current_goal_grid_.value(), map_msg_);
+    if (!global_goal_pos.has_value()) {
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 3000,
+            "Current goal is outside of the available map.");
+        return;
+    }
+
+    const double theta = tf2::getYaw(global_robot_pos.orientation);
 
     RCLCPP_INFO_THROTTLE_WITH_CONTEXT(this->get_logger(), *this->get_clock(), 
                 3000, "robot:x=%.3f y=%.3f theta=%.3f, target:robot:x=%.3f y=%.3f",
                 global_robot_pos.position.x, global_robot_pos.position.y, theta,
-                global_goal_pos.value().x, global_goal_pos.value().y);
+                global_goal_pos->x, global_goal_pos->y);
 
     // 更新内部 robot_grid_（当前网格坐标）
     robot_grid_ = world_to_grid(global_robot_pos.position, map_msg_);  
@@ -435,54 +507,49 @@ void FrontierExplorerNode::feedback_callback(GoalHandleNavigateToPose::SharedPtr
         return;  
     }
 
-    if (current_goal_grid_) {
-        // 计算到目标点的距离
-        double dist_to_goal = distance_in_meters(
-            global_robot_pos.position,
-            global_goal_pos.value());
+    // 计算到目标点的距离
+    double dist_to_goal = distance_in_meters(
+        global_robot_pos.position,
+        global_goal_pos.value());
 
-        if (initial_goal_distance_ <= 0.0) {
-            initial_goal_distance_ = std::max(dist_to_goal, 1e-3);
-        }
-        double progress_ratio = 1.0 - dist_to_goal / initial_goal_distance_;
-        progress_ratio = std::clamp(progress_ratio, 0.0, 1.0);
-        goal_progress_.store(static_cast<float>(progress_ratio), std::memory_order_relaxed);
-        RCLCPP_DEBUG_WITH_CONTEXT(
-            this->get_logger(),
-            "goal progress: %.1f%% (remaining %.3fm)",
-            progress_ratio * 100.0,
-            dist_to_goal);
+    if (initial_goal_distance_ <= 0.0) {
+        initial_goal_distance_ = std::max(dist_to_goal, 1e-3);
+    }
+    double progress_ratio = 1.0 - dist_to_goal / initial_goal_distance_;
+    progress_ratio = std::clamp(progress_ratio, 0.0, 1.0);
+    goal_progress_.store(static_cast<float>(progress_ratio), std::memory_order_relaxed);
+    RCLCPP_DEBUG_WITH_CONTEXT(
+        this->get_logger(),
+        "goal progress: %.1f%% (remaining %.3fm)",
+        progress_ratio * 100.0,
+        dist_to_goal);
 
-        if (dist_to_goal < 0.05) {
-            set_state(ExplorationState::COMPLETED);
-        } 
-        else {
-            set_state(ExplorationState::RUNNING);
-        }
+    if (dist_to_goal < 0.05) {
+        set_state(ExplorationState::COMPLETED);
+    } else {
+        set_state(ExplorationState::RUNNING);
+    }
 
-        // fallback 处理：如果长时间没有明显进展
-        auto now = this->now();
-        if (!last_progress_time_) {
+    // fallback 处理：如果长时间没有明显进展
+    auto now = this->now();
+    if (!last_progress_time_) {
+        last_progress_time_ = now;
+        last_progress_distance_ = dist_to_goal;
+    } else {
+        double delta = std::abs(dist_to_goal - last_progress_distance_);
+        if (delta < 0.01 && (now - *last_progress_time_).seconds() > 5.0) {
+            RCLCPP_WARN_WITH_CONTEXT(this->get_logger(),
+                        "Goal seems stuck! triggering fallback.");
+            set_state(ExplorationState::STUCK);
+            last_progress_time_ = now;
+            last_progress_distance_ = dist_to_goal;  // 重置防止重复触发
+        } else if (delta >= 0.01) {
             last_progress_time_ = now;
             last_progress_distance_ = dist_to_goal;
-        } 
-        else {
-            double delta = std::abs(dist_to_goal - last_progress_distance_);
-            if (delta < 0.01 && (now - *last_progress_time_).seconds() > 5.0) {
-                RCLCPP_WARN_WITH_CONTEXT(this->get_logger(),
-                            "Goal seems stuck! triggering fallback.");
-                set_state(ExplorationState::STUCK);
-                last_progress_time_ = now;
-                last_progress_distance_ = dist_to_goal;  // 重置防止重复触发
-            } 
-            else if (delta >= 0.01) {
-                last_progress_time_ = now;
-                last_progress_distance_ = dist_to_goal;
-            }
         }
-
-        publish_state();  // 每次反馈更新状态
     }
+
+    publish_state();  // 每次反馈更新状态
 }
 
 void FrontierExplorerNode::explore_timer_callback()
@@ -508,7 +575,7 @@ void FrontierExplorerNode::explore_timer_callback()
     const auto now = this->now();
     if (last_map_update_time_.nanoseconds() > 0) {
         const auto elapsed = now - last_map_update_time_;
-        if (elapsed > rclcpp::Duration(map_stale_timeout_)) {
+        if (elapsed > rclcpp::Duration(params_.runtime.map_stale_timeout)) {
             RCLCPP_WARN_THROTTLE_WITH_CONTEXT(
                 this->get_logger(), *this->get_clock(), 2000,
                 "Map has not updated for %.2f seconds, marking STUCK.",
@@ -548,9 +615,14 @@ void FrontierExplorerNode::explore_timer_callback()
             robot_grid_->col,
             clusters.size());
         ++consecutive_frontier_failures_;
-        if (consecutive_frontier_failures_ >= max_frontier_failures_) {
+        if (consecutive_frontier_failures_ >=
+            static_cast<std::size_t>(params_.runtime.max_frontier_failures))
+        {
             const bool near_edge = robot_grid_.has_value() &&
-                near_map_edge(*map_msg_, robot_grid_.value(), edge_tolerance_m_);
+                near_map_edge(
+                    *map_msg_,
+                    robot_grid_.value(),
+                    params_.runtime.edge_tolerance_m);
             const std::string reason = near_edge ?
                 "no_frontier_near_edge" : "no_valid_frontier";
             RCLCPP_WARN_WITH_CONTEXT(
