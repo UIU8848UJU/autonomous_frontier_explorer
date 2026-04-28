@@ -13,8 +13,10 @@ FrontierSelector::FrontierSelector(
     int max_cluster_retry_count,
     int candidate_unknown_margin_cells,
     bool defer_small_clusters,
-    std::size_t small_cluster_size_threshold)
-: min_goal_distance_m_(min_goal_distance_m),
+    std::size_t small_cluster_size_threshold,
+    const rclcpp::Logger & logger)
+: logger_(rclcpp::Logger(logger).get_child("selector")),
+  min_goal_distance_m_(min_goal_distance_m),
   max_retry_count_(max_retry_count),
   max_cluster_retry_count_(max_cluster_retry_count),
   min_cluster_size_(std::max<std::size_t>(1U, min_cluster_size)),
@@ -26,8 +28,9 @@ FrontierSelector::FrontierSelector(
       max_retry_count_,
       max_cluster_retry_count_,
       min_cluster_size_,
-      candidate_unknown_margin_cells),
-  scorer_(scoring_weights, max_retry_count_)
+      candidate_unknown_margin_cells,
+      logger_),
+  scorer_(scoring_weights, max_retry_count_, logger_)
 {
 }
 
@@ -35,7 +38,8 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
     const std::vector<FrontierCluster> & clusters,
     const GridCell & robot_grid,
     double resolution,
-    const nav_msgs::msg::OccupancyGrid & map)
+    const CostmapAdapter & frontier_costmap,
+    const CostmapAdapter * safety_costmap)
 {
     const FrontierPruningContext context{
         state_.last_goal_grid,
@@ -49,7 +53,8 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
         clusters,
         robot_grid,
         resolution,
-        &map,
+        &frontier_costmap,
+        safety_costmap,
         context,
         &fallback_failed_clusters);
 
@@ -58,6 +63,7 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
     }
 
     if (valid_candidates.empty()) {
+        RCLCPP_WARN(logger_, "No valid frontier candidates after pruning.");
         return std::nullopt;
     }
 

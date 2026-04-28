@@ -16,6 +16,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "types.h"
+#include "costmap_adapter.hpp"
 #include "frontier_detector.hpp"
 #include "frontier_explorer_params.hpp"
 #include "frontier_selector.hpp"
@@ -48,7 +49,16 @@ private:
     void create_interfaces();
 
     // 回调callback
+    /// @brief: 处理用于 frontier 检测的 /map 更新
+    /// @param msg OccupancyGrid 地图消息
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
+
+    /// @brief: 处理用于目标安全检查的 global costmap 更新
+    /// @param msg OccupancyGrid costmap 消息
+    void global_costmap_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
+
+    /// @brief: 处理里程计更新
+    /// @param msg Odometry 消息
     void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg);
     void explore_timer_callback();
 
@@ -82,11 +92,14 @@ private:
 
 private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
+    rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr global_costmap_sub_;
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
     rclcpp_action::Client<NavigateToPose>::SharedPtr nav_client_;
     rclcpp::TimerBase::SharedPtr explore_timer_;
 
     nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
+    CostmapAdapter map_costmap_;
+    CostmapAdapter global_costmap_;
     nav_msgs::msg::Odometry::SharedPtr odom_msg_;
 
     std::optional<GridCell> robot_grid_;

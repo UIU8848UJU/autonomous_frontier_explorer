@@ -7,8 +7,10 @@ namespace frontier_explorer
 
 FrontierScorer::FrontierScorer(
     FrontierScoringWeights weights,
-    int max_retry_count)
-: weights_(weights),
+    int max_retry_count,
+    const rclcpp::Logger & logger)
+: logger_(rclcpp::Logger(logger).get_child("scorer")),
+  weights_(weights),
   retry_penalty_score_(max_retry_count),
   unknown_risk_penalty_score_(weights.unknown_risk_threshold)
 {
@@ -51,6 +53,7 @@ std::vector<ScoredFrontierCandidate> FrontierScorer::score_candidates(
 {
     std::vector<ScoredFrontierCandidate> scored_candidates;
     if (candidates.empty()) {
+        RCLCPP_DEBUG(logger_, "No candidates to score.");
         return scored_candidates;
     }
 

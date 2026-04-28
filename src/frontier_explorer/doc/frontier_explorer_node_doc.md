@@ -25,6 +25,7 @@ FrontierDetector
 
 - ROS 2 Humble
 - Nav2 `NavigateToPose`
+- Nav2 `nav2_costmap_2d::Costmap2D`
 - `nav_msgs/msg/OccupancyGrid`
 - `nav_msgs/msg/Odometry`
 - `robot_interfaces/msg/ExplorationState`
@@ -34,7 +35,8 @@ FrontierDetector
 
 | 接口 | 类型 | 方向 | 说明 |
 | --- | --- | --- | --- |
-| `/map` | `nav_msgs/msg/OccupancyGrid` | 订阅 | frontier 检测与候选合法性判断。 |
+| `/map` | `nav_msgs/msg/OccupancyGrid` | 订阅 | frontier 检测、unknown 语义和候选基础合法性判断。 |
+| `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | 可选 safety costmap 来源，用于 clearance 软评分，不作为 frontier 硬过滤。 |
 | `/odom` | `nav_msgs/msg/Odometry` | 订阅 | 将机器人位置转换为地图栅格坐标。 |
 | `/exploration_state` | `robot_interfaces/msg/ExplorationState` | 发布 | 发布 IDLE/RUNNING/STOPPED/COMPLETED/STUCK 等状态。 |
 | `/start_exploration` | `std_srvs/srv/Trigger` | 服务 | 进入 RUNNING，允许定时器派发目标。 |
@@ -49,7 +51,7 @@ FrontierDetector
 2. 检查 `/map` 是否超时；超时则进入 STUCK，detail 为 `map_stale`。
 3. 根据 `/odom` 和 `/map` 原点/分辨率计算机器人当前 `GridCell`。
 4. `FrontierDetector` 从 `/map` 中检测 frontier cell 并聚类。
-5. `FrontierSelector` 调用 pruner/scorer，选择最终 goal。
+5. `FrontierSelector` 调用 pruner/scorer，使用 `/map` 生成候选，使用 global costmap 计算 clearance 软评分。
 6. 将 goal grid 转换为 `PoseStamped`，发送 Nav2 `NavigateToPose`。
 7. 根据 action feedback/result 更新状态、失败计数和黑名单。
 
@@ -58,7 +60,34 @@ FrontierDetector
 
 ## 4. 组件职责
 
-### 4.1 FrontierDetector
+### 4.1 CostmapAdapter
+
+`CostmapAdapter` 是地图访问适配层，内部使用 Nav2 `Costmap2D`，统一处理：
+
+- `OccupancyGrid` 到 `Costmap2D` 的 cost 转换；
+- `worldToMap` / `mapToWorld` 坐标转换；
+- free / unknown / obstacle 判断；
+- frontier unknown 邻居判断；
+- 候选点到最近障碍的 clearance 查询。
+
+当前维护两类地图来源：
+
+```text
+/map
+  -> unknown frontier 检测
+  -> free / unknown / obstacle 基础语义
+  -> 候选点硬约束
+
+/global_costmap/costmap
+  -> clearance_m 计算
+  -> ClearanceScore 软评分
+  -> 不直接删除 frontier 候选
+```
+
+注意：global costmap 通常包含 inflation layer，代价会比 `/map` 更保守。
+因此它只进入评分体系，不作为 pruner 的一票否决条件，避免小边界 frontier 被过早过滤。
+
+### 4.2 FrontierDetector
 
 `FrontierDetector` 只负责发现和聚类：
 
@@ -70,7 +99,7 @@ FrontierDetector
 小边界需要保留给后续兜底探索，因此 cluster size 判断交给后面的
 `FrontierPruner` 和 `FrontierSelector`。
 
-### 4.2 FrontierPruner
+### 4.3 FrontierPruner
 
 `FrontierPruner` 负责硬过滤和候选修复：
 
@@ -81,7 +110,8 @@ FrontierDetector
 - `min_goal_distance_m` 过滤；
 - goal 必须落在当前 map 的 free cell；
 - centroid 不可用时，在 cluster 内寻找 fallback goal；
-- 统计候选点局部窗口内的 `unknown_ratio`。
+- 统计候选点局部窗口内的 `unknown_ratio`；
+- 查询候选点的 `clearance_m`，供 scorer 做软评分。
 
 局部窗口统计由：
 
@@ -92,10 +122,14 @@ frontier_decision.candidate_unknown_margin_cells
 控制。当前 `unknown_ratio` 不再作为硬过滤直接丢弃候选，而是交给
 `UnknownRiskPenaltyScore` 做风险扣分。
 
-当前 `clearance_m` 字段已经预留，但还没有接入真实 costmap 或最近障碍距离统计；
-因此 `clearance_score` 通道目前是结构已就绪、数据尚未真正喂入的状态。
+`clearance_m` 已接入 `CostmapAdapter::distanceToNearestObstacle()`。
+当 `use_global_costmap_for_safety: true` 且 global costmap 已就绪时，pruner 会把
+候选点从 `/map` 栅格转换到世界坐标，再转换到 global costmap 栅格，计算最近障碍距离。
+如果 global costmap 不可用，则回退到 `/map` adapter。
 
-### 4.3 FrontierScorer
+`clearance_m` 只作为候选事实数据写入 `FrontierCandidate`，不改变 pruner 的硬过滤边界。
+
+### 4.4 FrontierScorer
 
 `FrontierScorer` 只负责打分：
 
@@ -110,6 +144,7 @@ frontier_decision.candidate_unknown_margin_cells
 total_score =
   weight_distance * distance_score
 + weight_cluster_size * cluster_size_score
++ weight_clearance * clearance_score
 - weight_retry_penalty * retry_penalty
 - weight_unknown_risk_penalty * unknown_risk_penalty
 + optional scores
@@ -121,10 +156,10 @@ total_score =
 - `ClusterSizeScore`
 - `RetryPenaltyScore`
 - `UnknownRiskPenaltyScore`
-- `ClearanceScore`，当前数据源未接入真实 clearance
+- `ClearanceScore`，基于 `/global_costmap/costmap` 或 `/map` 的最近障碍距离做软评分
 - `InformationGainScore`，当前以 `unknown_ratio` 作为轻量代理，默认未启用
 
-### 4.4 FrontierSelector
+### 4.5 FrontierSelector
 
 `FrontierSelector` 是编排层和长期状态持有者：
 
@@ -176,6 +211,8 @@ full system 实际使用的是 bringup 包下的配置。
 | `frontier_decision.small_cluster_size_threshold` | 3 | 小 cluster 阈值，低于该值时视为兜底候选。 |
 | `frontier_decision.weight_distance` | 1.0 | 距离分权重，越高越偏向近目标。 |
 | `frontier_decision.weight_cluster_size` | 1.0 | cluster size 分权重，越高越偏向大 frontier。 |
+| `frontier_decision.weight_clearance` | 0.25 | clearance 分权重，越高越偏向远离障碍或高 cost 区的目标。 |
+| `frontier_decision.enable_clearance_score` | true | 是否启用 clearance 软评分。 |
 | `frontier_decision.weight_unknown_risk_penalty` | 1.0 | unknown risk 扣分权重。 |
 | `frontier_decision.enable_unknown_risk_penalty` | true | 是否启用 unknown ratio 风险扣分。 |
 | `frontier_decision.candidate_unknown_margin_cells` | 2 | 局部 unknown ratio 统计窗口半径。 |
@@ -183,6 +220,9 @@ full system 实际使用的是 bringup 包下的配置。
 | `map_stale_timeout_ms` | 5000 | 地图长时间不更新时进入 STUCK。 |
 | `max_frontier_failures` | 3 | 连续找不到目标后进入 STUCK。 |
 | `edge_tolerance_m` | 0.3 | 判断机器人是否靠近 map 边缘。 |
+| `map_topic` | `/map` | 用于 frontier 检测的 OccupancyGrid topic。 |
+| `global_costmap_topic` | `/global_costmap/costmap` | 用于 clearance 评分的 global costmap topic。 |
+| `use_global_costmap_for_safety` | true | 是否订阅 global costmap 并将其作为 clearance 评分来源；不会作为硬过滤。 |
 
 ## 7. 策略调参方向
 
@@ -200,6 +240,8 @@ candidate_max_unknown_ratio: 0.5
 ```yaml
 weight_cluster_size: 0.7
 weight_distance: 1.0
+weight_clearance: 0.4
+enable_clearance_score: true
 weight_unknown_risk_penalty: 2.0
 candidate_max_unknown_ratio: 0.25
 defer_small_clusters: true
@@ -211,6 +253,7 @@ small_cluster_size_threshold: 3
 - 不建议把 `min_frontier_cluster_size` 重新拉得很高；
 - 推荐保留 `min_frontier_cluster_size: 1`；
 - 用 `defer_small_clusters` 把小边界延后，而不是删除。
+- global costmap 不应用于硬过滤小边界，只通过 `clearance_score` 影响排序。
 
 ## 8. Nav2 调试结论
 
@@ -258,9 +301,17 @@ ros2 param get /planner_server GridBased.allow_unknown
 ros2 param get /global_costmap/global_costmap track_unknown_space
 ```
 
+检查 costmap 评分来源：
+
+```bash
+ros2 topic info /global_costmap/costmap -v
+ros2 param get /frontier_explorer_node use_global_costmap_for_safety
+ros2 param get /frontier_explorer_node frontier_decision.enable_clearance_score
+ros2 param get /frontier_explorer_node frontier_decision.weight_clearance
+```
+
 ## 10. 后续 TODO
 
-- 接入真实 clearance 计算，把 `clearance_m` 从占位值改为候选点到最近障碍或高 cost 区的距离。
-- 可选接入 global/local costmap cost 统计，用于更准确地降低贴边目标分数。
 - 将 information gain 从当前 `unknown_ratio` 代理升级为更稳定的窗口信息量估计。
 - 为 scorer 输出增加调试日志或可视化，便于解释每次选点原因。
+- 后续可增加可视化 marker，显示每个 frontier candidate 的 clearance、unknown risk 和 total score。

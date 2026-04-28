@@ -7,13 +7,16 @@
 namespace frontier_explorer
 {
 
-FrontierDetector::FrontierDetector(int obstacle_search_radius_cells)
-: obstacle_search_radius_cells_(obstacle_search_radius_cells)
+FrontierDetector::FrontierDetector(
+    int obstacle_search_radius_cells,
+    const rclcpp::Logger & logger)
+: logger_(rclcpp::Logger(logger).get_child("detector")),
+  obstacle_search_radius_cells_(obstacle_search_radius_cells)
 {
 
 }
 
-bool FrontierDetector::is_frontier_cell_safe( const nav_msgs::msg::OccupancyGrid & map,
+bool FrontierDetector::is_frontier_cell_safe( const CostmapAdapter & costmap,
     const GridCell & cell) const
 {
     for (int dr = -obstacle_search_radius_cells_; 
@@ -22,7 +25,11 @@ bool FrontierDetector::is_frontier_cell_safe( const nav_msgs::msg::OccupancyGrid
         for (int dc = -obstacle_search_radius_cells_; 
                 dc <= obstacle_search_radius_cells_; ++dc) {
                 
-            if (is_cell_obstacle(map, cell.row + dr, cell.col + dc)) {
+            const int row = cell.row + dr;
+            const int col = cell.col + dc;
+            if (!costmap.inBounds(col, row) ||
+                costmap.isObstacle(static_cast<unsigned int>(col), static_cast<unsigned int>(row)))
+            {
                 return false;
             }
         }
@@ -31,52 +38,64 @@ bool FrontierDetector::is_frontier_cell_safe( const nav_msgs::msg::OccupancyGrid
 }
 
 std::vector<GridCell> FrontierDetector::detect_frontier_cells(
-    const nav_msgs::msg::OccupancyGrid & map) const
+    const CostmapAdapter & costmap) const
 {
     std::vector<GridCell> frontier_cells;
 
-    const int rows = static_cast<int>(map.info.height);
-    const int cols = static_cast<int>(map.info.width);
+    if (!costmap.isReady()) {
+        RCLCPP_WARN(logger_, "Cannot detect frontiers because costmap is not ready.");
+        return frontier_cells;
+    }
+
+    const int rows = static_cast<int>(costmap.getSizeInCellsY());
+    const int cols = static_cast<int>(costmap.getSizeInCellsX());
+
+    RCLCPP_DEBUG(
+        logger_,
+        "Detecting frontier cells on costmap: width=%d, height=%d, resolution=%.3f",
+        cols,
+        rows,
+        costmap.getResolution());
 
     for (int r = 1; r < rows - 1; ++r) {
 
         for (int c = 1; c < cols - 1; ++c) {
-            if (!is_cell_free(map, r, c)) {
+            const auto mx = static_cast<unsigned int>(c);
+            const auto my = static_cast<unsigned int>(r);
+            if (!costmap.isFree(mx, my)) {
                 continue;
             }
 
-            bool has_unknown_neighbor = false;
-
-            for (int dr = -1; dr <= 1 && !has_unknown_neighbor; ++dr) {
-
-                for (int dc = -1; dc <= 1; ++dc) {
-                    if (dr == 0 && dc == 0) {
-                        continue;
-                    }
-
-                    if (is_cell_unknown(map, r + dr, c + dc)) {
-                        has_unknown_neighbor = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!has_unknown_neighbor) {
+            if (!costmap.hasUnknownNeighbor(mx, my)) {
                 continue;
             }
 
             GridCell cell{r, c};
-            if (is_frontier_cell_safe(map, cell)) {
+            if (is_frontier_cell_safe(costmap, cell)) {
                 frontier_cells.push_back(cell);
             }
         }
     }
 
+    if (frontier_cells.empty()) {
+        RCLCPP_WARN(logger_, "No frontier cells found.");
+    }
+
     return frontier_cells;
 }
 
-std::vector<FrontierCluster> FrontierDetector::cluster_frontiers( 
-    const nav_msgs::msg::OccupancyGrid &,
+std::vector<GridCell> FrontierDetector::detect_frontier_cells(
+    const nav_msgs::msg::OccupancyGrid & map) const
+{
+    CostmapAdapter costmap(logger_);
+    if (!costmap.updateFromOccupancyGrid(map)) {
+        return {};
+    }
+    return detect_frontier_cells(costmap);
+}
+
+std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
+    const CostmapAdapter &,
     const std::vector<GridCell> & frontier_cells) const
 {
     std::vector<FrontierCluster> clusters;
@@ -135,6 +154,14 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
     }
 
   return clusters;
+}
+
+std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
+    const nav_msgs::msg::OccupancyGrid &,
+    const std::vector<GridCell> & frontier_cells) const
+{
+    CostmapAdapter costmap(logger_);
+    return cluster_frontiers(costmap, frontier_cells);
 }
 
 }  // namespace frontier_explorer

@@ -61,7 +61,9 @@ constexpr size_t kStatePublisherDepth = 10;
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
-  detector_(params_.runtime.obstacle_search_radius_cells),
+  map_costmap_(this->get_logger()),
+  global_costmap_(this->get_logger()),
+  detector_(params_.runtime.obstacle_search_radius_cells, this->get_logger()),
   selector_(
       params_.pruner.min_goal_distance_m,
       params_.selection.max_retry_count,
@@ -70,7 +72,8 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
       params_.selection.max_cluster_retry_count,
       params_.pruner.candidate_unknown_margin_cells,
       params_.selection.defer_small_clusters,
-      params_.selection.small_cluster_size_threshold)
+      params_.selection.small_cluster_size_threshold,
+      this->get_logger())
 {
     declare_params();
     load_params();
@@ -173,6 +176,13 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<int>(
         "max_frontier_failures", params_.runtime.max_frontier_failures);
     this->declare_parameter<double>("edge_tolerance_m", params_.runtime.edge_tolerance_m);
+    this->declare_parameter<std::string>("map_topic", params_.runtime.map_topic);
+    this->declare_parameter<std::string>(
+        "global_costmap_topic",
+        params_.runtime.global_costmap_topic);
+    this->declare_parameter<bool>(
+        "use_global_costmap_for_safety",
+        params_.runtime.use_global_costmap_for_safety);
 }
 
 void FrontierExplorerNode::load_params()
@@ -225,6 +235,12 @@ void FrontierExplorerNode::load_params()
         this->get_parameter("max_frontier_failures").as_int();
     params_.runtime.edge_tolerance_m =
         this->get_parameter("edge_tolerance_m").as_double();
+    params_.runtime.map_topic =
+        this->get_parameter("map_topic").as_string();
+    params_.runtime.global_costmap_topic =
+        this->get_parameter("global_costmap_topic").as_string();
+    params_.runtime.use_global_costmap_for_safety =
+        this->get_parameter("use_global_costmap_for_safety").as_bool();
 }
 
 void FrontierExplorerNode::apply_params()
@@ -255,7 +271,7 @@ void FrontierExplorerNode::apply_params()
         params_.pruner.min_cluster_size + 1U,
         params_.selection.small_cluster_size_threshold);
 
-    detector_ = FrontierDetector(params_.runtime.obstacle_search_radius_cells);
+    detector_ = FrontierDetector(params_.runtime.obstacle_search_radius_cells, this->get_logger());
     selector_ = FrontierSelector(
         params_.pruner.min_goal_distance_m,
         params_.selection.max_retry_count,
@@ -264,7 +280,8 @@ void FrontierExplorerNode::apply_params()
         params_.selection.max_cluster_retry_count,
         params_.pruner.candidate_unknown_margin_cells,
         params_.selection.defer_small_clusters,
-        params_.selection.small_cluster_size_threshold);
+        params_.selection.small_cluster_size_threshold,
+        this->get_logger());
 }
 
 void FrontierExplorerNode::create_interfaces()
@@ -289,8 +306,20 @@ void FrontierExplorerNode::create_interfaces()
                 .reliable() .transient_local();
 
     map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
-        "/map", map_qos,
+        params_.runtime.map_topic, map_qos,
         std::bind(&FrontierExplorerNode::map_callback, this, std::placeholders::_1));
+
+    if (params_.runtime.use_global_costmap_for_safety &&
+        !params_.runtime.global_costmap_topic.empty())
+    {
+        global_costmap_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
+            params_.runtime.global_costmap_topic,
+            rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local(),
+            std::bind(
+                &FrontierExplorerNode::global_costmap_callback,
+                this,
+                std::placeholders::_1));
+    }
         
     odom_sub_ = this->create_subscription<nav_msgs::msg::Odometry>(
         "/odom", rclcpp::QoS(10),
@@ -338,7 +367,26 @@ void FrontierExplorerNode::map_callback(
         msg->info.height
         );
     map_msg_ = msg;
+    map_costmap_.updateFromOccupancyGrid(*msg);
     last_map_update_time_ = this->now();
+}
+
+void FrontierExplorerNode::global_costmap_callback(
+    const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
+{
+    if (!msg) {
+        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Received null global costmap message");
+        return;
+    }
+
+    if (!global_costmap_.updateFromOccupancyGrid(*msg)) {
+        RCLCPP_WARN_THROTTLE_WITH_CONTEXT(
+            this->get_logger(),
+            *this->get_clock(),
+            3000,
+            "Failed to update global costmap adapter.");
+        return;
+    }
 }
 
 void FrontierExplorerNode::odom_callback(
@@ -355,24 +403,19 @@ bool FrontierExplorerNode::update_robot_grid_position()
         return false;
     }
 
-    const double origin_x = map_msg_->info.origin.position.x;
-    const double origin_y = map_msg_->info.origin.position.y;
-    const double resolution = map_msg_->info.resolution;
-
     const double robot_x = odom_msg_->pose.pose.position.x;
     const double robot_y = odom_msg_->pose.pose.position.y;
 
-    const int col = static_cast<int>((robot_x - origin_x) / resolution);
-    const int row = static_cast<int>((robot_y - origin_y) / resolution);
-
-    if (!in_bounds(*map_msg_, row, col)) {
+    unsigned int col = 0U;
+    unsigned int row = 0U;
+    if (!map_costmap_.worldToMap(robot_x, robot_y, col, row)) {
         RCLCPP_WARN_THROTTLE(
             this->get_logger(), *this->get_clock(), 3000,
             "Robot grid position out of map bounds.");
         return false;
     }
 
-    robot_grid_ = GridCell{row, col};
+    robot_grid_ = GridCell{static_cast<int>(row), static_cast<int>(col)};
     return true;
 }
 
@@ -497,33 +540,45 @@ void FrontierExplorerNode::feedback_callback(GoalHandleNavigateToPose::SharedPtr
 
     // 传回来的机器坐标
     const auto & global_robot_pos = feedback->current_pose.pose;
-    const auto global_goal_pos = grid_to_world(current_goal_grid_.value(), map_msg_);
-    if (!global_goal_pos.has_value()) {
+    if (!map_costmap_.inBounds(current_goal_grid_->col, current_goal_grid_->row)) {
         RCLCPP_WARN_THROTTLE(
             this->get_logger(), *this->get_clock(), 3000,
             "Current goal is outside of the available map.");
         return;
     }
+    geometry_msgs::msg::Point global_goal_pos;
+    map_costmap_.mapToWorld(
+        static_cast<unsigned int>(current_goal_grid_->col),
+        static_cast<unsigned int>(current_goal_grid_->row),
+        global_goal_pos.x,
+        global_goal_pos.y);
+    global_goal_pos.z = 0.0;
 
     const double theta = tf2::getYaw(global_robot_pos.orientation);
 
     RCLCPP_INFO_THROTTLE_WITH_CONTEXT(this->get_logger(), *this->get_clock(), 
                 3000, "robot:x=%.3f y=%.3f theta=%.3f, target:robot:x=%.3f y=%.3f",
                 global_robot_pos.position.x, global_robot_pos.position.y, theta,
-                global_goal_pos->x, global_goal_pos->y);
+                global_goal_pos.x, global_goal_pos.y);
 
     // 更新内部 robot_grid_（当前网格坐标）
-    robot_grid_ = world_to_grid(global_robot_pos.position, map_msg_);  
-
-    if (!robot_grid_.has_value()) {
+    unsigned int robot_col = 0U;
+    unsigned int robot_row = 0U;
+    if (!map_costmap_.worldToMap(
+            global_robot_pos.position.x,
+            global_robot_pos.position.y,
+            robot_col,
+            robot_row))
+    {
         RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Position out of map bounds!");
         return;  
     }
+    robot_grid_ = GridCell{static_cast<int>(robot_row), static_cast<int>(robot_col)};
 
     // 计算到目标点的距离
     double dist_to_goal = distance_in_meters(
         global_robot_pos.position,
-        global_goal_pos.value());
+        global_goal_pos);
 
     if (initial_goal_distance_ <= 0.0) {
         initial_goal_distance_ = std::max(dist_to_goal, 1e-3);
@@ -570,11 +625,13 @@ void FrontierExplorerNode::explore_timer_callback()
     if(get_state() != ExplorationState::RUNNING)
     {
         RCLCPP_DEBUG(this->get_logger(), "controll is not running");
+        publish_state();
         return;
     }
 
     if (is_navigating_) {
         RCLCPP_DEBUG(this->get_logger(), "Still navigating, skip exploration tick.");
+        publish_state();
         return;
     }
 
@@ -582,6 +639,7 @@ void FrontierExplorerNode::explore_timer_callback()
         RCLCPP_WARN_THROTTLE(
         this->get_logger(), *this->get_clock(), 3000,
         "No map data available.");
+        publish_state();
         return;
     }
 
@@ -603,11 +661,19 @@ void FrontierExplorerNode::explore_timer_callback()
         RCLCPP_WARN_THROTTLE(
             this->get_logger(), *this->get_clock(), 3000,
             "Robot grid position unavailable.");
+        publish_state();
         return;
     }
 
-    const auto frontier_cells = detector_.detect_frontier_cells(*map_msg_);
-    const auto clusters = detector_.cluster_frontiers(*map_msg_, frontier_cells);
+    if (!map_costmap_.isReady()) {
+        RCLCPP_WARN_THROTTLE(
+            this->get_logger(), *this->get_clock(), 3000,
+            "Costmap adapter is not ready.");
+        return;
+    }
+
+    const auto frontier_cells = detector_.detect_frontier_cells(map_costmap_);
+    const auto clusters = detector_.cluster_frontiers(map_costmap_, frontier_cells);
 
     RCLCPP_INFO_THROTTLE_WITH_CONTEXT(
         this->get_logger(),
@@ -618,11 +684,16 @@ void FrontierExplorerNode::explore_timer_callback()
         clusters.size(),
         params_.pruner.min_cluster_size);
 
+    const CostmapAdapter * safety_costmap =
+        (params_.runtime.use_global_costmap_for_safety && global_costmap_.isReady()) ?
+        &global_costmap_ : &map_costmap_;
+
     const auto best_frontier = selector_.choose_best_frontier(
         clusters,
         robot_grid_.value(),
-        map_msg_->info.resolution,
-        *map_msg_);
+        map_costmap_.getResolution(),
+        map_costmap_,
+        safety_costmap);
 
     if (!best_frontier.has_value()) {
         RCLCPP_WARN_WITH_CONTEXT(
@@ -650,6 +721,8 @@ void FrontierExplorerNode::explore_timer_callback()
             set_state(ExplorationState::STUCK, reason);
             publish_state();
             consecutive_frontier_failures_ = 0;
+        } else {
+            publish_state();
         }
         return;
     }
@@ -664,7 +737,16 @@ void FrontierExplorerNode::explore_timer_callback()
             robot_grid_->col);
     }
 
-    const auto goal_pose = grid_to_goal_pose( *map_msg_, best_frontier.value(), this->now());
+    geometry_msgs::msg::PoseStamped goal_pose;
+    goal_pose.header.frame_id = "map";
+    goal_pose.header.stamp = this->now();
+    map_costmap_.mapToWorld(
+        static_cast<unsigned int>(best_frontier->col),
+        static_cast<unsigned int>(best_frontier->row),
+        goal_pose.pose.position.x,
+        goal_pose.pose.position.y);
+    goal_pose.pose.position.z = 0.0;
+    goal_pose.pose.orientation.w = 1.0;
     send_navigation_goal(best_frontier.value(), goal_pose);
 }
 

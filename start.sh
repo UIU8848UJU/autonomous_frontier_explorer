@@ -1,0 +1,1 @@
+ros2 service call /start_mapping std_srvs/srv/Trigger {}

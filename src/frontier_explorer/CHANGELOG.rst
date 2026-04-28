@@ -1,6 +1,20 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 frontier_explorer 包更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+0.0.5(2026-04-28)
+------------------
+* 新增 ``CostmapAdapter``，内部基于 Nav2 ``nav2_costmap_2d::Costmap2D`` 统一封装 OccupancyGrid 更新、world/map 坐标转换、cost 查询、free/unknown/obstacle 判断和 frontier unknown 邻居判断。
+* ``FrontierDetector`` 改为通过 ``CostmapAdapter`` 访问地图，不再在 detector 中手写 OccupancyGrid 索引、边界检查和 unknown 邻居判断。
+* ``FrontierPruner`` 改为接收 frontier map adapter 与可选 safety costmap adapter，保留 ``/map`` 作为 frontier 候选硬约束来源。
+* 接入 ``/global_costmap/costmap`` 作为 clearance 评分来源：候选点先从 ``/map`` 栅格转换到世界坐标，再转换到 global costmap 栅格并查询最近障碍距离。
+* 调整 global costmap 使用策略：global costmap 不作为 frontier 候选硬过滤条件，只通过 ``clearance_m`` 和 ``ClearanceScore`` 参与软评分，避免小边界 frontier 被 inflation/high cost 过早丢弃。
+* 默认启用 ``frontier_decision.enable_clearance_score``，并将 ``frontier_decision.weight_clearance`` 设置为 0.25，用于轻量偏向更宽敞的目标。
+* 新增 ``map_topic``、``global_costmap_topic``、``use_global_costmap_for_safety`` 参数，并同步更新 ``autonomousr_explorer_bringup`` 中实际使用的 frontier 配置。
+* 为 detector、pruner、scorer、selector、costmap adapter 增加 ``rclcpp::Logger`` 成员和 child logger，便于定位地图转换、候选过滤和评分问题。
+* 修复探索节点在非 RUNNING、正在导航或本轮无可用 frontier 时不发布 ``/exploration_state`` 的问题，避免 TaskManager 因心跳超时误判探索卡住。
+* 更新 ``frontier_explorer_node_doc.md``，补充 ``/map`` 与 ``/global_costmap/costmap`` 的职责分工、soft costmap scoring 策略和相关调试命令。
+
 0.0.4(2026-04-26)
 ------------------
 * 将 frontier 选择链路重构为 ``FrontierPruner``、``FrontierScorer``、``score_components``、``FrontierSelector``。

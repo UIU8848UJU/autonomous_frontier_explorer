@@ -14,13 +14,13 @@ frontier_explorer_node:
       # weight_distance: 1.4
       weight_cluster_size: 1.0
       # weight_cluster_size: 0.3
-      weight_clearance: 0.0
+      weight_clearance: 0.25
       weight_retry_penalty: 1.0
       weight_unknown_risk_penalty: 1.0
       # weight_unknown_risk_penalty: 3.0
       weight_information_gain: 0.0
       weight_revisit_penalty: 0.0
-      enable_clearance_score: false
+      enable_clearance_score: true
       enable_unknown_risk_penalty: true
       enable_information_gain_score: false
       enable_revisit_penalty: false
@@ -30,3 +30,6 @@ frontier_explorer_node:
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3
+    map_topic: /map
+    global_costmap_topic: /global_costmap/costmap
+    use_global_costmap_for_safety: true

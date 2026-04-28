@@ -2,6 +2,30 @@
 autonomous_frontier_explorer 项目更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+2026-04-28
+==========
+
+CostmapAdapter 与地图访问层重构
+-------------------------------
+- ``frontier_explorer`` 新增 ``CostmapAdapter``，基于 Nav2 ``Costmap2D`` 统一处理 OccupancyGrid 更新、坐标转换、cost 查询和 frontier 基础判断。
+- ``FrontierDetector`` 迁移到 adapter API，不再直接手写 OccupancyGrid 下标、world/grid 转换和 unknown 邻居判断。
+- ``FrontierPruner`` / ``FrontierSelector`` 支持同时接收 frontier map adapter 与 safety costmap adapter，为 ``/map`` 和 ``/global_costmap/costmap`` 分层使用打基础。
+- 新增 ``nav2_costmap_2d`` 与 ``tf2_ros`` 依赖，构建系统同步纳入 ``costmap_adapter.cpp``。
+
+Global Costmap 软评分策略
+-------------------------
+- 明确 ``/map`` 负责 unknown frontier 检测和候选基础合法性判断。
+- ``/global_costmap/costmap`` 仅作为 clearance 评分来源，不再作为 frontier 候选硬过滤条件。
+- 候选点从 ``/map`` 栅格转换到世界坐标，再转换到 global costmap 栅格，用于计算到最近障碍或高风险区域的距离。
+- ``ClearanceScore`` 默认启用，``weight_clearance`` 设置为 0.25，使更宽敞的目标分数略高，同时保留小边界探索能力。
+- ``autonomousr_explorer_bringup/config/frontier_explorer.yaml`` 同步新增 ``map_topic``、``global_costmap_topic``、``use_global_costmap_for_safety`` 和 clearance 相关参数，确保 full system 启动时使用同一策略。
+
+稳定性与文档
+------------
+- ``frontier_explorer_node`` 在非 RUNNING、正在导航、地图不可用、机器人位置不可用或本轮未选出 frontier 时也会继续发布 ``/exploration_state``，避免 TaskManager 因心跳超时误判卡住。
+- detector、pruner、scorer、selector、costmap adapter 增加 child logger，便于定位地图转换、候选过滤和评分问题。
+- 更新 ``frontier_explorer_node_doc.md``，记录 CostmapAdapter、soft costmap scoring、参数说明和调试命令。
+
 2026-04-26
 ==========
 
