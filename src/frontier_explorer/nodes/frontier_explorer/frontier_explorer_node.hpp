@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -19,6 +20,7 @@
 #include "costmap_adapter.hpp"
 #include "frontier_detector.hpp"
 #include "frontier_explorer_params.hpp"
+#include "frontier_marker_publisher.hpp"
 #include "frontier_selector.hpp"
 #include "map_utils.hpp"
 // 状态节点
@@ -109,6 +111,7 @@ private:
     FrontierExplorerParams params_;
     FrontierDetector detector_;
     FrontierSelector selector_;
+    std::unique_ptr<FrontierMarkerPublisher> marker_publisher_;
 
     bool is_navigating_{false};
     

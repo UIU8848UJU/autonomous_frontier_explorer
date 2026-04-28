@@ -66,7 +66,19 @@ public:
     /// @param goal 成功目标栅格
     void mark_goal_succeeded(const GridCell & goal);
 
+    /// @brief: 获取最近一次参与最终排序的 scored candidates
+    /// @return: 最近一次 scored candidates 只读引用
+    const std::vector<ScoredFrontierCandidate> & last_scored_candidates() const;
+
+    /// @brief: 获取当前 goal 黑名单
+    /// @return: 黑名单 goal 列表
+    std::vector<GridCell> blacklisted_goals() const;
+
 private:
+    void log_scored_candidates(
+        const std::vector<ScoredFrontierCandidate> & scored_candidates,
+        const ScoredFrontierCandidate & selected) const;
+
     // 记录 cluster 层面的失败；连续失败过多的 cluster 会被拉黑。
     void mark_cluster_failed(const GridCell & cluster_id);
 
@@ -93,6 +105,9 @@ private:
 
     // 长期选择状态，由 selector 持有和更新。
     FrontierSelectionState state_;
+
+    // 最近一次用于最终排序的 scored candidates，仅用于调试可视化。
+    mutable std::vector<ScoredFrontierCandidate> last_scored_candidates_;
 };
 
 }  // namespace frontier_explorer

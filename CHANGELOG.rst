@@ -20,11 +20,21 @@ Global Costmap 软评分策略
 - ``ClearanceScore`` 默认启用，``weight_clearance`` 设置为 0.25，使更宽敞的目标分数略高，同时保留小边界探索能力。
 - ``autonomousr_explorer_bringup/config/frontier_explorer.yaml`` 同步新增 ``map_topic``、``global_costmap_topic``、``use_global_costmap_for_safety`` 和 clearance 相关参数，确保 full system 启动时使用同一策略。
 
+RViz Frontier Marker 可视化
+---------------------------
+- ``frontier_explorer`` 新增 ``FrontierMarkerPublisher``，集中发布 frontier 调试 marker，marker 生成逻辑不写入 detector、pruner、scorer 或 selector。
+- 新增 ``/frontier/raw_markers``、``/frontier/candidate_markers``、``/frontier/scored_markers``、``/frontier/selected_marker``、``/frontier/blacklist_markers``，并预留 ``/frontier/rejected_markers``。
+- raw frontier 使用蓝色 ``POINTS``，候选点使用青色 ``SPHERE``，评分候选使用黄色文本，最终目标使用绿色 ``ARROW``，blacklist 使用红色 ``SPHERE``。
+- ``/frontier/selected_marker`` 的箭头方向调整为机器人当前位置指向最终目标，避免 RViz 中看起来头尾反向。
+- ``/frontier/scored_markers`` 只显示 Top 5 候选的简短 ``#rank score`` 文本，详细得分原因改由 selector 日志输出，避免 RViz 文字遮挡地图。
+- selector 记录最终选择原因、Top 3 候选得分、retry 次数、clearance、unknown risk、cluster size 和 blacklist 阈值，用于回答“为什么分数最高、为什么最终选它、为什么失败后进 blacklist”。
+- rejected marker 用于显示本轮 detector 发现但 selector 未能选出有效目标的 frontier，发布到独立的 ``/frontier/rejected_markers``，不占用 ``/map`` topic。
+
 稳定性与文档
 ------------
 - ``frontier_explorer_node`` 在非 RUNNING、正在导航、地图不可用、机器人位置不可用或本轮未选出 frontier 时也会继续发布 ``/exploration_state``，避免 TaskManager 因心跳超时误判卡住。
 - detector、pruner、scorer、selector、costmap adapter 增加 child logger，便于定位地图转换、候选过滤和评分问题。
-- 更新 ``frontier_explorer_node_doc.md``，记录 CostmapAdapter、soft costmap scoring、参数说明和调试命令。
+- 更新 ``frontier_explorer_node_doc.md``，记录 CostmapAdapter、soft costmap scoring、marker 可视化、参数说明和调试命令。
 
 2026-04-26
 ==========

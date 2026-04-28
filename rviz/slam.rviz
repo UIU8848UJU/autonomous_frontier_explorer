@@ -5,9 +5,6 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /Map1/Topic1
-        - /MarkerArray2
-        - /MarkerArray3
-        - /MarkerArray4
       Splitter Ratio: 0.5
     Tree Height: 438
   - Class: rviz_common/Selection
@@ -162,7 +159,7 @@ Visualization Manager:
       Name: Map
       Topic:
         Depth: 5
-        Durability Policy: Transient Local
+        Durability Policy: Volatile
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
@@ -219,7 +216,7 @@ Visualization Manager:
       Enabled: true
       Name: MarkerArray
       Namespaces:
-        {}
+        raw_frontiers: true
       Topic:
         Depth: 5
         Durability Policy: Volatile
@@ -262,30 +259,6 @@ Visualization Manager:
         History Policy: Keep Last
         Reliability Policy: Reliable
         Value: /frontier/selected_marker
-      Value: true
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: false
-      Name: MarkerArray
-      Namespaces:
-        {}
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /slam_toolbox/graph_visualization
-      Value: false
-    - Class: rviz_default_plugins/MarkerArray
-      Enabled: true
-      Name: MarkerArray
-      Namespaces:
-        {}
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /frontier/scored_markers
       Value: true
   Enabled: true
   Global Options:
@@ -333,25 +306,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 6.224918842315674
+      Distance: 5.815306663513184
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.07132905721664429
-        Y: 0.23612403869628906
-        Z: 0.07984667271375656
+        X: -0.11107871681451797
+        Y: -0.09116694331169128
+        Z: 0.3767591714859009
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 1.5497963428497314
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.5553950071334839
+      Yaw: 1.3303979635238647
     Saved: ~
 Window Geometry:
   Displays:

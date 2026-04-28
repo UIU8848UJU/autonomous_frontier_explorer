@@ -16,6 +16,7 @@ find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -29,6 +30,7 @@ add_executable(frontier_explorer_node
   nodes/frontier_explorer/main.cpp
   nodes/frontier_explorer/frontier_explorer_node.cpp
   utils/map/map_utils.cpp
+  visualization/frontier_marker_publisher.cpp
   core/costmap_adapter/costmap_adapter.cpp
   core/frontier_detector/frontier_detector.cpp
   core/frontier_selector/frontier_pruner.cpp
@@ -45,6 +47,7 @@ add_executable(frontier_explorer_node
 target_include_directories(frontier_explorer_node PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/
   ${CMAKE_CURRENT_SOURCE_DIR}/nodes/frontier_explorer
+  ${CMAKE_CURRENT_SOURCE_DIR}/visualization
   ${CMAKE_CURRENT_SOURCE_DIR}/core
   ${CMAKE_CURRENT_SOURCE_DIR}/core/costmap_adapter
   ${CMAKE_CURRENT_SOURCE_DIR}/core/frontier_detector
@@ -63,6 +66,7 @@ ament_target_dependencies(frontier_explorer_node
     nav2_msgs
     nav2_costmap_2d
     geometry_msgs
+    visualization_msgs
     std_srvs
     robot_interfaces
     tf2_geometry_msgs

@@ -13,7 +13,15 @@ frontier_explorer 包更新日志
 * 新增 ``map_topic``、``global_costmap_topic``、``use_global_costmap_for_safety`` 参数，并同步更新 ``autonomousr_explorer_bringup`` 中实际使用的 frontier 配置。
 * 为 detector、pruner、scorer、selector、costmap adapter 增加 ``rclcpp::Logger`` 成员和 child logger，便于定位地图转换、候选过滤和评分问题。
 * 修复探索节点在非 RUNNING、正在导航或本轮无可用 frontier 时不发布 ``/exploration_state`` 的问题，避免 TaskManager 因心跳超时误判探索卡住。
-* 更新 ``frontier_explorer_node_doc.md``，补充 ``/map`` 与 ``/global_costmap/costmap`` 的职责分工、soft costmap scoring 策略和相关调试命令。
+* 新增 ``FrontierMarkerPublisher``，集中发布 RViz ``MarkerArray``，避免把 marker 生成逻辑写入 detector、pruner、scorer 或 selector。
+* 新增 frontier 可视化 topic：``/frontier/raw_markers``、``/frontier/candidate_markers``、``/frontier/scored_markers``、``/frontier/selected_marker``、``/frontier/blacklist_markers``，并预留 ``/frontier/rejected_markers``。
+* raw frontier 使用蓝色 ``POINTS``，候选点使用青色 ``SPHERE``，评分候选使用黄色文本，最终目标使用绿色 ``ARROW``，blacklist 使用红色 ``SPHERE``。
+* 修正 selected goal 箭头方向，``/frontier/selected_marker`` 现在从机器人当前位置指向最终目标。
+* ``/frontier/scored_markers`` 只显示 Top 5 候选的简短 ``#rank score`` 文本，详细评分拆解改由 selector 日志输出，降低 RViz 文字遮挡。
+* selector 增加最终选点解释日志和 Top 3 候选摘要，包含 total score、distance、cluster、clearance、retry、unknown risk 等字段，便于解释为什么选中某个 frontier。
+* blacklist 目标通过 ``/frontier/blacklist_markers`` 红色球显示，并在目标失败、达到 retry 阈值和加入 blacklist 时输出日志。
+* ``/frontier/rejected_markers`` 用于显示本轮 detector 发现但 selector 未能选出有效目标的 frontier，发布到独立 marker topic，不占用 ``/map``。
+* 更新 ``frontier_explorer_node_doc.md``，补充 ``/map`` 与 ``/global_costmap/costmap`` 的职责分工、soft costmap scoring、marker 可视化策略和相关调试命令。
 
 0.0.4(2026-04-26)
 ------------------

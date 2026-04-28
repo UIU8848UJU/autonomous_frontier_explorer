@@ -1,6 +1,7 @@
 #include "frontier_selector.hpp"
 
 #include <algorithm>
+#include <sstream>
 
 namespace frontier_explorer
 {
@@ -41,6 +42,8 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
     const CostmapAdapter & frontier_costmap,
     const CostmapAdapter * safety_costmap)
 {
+    last_scored_candidates_.clear();
+
     const FrontierPruningContext context{
         state_.last_goal_grid,
         &state_.failed_goal_counts,
@@ -98,14 +101,14 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
 std::optional<ScoredFrontierCandidate> FrontierSelector::choose_best_scored_candidate(
     const std::vector<FrontierCandidate> & candidates) const
 {
-    const auto scored_candidates = scorer_.score_candidates(candidates, state_.last_goal_grid);
-    if (scored_candidates.empty()) {
+    last_scored_candidates_ = scorer_.score_candidates(candidates, state_.last_goal_grid);
+    if (last_scored_candidates_.empty()) {
         return std::nullopt;
     }
 
     const auto best_it = std::max_element(
-        scored_candidates.begin(),
-        scored_candidates.end(),
+        last_scored_candidates_.begin(),
+        last_scored_candidates_.end(),
         [](const ScoredFrontierCandidate & lhs, const ScoredFrontierCandidate & rhs) {
             if (lhs.total_score == rhs.total_score) {
                 return lhs.candidate.distance_m > rhs.candidate.distance_m;
@@ -113,10 +116,11 @@ std::optional<ScoredFrontierCandidate> FrontierSelector::choose_best_scored_cand
             return lhs.total_score < rhs.total_score;
         });
 
-    if (best_it == scored_candidates.end()) {
+    if (best_it == last_scored_candidates_.end()) {
         return std::nullopt;
     }
 
+    log_scored_candidates(last_scored_candidates_, *best_it);
     return *best_it;
 }
 
@@ -132,6 +136,21 @@ void FrontierSelector::mark_goal_failed(const GridCell & goal)
 
     if (count >= max_retry_count_) {
         state_.blacklist.insert(goal);
+        RCLCPP_WARN(
+            logger_,
+            "Goal blacklisted: row=%d, col=%d, failures=%d, threshold=%d",
+            goal.row,
+            goal.col,
+            count,
+            max_retry_count_);
+    } else {
+        RCLCPP_WARN(
+            logger_,
+            "Goal failed: row=%d, col=%d, failures=%d/%d",
+            goal.row,
+            goal.col,
+            count,
+            max_retry_count_);
     }
 }
 
@@ -139,6 +158,68 @@ void FrontierSelector::mark_goal_succeeded(const GridCell & goal)
 {
     state_.failed_goal_counts.erase(goal);
     state_.blacklist.erase(goal);
+}
+
+const std::vector<ScoredFrontierCandidate> & FrontierSelector::last_scored_candidates() const
+{
+    return last_scored_candidates_;
+}
+
+std::vector<GridCell> FrontierSelector::blacklisted_goals() const
+{
+    std::vector<GridCell> goals;
+    goals.reserve(state_.blacklist.size());
+    for (const auto & goal : state_.blacklist) {
+        goals.push_back(goal);
+    }
+    return goals;
+}
+
+void FrontierSelector::log_scored_candidates(
+    const std::vector<ScoredFrontierCandidate> & scored_candidates,
+    const ScoredFrontierCandidate & selected) const
+{
+    std::vector<ScoredFrontierCandidate> sorted = scored_candidates;
+    std::sort(
+        sorted.begin(),
+        sorted.end(),
+        [](const ScoredFrontierCandidate & lhs, const ScoredFrontierCandidate & rhs) {
+            return lhs.total_score > rhs.total_score;
+        });
+
+    std::ostringstream stream;
+    stream.precision(3);
+    stream << std::fixed
+           << "Selected frontier reason: goal=("
+           << selected.candidate.goal.row << ", " << selected.candidate.goal.col
+           << "), total=" << selected.total_score
+           << ", distance_score=" << selected.distance_score
+           << ", cluster_score=" << selected.cluster_size_score
+           << ", clearance_score=" << selected.clearance_score
+           << ", retry_penalty=" << selected.retry_penalty
+           << ", unknown_risk_penalty=" << selected.unknown_risk_penalty
+           << ", information_gain=" << selected.information_gain_score
+           << ", distance_m=" << selected.candidate.distance_m
+           << ", cluster_size=" << selected.candidate.cluster_size
+           << ", clearance_m=" << selected.candidate.clearance_m
+           << ", unknown_ratio=" << selected.candidate.unknown_ratio
+           << ", retry_count=" << selected.candidate.retry_count
+           << ", used_fallback=" << (selected.candidate.used_fallback ? "true" : "false");
+
+    const std::size_t top_count = std::min<std::size_t>(3U, sorted.size());
+    for (std::size_t i = 0; i < top_count; ++i) {
+        const auto & scored = sorted[i];
+        stream << " | top" << (i + 1)
+               << " goal=(" << scored.candidate.goal.row << ", " << scored.candidate.goal.col
+               << ") total=" << scored.total_score
+               << " d=" << scored.distance_score
+               << " c=" << scored.cluster_size_score
+               << " clear=" << scored.clearance_score
+               << " risk=-" << scored.unknown_risk_penalty
+               << " retry=-" << scored.retry_penalty;
+    }
+
+    RCLCPP_INFO(logger_, "%s", stream.str().c_str());
 }
 
 void FrontierSelector::mark_cluster_failed(const GridCell & cluster_id)

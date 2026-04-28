@@ -28,6 +28,7 @@ FrontierDetector
 - Nav2 `nav2_costmap_2d::Costmap2D`
 - `nav_msgs/msg/OccupancyGrid`
 - `nav_msgs/msg/Odometry`
+- `visualization_msgs/msg/MarkerArray`
 - `robot_interfaces/msg/ExplorationState`
 - `util_package` 中的 friendly logging
 
@@ -39,6 +40,12 @@ FrontierDetector
 | `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | 可选 safety costmap 来源，用于 clearance 软评分，不作为 frontier 硬过滤。 |
 | `/odom` | `nav_msgs/msg/Odometry` | 订阅 | 将机器人位置转换为地图栅格坐标。 |
 | `/exploration_state` | `robot_interfaces/msg/ExplorationState` | 发布 | 发布 IDLE/RUNNING/STOPPED/COMPLETED/STUCK 等状态。 |
+| `/frontier/raw_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 原始 frontier cluster 点云。 |
+| `/frontier/candidate_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | pruner/scorer 后仍参与评分的候选点。 |
+| `/frontier/scored_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | Top 5 评分候选的简短文本。 |
+| `/frontier/selected_marker` | `visualization_msgs/msg/MarkerArray` | 发布 | 本轮最终选中的目标箭头。 |
+| `/frontier/blacklist_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 已进入 goal blacklist 的目标点。 |
+| `/frontier/rejected_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 本轮 detector 发现但 selector 未能选出有效目标的 frontier。 |
 | `/start_exploration` | `std_srvs/srv/Trigger` | 服务 | 进入 RUNNING，允许定时器派发目标。 |
 | `/stop_exploration` | `std_srvs/srv/Trigger` | 服务 | 进入 STOPPED，停止派发新目标。 |
 | `navigate_to_pose` | `nav2_msgs/action/NavigateToPose` | Action Client | 向 Nav2 发送选中的 frontier goal。 |
@@ -50,10 +57,11 @@ FrontierDetector
 1. 仅在状态为 RUNNING 且当前没有 action goal 执行时继续。
 2. 检查 `/map` 是否超时；超时则进入 STUCK，detail 为 `map_stale`。
 3. 根据 `/odom` 和 `/map` 原点/分辨率计算机器人当前 `GridCell`。
-4. `FrontierDetector` 从 `/map` 中检测 frontier cell 并聚类。
+4. `FrontierDetector` 从 `/map` 中检测 frontier cell 并聚类，发布 raw frontier marker。
 5. `FrontierSelector` 调用 pruner/scorer，使用 `/map` 生成候选，使用 global costmap 计算 clearance 软评分。
-6. 将 goal grid 转换为 `PoseStamped`，发送 Nav2 `NavigateToPose`。
-7. 根据 action feedback/result 更新状态、失败计数和黑名单。
+6. 发布候选点、Top 5 评分文本、blacklist 和最终 selected goal marker。
+7. 将 goal grid 转换为 `PoseStamped`，发送 Nav2 `NavigateToPose`。
+8. 根据 action feedback/result 更新状态、失败计数和黑名单。
 
 当前节点会周期性输出 frontier cell 数量、raw cluster 数量和
 `min_cluster_size`，用于判断小边界是否在 detector 阶段被发现。
@@ -177,6 +185,40 @@ frontier_decision.small_cluster_size_threshold: 3
 ```
 
 控制。默认 `cluster_size < 3` 的候选不会参与正常竞争，只作为兜底目标。
+
+selector 会保留最近一轮 `last_scored_candidates()`，供 marker 层显示评分候选。
+同时它会在日志里输出：
+
+- 最终选中的候选及 total score；
+- distance、cluster size、clearance、retry、unknown risk 等分项；
+- Top 3 候选摘要；
+- 目标失败次数、retry 阈值和加入 blacklist 的原因。
+
+因此，“为什么这个分数最高”和“为什么最终选它”主要看 selector 日志；
+RViz 只保留 Top 5 的简短分数标签，避免文字盖住地图。
+
+### 4.6 FrontierMarkerPublisher
+
+`FrontierMarkerPublisher` 是 RViz 可视化层，只负责把已有中间结果转成
+`visualization_msgs/msg/MarkerArray`。它不参与 frontier 检测、过滤、评分或选择，
+也不会改变探索策略。
+
+当前 marker topic 和语义如下：
+
+| Topic | ns | 类型 | 颜色 | 说明 |
+| --- | --- | --- | --- | --- |
+| `/frontier/raw_markers` | `raw_frontiers` | `POINTS` | 蓝色 | detector 输出的原始 frontier cells。 |
+| `/frontier/candidate_markers` | `candidates` | `SPHERE` | 青色 | pruner/scorer 后仍参与评分的候选点。 |
+| `/frontier/scored_markers` | `scored_candidates` | `TEXT_VIEW_FACING` | 黄色；retry 高时紫色 | Top 5 候选的 `#rank score` 简短文本。 |
+| `/frontier/selected_marker` | `selected_goal` | `ARROW` | 绿色 | 从机器人当前位置指向最终目标。 |
+| `/frontier/blacklist_markers` | `blacklist` | `SPHERE` | 红色 | 已加入 goal blacklist 的目标点。 |
+| `/frontier/rejected_markers` | `rejected_candidates` / `rejected_frontiers` | `SPHERE` / `POINTS` | 红色 | 本轮 detector 发现但 selector 未能选出有效目标的 frontier 或候选。 |
+
+每次发布前都会发送 `DELETEALL`，避免 RViz 残留旧 marker。
+`/start_exploration` 和 `/stop_exploration` 也会调用 `clearAll()` 清理所有 frontier marker。
+
+注意：RViz 中看到的一串红色球如果来自 `/slam_toolbox/graph_visualization`，
+那是 SLAM Toolbox pose graph，不是 `/frontier/blacklist_markers`。
 
 ## 5. 状态机
 
@@ -310,8 +352,21 @@ ros2 param get /frontier_explorer_node frontier_decision.enable_clearance_score
 ros2 param get /frontier_explorer_node frontier_decision.weight_clearance
 ```
 
+检查 frontier marker：
+
+```bash
+ros2 topic list | grep /frontier
+ros2 topic info /frontier/raw_markers -v
+ros2 topic info /frontier/scored_markers -v
+ros2 topic info /frontier/selected_marker -v
+ros2 topic info /frontier/blacklist_markers -v
+```
+
+在 RViz 中添加 `MarkerArray` display，分别选择上述 `/frontier/...` topic。
+这些 topic 使用 transient local QoS；如果 RViz 后启动，也能拿到最近一次 marker。
+
 ## 10. 后续 TODO
 
 - 将 information gain 从当前 `unknown_ratio` 代理升级为更稳定的窗口信息量估计。
-- 为 scorer 输出增加调试日志或可视化，便于解释每次选点原因。
-- 后续可增加可视化 marker，显示每个 frontier candidate 的 clearance、unknown risk 和 total score。
+- 后续可以把 rejected candidate 拆成更细的拒绝原因 topic 或文本，但不建议默认全部打开，避免 RViz 过载。
+- 如果需要更强解释性，可以增加一个低频 debug topic，发布完整候选评分表，替代 RViz 上的大量文本。

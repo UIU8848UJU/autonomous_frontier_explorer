@@ -79,6 +79,7 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
     load_params();
     apply_params();
     create_interfaces();
+    marker_publisher_ = std::make_unique<FrontierMarkerPublisher>(this, this->get_logger(), "map");
 
     explore_timer_ = this->create_wall_timer(
         std::chrono::duration<double>(params_.runtime.explore_period_sec),
@@ -465,6 +466,9 @@ void FrontierExplorerNode::goal_response_callback(
 
         if (current_goal_grid_.has_value()) {
             selector_.mark_goal_failed(current_goal_grid_.value());
+            if (marker_publisher_ && map_costmap_.isReady()) {
+                marker_publisher_->publishBlacklist(selector_.blacklisted_goals(), map_costmap_);
+            }
         }
         return;
     }
@@ -487,6 +491,11 @@ void FrontierExplorerNode::result_callback(
   
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_succeeded(current_goal_grid_.value());
+                if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->publishBlacklist(
+                        selector_.blacklisted_goals(),
+                        map_costmap_);
+                }
             }
             RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal SUCCEEDED, state is:%s",
                 state_to_string().c_str());
@@ -496,6 +505,11 @@ void FrontierExplorerNode::result_callback(
             set_state(ExplorationState::STOPPED);
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
+                if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->publishBlacklist(
+                        selector_.blacklisted_goals(),
+                        map_costmap_);
+                }
             }
             RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal ABORTED,  state is:%s", 
                 state_to_string().c_str());
@@ -505,6 +519,11 @@ void FrontierExplorerNode::result_callback(
             set_state(ExplorationState::STOPPED);
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
+                if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->publishBlacklist(
+                        selector_.blacklisted_goals(),
+                        map_costmap_);
+                }
             }
             RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal CANCELED,  state is:%s.",
                 state_to_string().c_str());
@@ -514,6 +533,11 @@ void FrontierExplorerNode::result_callback(
             set_state(ExplorationState::STOPPED);
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
+                if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->publishBlacklist(
+                        selector_.blacklisted_goals(),
+                        map_costmap_);
+                }
             }
             RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Frontier goal unknown result. state is:%s",
                 state_to_string().c_str());
@@ -674,6 +698,9 @@ void FrontierExplorerNode::explore_timer_callback()
 
     const auto frontier_cells = detector_.detect_frontier_cells(map_costmap_);
     const auto clusters = detector_.cluster_frontiers(map_costmap_, frontier_cells);
+    if (marker_publisher_) {
+        marker_publisher_->publishRawFrontiers(clusters, map_costmap_);
+    }
 
     RCLCPP_INFO_THROTTLE_WITH_CONTEXT(
         this->get_logger(),
@@ -694,8 +721,23 @@ void FrontierExplorerNode::explore_timer_callback()
         map_costmap_.getResolution(),
         map_costmap_,
         safety_costmap);
+    if (marker_publisher_) {
+        std::vector<FrontierCandidate> scored_candidates;
+        scored_candidates.reserve(selector_.last_scored_candidates().size());
+        for (const auto & scored : selector_.last_scored_candidates()) {
+            scored_candidates.push_back(scored.candidate);
+        }
+        marker_publisher_->publishCandidates(scored_candidates, map_costmap_);
+        marker_publisher_->publishScoredCandidates(
+            selector_.last_scored_candidates(),
+            map_costmap_);
+        marker_publisher_->publishBlacklist(selector_.blacklisted_goals(), map_costmap_);
+    }
 
     if (!best_frontier.has_value()) {
+        if (marker_publisher_) {
+            marker_publisher_->publishRejectedFrontiers(clusters, map_costmap_);
+        }
         RCLCPP_WARN_WITH_CONTEXT(
             this->get_logger(),
             "No valid frontier selected. robot_grid=(%d, %d), clusters=%zu",
@@ -728,6 +770,12 @@ void FrontierExplorerNode::explore_timer_callback()
     }
     else{
         consecutive_frontier_failures_ = 0;
+        if (marker_publisher_) {
+            marker_publisher_->publishSelectedGoal(
+                best_frontier.value(),
+                robot_grid_.value(),
+                map_costmap_);
+        }
         RCLCPP_INFO_WITH_CONTEXT(
             this->get_logger(),
             "Chosen frontier: row=%d, col=%d, robot=(%d, %d)", 
@@ -794,6 +842,9 @@ void FrontierExplorerNode::publish_state()
 void FrontierExplorerNode::handle_start( const std::shared_ptr<std_srvs::srv::Trigger::Request>,
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
+    if (marker_publisher_) {
+        marker_publisher_->clearAll();
+    }
     set_state(ExplorationState::RUNNING);
     publish_state();
 
@@ -805,6 +856,9 @@ void FrontierExplorerNode::handle_stop( const std::shared_ptr<std_srvs::srv::Tri
   std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
     set_state(ExplorationState::STOPPED);
+    if (marker_publisher_) {
+        marker_publisher_->clearAll();
+    }
     publish_state();
 
     response->success = true;
