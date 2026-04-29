@@ -63,6 +63,10 @@ https://github.com/user-attachments/assets/9e4f8a30-9b6f-4366-87e5-293d407cfe1d
 https://github.com/user-attachments/assets/4116bd11-13f0-4c1d-8bfb-4c77dc61bf0e
 
 
+### 目前加入了可视化决策功能
+`后续视频会重做`
+![alt text](image/image.png)
+
 ## 当前能力
 
 - 一键 bringup：仿真、SLAM、Nav2、RViz、FrontierExplorer、TaskManager 分阶段启动。

@@ -467,6 +467,7 @@ void FrontierExplorerNode::goal_response_callback(
         if (current_goal_grid_.has_value()) {
             selector_.mark_goal_failed(current_goal_grid_.value());
             if (marker_publisher_ && map_costmap_.isReady()) {
+                marker_publisher_->clearCandidateMarkers();
                 marker_publisher_->publishBlacklist(selector_.blacklisted_goals(), map_costmap_);
             }
         }
@@ -492,6 +493,7 @@ void FrontierExplorerNode::result_callback(
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_succeeded(current_goal_grid_.value());
                 if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->clearCandidateMarkers();
                     marker_publisher_->publishBlacklist(
                         selector_.blacklisted_goals(),
                         map_costmap_);
@@ -506,6 +508,7 @@ void FrontierExplorerNode::result_callback(
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
                 if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->clearCandidateMarkers();
                     marker_publisher_->publishBlacklist(
                         selector_.blacklisted_goals(),
                         map_costmap_);
@@ -520,6 +523,7 @@ void FrontierExplorerNode::result_callback(
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
                 if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->clearCandidateMarkers();
                     marker_publisher_->publishBlacklist(
                         selector_.blacklisted_goals(),
                         map_costmap_);
@@ -534,6 +538,7 @@ void FrontierExplorerNode::result_callback(
             if (current_goal_grid_.has_value()) {
                 selector_.mark_goal_failed(current_goal_grid_.value());
                 if (marker_publisher_ && map_costmap_.isReady()) {
+                    marker_publisher_->clearCandidateMarkers();
                     marker_publisher_->publishBlacklist(
                         selector_.blacklisted_goals(),
                         map_costmap_);
@@ -633,6 +638,9 @@ void FrontierExplorerNode::feedback_callback(GoalHandleNavigateToPose::SharedPtr
             RCLCPP_WARN_WITH_CONTEXT(this->get_logger(),
                         "Goal seems stuck! triggering fallback.");
             set_state(ExplorationState::STUCK);
+            if (marker_publisher_) {
+                marker_publisher_->clearCandidateMarkers();
+            }
             last_progress_time_ = now;
             last_progress_distance_ = dist_to_goal;  // 重置防止重复触发
         } else if (delta >= 0.01) {
@@ -676,6 +684,9 @@ void FrontierExplorerNode::explore_timer_callback()
                 "Map has not updated for %.2f seconds, marking STUCK.",
                 elapsed.seconds());
             set_state(ExplorationState::STUCK, "map_stale");
+            if (marker_publisher_) {
+                marker_publisher_->clearCandidateMarkers();
+            }
             publish_state();
             return;
         }
@@ -761,6 +772,9 @@ void FrontierExplorerNode::explore_timer_callback()
                 consecutive_frontier_failures_,
                 near_edge ? "true" : "false");
             set_state(ExplorationState::STUCK, reason);
+            if (marker_publisher_) {
+                marker_publisher_->clearCandidateMarkers();
+            }
             publish_state();
             consecutive_frontier_failures_ = 0;
         } else {

@@ -12,7 +12,7 @@ namespace
 {
 constexpr double kPointScale = 0.05;
 constexpr double kSphereScale = 0.15;
-constexpr double kTextScale = 0.16;
+constexpr double kTextScale = 0.13;
 constexpr double kTextHeightOffset = 0.28;
 constexpr double kArrowLength = 0.4;
 constexpr double kArrowShaft = 0.08;
@@ -55,6 +55,12 @@ void FrontierMarkerPublisher::clearAll() const
     publishDeleteAll(scored_pub_);
     publishDeleteAll(selected_pub_);
     publishDeleteAll(blacklist_pub_);
+}
+
+void FrontierMarkerPublisher::clearCandidateMarkers() const
+{
+    publishDeleteAll(candidate_pub_);
+    publishDeleteAll(scored_pub_);
 }
 
 void FrontierMarkerPublisher::publishRawFrontiers(
@@ -250,7 +256,7 @@ void FrontierMarkerPublisher::publishScoredCandidates(
         text.precision(2);
         text << std::fixed
              << "#" << (index + 1)
-             << " score " << scored.total_score;
+             << ":" << scored.total_score;
         marker.text = text.str();
 
         array.markers.push_back(marker);

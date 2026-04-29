@@ -28,6 +28,9 @@ public:
     /// @brief: 清空所有 frontier marker topic 上的旧 marker
     void clearAll() const;
 
+    /// @brief: 清空候选点和评分文本 marker
+    void clearCandidateMarkers() const;
+
     /// @brief: 发布原始 frontier cluster 点云 marker
     /// @param clusters detector 输出的 frontier clusters
     /// @param costmap 用于把 grid cell 转换到世界坐标
