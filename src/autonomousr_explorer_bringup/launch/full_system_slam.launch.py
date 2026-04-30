@@ -8,6 +8,7 @@ import os
 
 def generate_launch_description():
     bringup_pkg = get_package_share_directory("autonomousr_explorer_bringup")
+    map_manager_pkg = get_package_share_directory("map_manager")
 
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -43,9 +44,19 @@ def generate_launch_description():
         parameters=[task_params],
     )
 
+    map_manager_params = os.path.join(map_manager_pkg, "config", "map_manager.yaml")
+    map_manager_node = Node(
+        package="map_manager",
+        executable="map_manager_node",
+        name="map_manager_node",
+        output="screen",
+        parameters=[map_manager_params],
+    )
+
     return LaunchDescription([
         TimerAction(period=8.0, actions=[nav2_launch]),
         TimerAction(period=10.0, actions=[rviz_node]),
         TimerAction(period=12.0, actions=[frontier_node]),
         TimerAction(period=14.0, actions=[task_node]),
+        TimerAction(period=14.0, actions=[map_manager_node]),
     ])

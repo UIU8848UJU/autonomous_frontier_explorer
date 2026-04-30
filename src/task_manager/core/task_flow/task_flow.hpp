@@ -22,6 +22,7 @@ public:
 
     bool start_mapping_flow();
     bool mark_mapping_done();
+    bool mark_map_saved();
     bool start_navigation_flow();
     bool stop_all();
 

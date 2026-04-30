@@ -14,6 +14,7 @@ namespace
 constexpr int kDefaultHeartbeatPeriodMs = 1000;
 constexpr size_t kStatePublisherDepth = 10;
 constexpr size_t kExplorationSubDepth = 10;
+constexpr size_t kMapManagerSubDepth = 10;
 constexpr auto kServiceCallTimeout = 3s;
 }  // namespace
 
@@ -34,6 +35,8 @@ void TaskManagerNode::declare_parameters()
 
     interface_config_.exploration_state_topic = this->declare_parameter<std::string>(
         "exploration_state_topic", interface_config_.exploration_state_topic);
+    interface_config_.map_manager_state_topic = this->declare_parameter<std::string>(
+        "map_manager_state_topic", interface_config_.map_manager_state_topic);
     interface_config_.task_manager_state_topic = this->declare_parameter<std::string>(
         "task_manager_state_topic", interface_config_.task_manager_state_topic);
     interface_config_.start_mapping_service_name = this->declare_parameter<std::string>(
@@ -54,9 +57,10 @@ void TaskManagerNode::declare_parameters()
 
     RCLCPP_INFO_WITH_CONTEXT(
         this->get_logger(),
-        "Parameters loaded: heartbeat=%ld ms, topics=[%s,%s], services=[%s,%s,%s]",
+        "Parameters loaded: heartbeat=%ld ms, topics=[%s,%s,%s], services=[%s,%s,%s]",
         heartbeat_period_.count(),
         interface_config_.exploration_state_topic.c_str(),
+        interface_config_.map_manager_state_topic.c_str(),
         interface_config_.task_manager_state_topic.c_str(),
         interface_config_.start_mapping_service_name.c_str(),
         interface_config_.start_navigation_service_name.c_str(),
@@ -76,6 +80,12 @@ void TaskManagerNode::create_interfaces()
     exploration_state_sub_ = this->create_subscription<ExplorationStateMsg>(
         interface_config_.exploration_state_topic, explor_sub_qos,
         std::bind(&TaskManagerNode::handle_exploration_state, this, _1));
+
+    const auto map_manager_sub_qos =
+        rclcpp::QoS(rclcpp::KeepLast(kMapManagerSubDepth)).reliable().transient_local();
+    map_manager_state_sub_ = this->create_subscription<MapManagerStateMsg>(
+        interface_config_.map_manager_state_topic, map_manager_sub_qos,
+        std::bind(&TaskManagerNode::handle_map_manager_state, this, _1));
 
     start_mapping_srv_ = this->create_service<Trigger>(
         interface_config_.start_mapping_service_name,
@@ -101,9 +111,10 @@ void TaskManagerNode::create_interfaces()
 
     RCLCPP_INFO_WITH_CONTEXT(
         this->get_logger(),
-        "Interfaces ready: state_pub=%s exploration_sub=%s",
+        "Interfaces ready: state_pub=%s exploration_sub=%s map_manager_sub=%s",
         interface_config_.task_manager_state_topic.c_str(),
-        interface_config_.exploration_state_topic.c_str());
+        interface_config_.exploration_state_topic.c_str(),
+        interface_config_.map_manager_state_topic.c_str());
 }
 
 void TaskManagerNode::publish_state()
@@ -158,6 +169,35 @@ void TaskManagerNode::handle_exploration_state(const ExplorationStateMsg::Shared
         schedule_restart_exploration();
     }
     publish_state();
+}
+
+void TaskManagerNode::handle_map_manager_state(const MapManagerStateMsg::SharedPtr msg)
+{
+    if (!msg) {
+        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Received null map manager state message.");
+        return;
+    }
+
+    if (msg->state == msg->SAVED) {
+        task_flow_.mark_map_saved();
+        RCLCPP_INFO_WITH_CONTEXT(
+            this->get_logger(),
+            "Map saved and mapping marked done: url=%s",
+            msg->map_url.c_str());
+        request_stop_exploration();
+        publish_state();
+        return;
+    }
+
+    if (msg->state == msg->SAVE_FAILED) {
+        task_flow_.set_error(msg->detail.empty() ? "Map save failed." : msg->detail);
+        task_flow_.set_state(TaskManagerState::FAILED);
+        RCLCPP_WARN_WITH_CONTEXT(
+            this->get_logger(),
+            "Map manager reported save failure: %s",
+            msg->detail.c_str());
+        publish_state();
+    }
 }
 
 void TaskManagerNode::handle_start_mapping(

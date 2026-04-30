@@ -8,6 +8,7 @@ find_package(builtin_interfaces REQUIRED)
 
 set(MSG_FILES
   "msg/ExplorationState.msg"
+  "msg/MapManagerState.msg"
   "msg/TaskManagerState.msg"
 )
 

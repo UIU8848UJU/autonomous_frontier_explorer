@@ -55,6 +55,16 @@ bool TaskFlow::mark_mapping_done()
     return true;
 }
 
+bool TaskFlow::mark_map_saved()
+{
+    context_.exploration_running = false;
+    context_.navigation_running = false;
+    context_.map_ready = true;
+    context_.last_error.clear();
+    set_state(TaskManagerState::MAPPING_DONE);
+    return true;
+}
+
 bool TaskFlow::start_navigation_flow()
 {
     if (!context_.map_ready) {

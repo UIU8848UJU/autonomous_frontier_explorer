@@ -10,6 +10,7 @@
 #include "std_srvs/srv/trigger.hpp"
 
 #include "robot_interfaces/msg/exploration_state.hpp"
+#include "robot_interfaces/msg/map_manager_state.hpp"
 #include "robot_interfaces/msg/task_manager_state.hpp"
 
 #include "task_flow/task_flow.hpp"
@@ -18,6 +19,7 @@ namespace task_manager
 {
 
 using ExplorationStateMsg = robot_interfaces::msg::ExplorationState;
+using MapManagerStateMsg = robot_interfaces::msg::MapManagerState;
 using TaskManagerStateMsg = robot_interfaces::msg::TaskManagerState;
 
 class TaskManagerNode : public rclcpp::Node
@@ -31,6 +33,7 @@ private:
     struct InterfaceConfig
     {
         std::string exploration_state_topic{"/exploration_state"};
+        std::string map_manager_state_topic{"/map_manager_state"};
         std::string task_manager_state_topic{"/task_manager_state"};
         std::string start_mapping_service_name{"/start_mapping"};
         std::string start_navigation_service_name{"/start_navigation"};
@@ -47,6 +50,7 @@ private:
     void handle_tick();
     void check_exploration_timeout();
     void handle_exploration_state(const ExplorationStateMsg::SharedPtr msg);
+    void handle_map_manager_state(const MapManagerStateMsg::SharedPtr msg);
     void request_start_exploration();
     void request_stop_exploration();
     void schedule_restart_exploration();
@@ -73,6 +77,7 @@ private:
 
     rclcpp::Publisher<TaskManagerStateMsg>::SharedPtr state_pub_;
     rclcpp::Subscription<ExplorationStateMsg>::SharedPtr exploration_state_sub_;
+    rclcpp::Subscription<MapManagerStateMsg>::SharedPtr map_manager_state_sub_;
     rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
     rclcpp::Service<Trigger>::SharedPtr start_mapping_srv_;

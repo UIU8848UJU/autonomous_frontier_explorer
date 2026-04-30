@@ -15,6 +15,7 @@ task_manager_node:
       ]
 
     exploration_state_topic: "/exploration_state"
+    map_manager_state_topic: "/map_manager_state"
     task_manager_state_topic: "/task_manager_state"
     start_mapping_service_name: "/start_mapping"
     start_navigation_service_name: "/start_navigation"

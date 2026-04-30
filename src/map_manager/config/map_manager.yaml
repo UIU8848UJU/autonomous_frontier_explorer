@@ -1,0 +1,19 @@
+map_manager_node:
+  ros__parameters:
+    use_sim_time: true
+    map_topic: /map
+    exploration_state_topic: /exploration_state
+    map_manager_state_topic: /map_manager_state
+    enable_auto_save: true
+    save_directory: /home/xxx/mk_nav2/maps
+    saved_map_prefix: explore_map
+    map_saver_service_name: /map_saver/save_map
+    completion_no_frontier_rounds: 5
+    completion_unknown_delta_threshold: 0.002
+    completion_check_window_sec: 20.0
+    completion_check_period_sec: 2.0
+    image_format: pgm
+    map_mode: trinary
+    free_thresh: 0.25
+    occupied_thresh: 0.65
+    service_wait_timeout_sec: 2.0
