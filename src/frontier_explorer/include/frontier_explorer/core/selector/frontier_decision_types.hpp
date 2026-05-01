@@ -21,6 +21,10 @@ struct FrontierCandidate
     double unknown_ratio{0.0};
     std::size_t source_cluster_index{0U};
     bool used_fallback{false};
+    bool goal_inset_applied{false};
+    bool reachability_checked{false};
+    bool reachable{true};
+    double path_length_m{0.0};
 };
 
 // 临时兼容旧调用点的类型别名。

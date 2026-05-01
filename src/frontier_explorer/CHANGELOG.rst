@@ -5,13 +5,22 @@ frontier_explorer 包更新日志
 0.0.6(2026-05-01)
 ------------------
 * 将探索决策编排从 ``FrontierExplorerNode`` 中解耦，``FrontierExplorerNode`` 默认只作为 frontier 目标生成能力节点。
+* 新增 ``FrontierGoalProvider`` 纯 C++ 能力类，承接地图/costmap、detector、pruner、scorer、selector、retry/blacklist 和 frontier goal 计算。
+* 将 ``FrontierExplorerNode`` 收敛为 ROS wrapper，只负责参数、订阅、service、marker 和 state，不再持有 Nav2 action client。
+* 将机器人位姿来源从 ``/odom`` 订阅改为 TF 查询 ``global_frame <- robot_base_frame``，避免把会漂移的 odom frame 坐标当作 map frame 使用。
+* 新增 ``global_frame``、``robot_base_frame``、``robot_pose_timeout_ms`` 参数，默认分别为 ``map``、``base_link``、``200``。
+* 新增 ``show_all_candidate_markers`` 参数，默认 ``false``；RViz 默认只显示最终选中候选球，避免完整候选集合在探索后期被误认为残留目标。
+* 新增 frontier 可达性过滤：通过 Nav2 ``ComputePathToPose`` 检查评分靠前候选是否可规划路径，不可达候选不会被选为目标。
+* 新增 ``frontier_decision.enable_reachability_filter``、``frontier_decision.max_reachability_checks``、``frontier_decision.compute_path_to_pose_action``、``frontier_decision.reachability_server_timeout_ms``、``frontier_decision.reachability_check_timeout_ms``、``frontier_decision.reachability_planner_id`` 参数。
+* 新增 ``frontier_decision.candidate_goal_inset_cells`` 参数，候选目标会从 frontier 边界向机器人方向内缩到已知 free space，降低目标贴 unknown 边界导致 Nav2 拒绝的概率。
+* 将 ``frontier_explorer_node`` executor 改为 ``MultiThreadedExecutor``，避免 service 回调中等待 Nav2 planner action 结果时阻塞 action 回调处理。
 * 新增 ``robot_interfaces/srv/GetNextFrontierGoal``，用于外部请求下一个 frontier goal，并返回 success、reason、score、distance、clearance、frontier count、blacklist count、exploration_complete、recoverable 等字段。
 * 新增 ``robot_interfaces/srv/MarkFrontierFailed``，用于导航失败后由外部编排层通知 frontier 能力节点更新 retry / blacklist。
 * 新增 ``robot_interfaces/srv/ClearFrontierBlacklist``，用于清空 frontier blacklist。
 * 新增 ``robot_interfaces/srv/GetExplorationState``，复用已有 ``ExplorationState`` 消息查询当前探索状态。
-* 新增 ``FrontierGoalResult`` 和 ``compute_next_frontier_goal()``，将 frontier 检测、过滤、打分、选择、marker 发布、状态发布封装为纯能力接口，不直接触发 Nav2 goal。
-* 新增 ``enable_internal_navigation_loop`` 参数，默认 ``false``。关闭时 ``FrontierExplorerNode`` 不主动发送 ``NavigateToPose``，只提供服务能力。
-* 保留 retry / blacklist 管理在 ``FrontierExplorerNode`` 内部，外部 BT 只通过 ``MarkFrontierFailed`` 通知失败事件。
+* 新增 ``FrontierGoalResult`` 和 ``FrontierGoalProvider::compute_next_frontier_goal()``，将 frontier 检测、过滤、打分和选择封装为纯能力接口，不直接触发 Nav2 goal。
+* 废弃 ``enable_internal_navigation_loop`` 参数；即使配置为 ``true``，``FrontierExplorerNode`` 也不会主动发送 ``NavigateToPose``。
+* 保留 retry / blacklist 管理在 ``FrontierGoalProvider`` 内部，外部 BT 只通过 ``MarkFrontierFailed`` 通知失败事件。
 * 新增 ``ExplorationBtOrchestratorNode``，作为唯一探索编排层，加载 ``behavior_trees/exploration_tree.xml`` 并周期 tick BehaviorTree。
 * 新增 BT 节点 ``ComputeNextFrontierGoal``、``NavigateToFrontier``、``MarkFrontierFailed``、``IsExplorationComplete``。
 * 当前 BT 节点在 orchestrator 进程内注册，后续可以拆成 BehaviorTree.CPP plugin。

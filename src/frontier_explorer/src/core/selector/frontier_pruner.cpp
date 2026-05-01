@@ -1,6 +1,7 @@
 #include "core/selector/frontier_pruner.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 #include "core/utils/frontier_selector_utils.hpp"
@@ -14,13 +15,15 @@ FrontierPruner::FrontierPruner(
     int max_cluster_retry_count,
     std::size_t min_cluster_size,
     int unknown_margin_cells,
+    int goal_inset_cells,
     const rclcpp::Logger & logger)
 : logger_(rclcpp::Logger(logger).get_child("pruner")),
   min_goal_distance_m_(min_goal_distance_m),
   max_retry_count_(max_retry_count),
   max_cluster_retry_count_(max_cluster_retry_count),
   min_cluster_size_(min_cluster_size),
-  unknown_margin_cells_(std::max(0, unknown_margin_cells))
+  unknown_margin_cells_(std::max(0, unknown_margin_cells)),
+  goal_inset_cells_(std::max(0, goal_inset_cells))
 {
 }
 
@@ -151,6 +154,41 @@ bool FrontierPruner::pass_map_candidate_constraints(
     return true;
 }
 
+GridCell FrontierPruner::inset_goal_toward_robot(
+    const GridCell & frontier_goal,
+    const GridCell & robot_grid,
+    const CostmapAdapter * frontier_costmap,
+    const FrontierPruningContext & context) const
+{
+    if (goal_inset_cells_ <= 0 || frontier_costmap == nullptr) {
+        return frontier_goal;
+    }
+
+    const int delta_row = robot_grid.row - frontier_goal.row;
+    const int delta_col = robot_grid.col - frontier_goal.col;
+    if (delta_row == 0 && delta_col == 0) {
+        return frontier_goal;
+    }
+
+    const int step_row = delta_row == 0 ? 0 : (delta_row > 0 ? 1 : -1);
+    const int step_col = delta_col == 0 ? 0 : (delta_col > 0 ? 1 : -1);
+    GridCell best = frontier_goal;
+    for (int step = 1; step <= goal_inset_cells_; ++step) {
+        const GridCell inset{
+            frontier_goal.row + step_row * step,
+            frontier_goal.col + step_col * step};
+        if (should_skip_goal(inset, context)) {
+            continue;
+        }
+        if (!pass_map_candidate_constraints(inset, frontier_costmap)) {
+            continue;
+        }
+        best = inset;
+    }
+
+    return best;
+}
+
 double FrontierPruner::compute_clearance_m(
     const GridCell & cell,
     const CostmapAdapter * frontier_costmap,
@@ -232,6 +270,7 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
         double dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
         double unknown_ratio = 0.0;
         bool used_fallback = false;
+        bool goal_inset_applied = false;
 
         bool centroid_invalid = false;
         if (should_skip_goal(candidate, context)) {
@@ -260,6 +299,14 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
             used_fallback = true;
         }
 
+        const GridCell frontier_goal = candidate;
+        candidate = inset_goal_toward_robot(candidate, robot_grid, frontier_costmap, context);
+        if (!(candidate == frontier_goal)) {
+            dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
+            pass_map_candidate_constraints(candidate, frontier_costmap, &unknown_ratio);
+            goal_inset_applied = true;
+        }
+
         const double clearance_m = compute_clearance_m(
             candidate,
             frontier_costmap,
@@ -274,7 +321,11 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
             clearance_m,
             unknown_ratio,
             cluster_idx,
-            used_fallback
+            used_fallback,
+            goal_inset_applied,
+            false,
+            true,
+            0.0
         });
     }
 

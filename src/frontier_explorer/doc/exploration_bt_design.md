@@ -39,10 +39,15 @@ behavior_trees/exploration_tree.xml
 - `IsExplorationComplete`：如果上下文已标记探索完成，返回 `SUCCESS`。
 - `ComputeNextFrontierGoal`：调用 frontier 能力服务，请求下一个目标。
 - `NavigateToFrontier`：将目标发送给 Nav2 `NavigateToPose`。
-- `MarkFrontierFailed`：导航失败后通知 frontier 能力节点更新 retry / blacklist。
+- `MarkFrontierFailed`：导航失败后通知 frontier 能力节点处理失败事件。
 
 orchestrator 每次 BT 返回 `SUCCESS` 后会重新加载树并进入下一轮 frontier 请求。
 当 `ComputeNextFrontierGoal` 返回 `exploration_complete=true` 时，orchestrator 结束探索流程。
+
+## 边界约束
+
+BT 负责流程编排：请求 frontier、导航、失败后触发失败通知、重新选点、完成或失败。
+BT 不直接维护 retry / blacklist。`retry_count`、`blacklisted`、goal blacklist、cluster blacklist 等策略状态只在 `FrontierGoalProvider` / `FrontierSelector` 内部更新。
 
 ## BT 节点映射
 
@@ -50,7 +55,7 @@ orchestrator 每次 BT 返回 `SUCCESS` 后会重新加载树并进入下一轮 
 | --- | --- | --- | --- |
 | `ComputeNextFrontierGoal` | StatefulAction | `robot_interfaces/srv/GetNextFrontierGoal` | 请求下一个 frontier goal |
 | `NavigateToFrontier` | StatefulAction | `nav2_msgs/action/NavigateToPose` | 导航到当前 frontier goal |
-| `MarkFrontierFailed` | StatefulAction | `robot_interfaces/srv/MarkFrontierFailed` | 记录导航失败并触发 retry / blacklist |
+| `MarkFrontierFailed` | StatefulAction | `robot_interfaces/srv/MarkFrontierFailed` | 通知 frontier 能力节点处理导航失败事件 |
 | `IsExplorationComplete` | Condition | BT context | 判断探索是否完成 |
 
 ## BT 共享上下文

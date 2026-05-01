@@ -2,9 +2,11 @@
 
 #include <optional>
 #include <cstddef>
+#include <functional>
 #include <vector>
 
 #include "core/costmap/costmap_adapter.hpp"
+#include "core/reachability/frontier_reachability_checker.hpp"
 #include "core/selector/frontier_decision_types.hpp"
 #include "core/selector/frontier_pruner.hpp"
 #include "core/selector/frontier_scorer.hpp"
@@ -26,8 +28,10 @@ public:
     /// @param min_cluster_size 最小 cluster 尺寸
     /// @param max_cluster_retry_count 单个 cluster 最大重试次数
     /// @param candidate_unknown_margin_cells 候选点 unknown ratio 统计半径
+    /// @param candidate_goal_inset_cells 候选目标向机器人方向内缩的 cell 数
     /// @param defer_small_clusters 是否延后选择小 cluster
     /// @param small_cluster_size_threshold 小 cluster 判定阈值
+    /// @param require_reachable_goal 是否强制要求候选通过 planner 可达性检查
     /// @param logger ROS2 日志器
     FrontierSelector(
         double min_goal_distance_m,
@@ -36,8 +40,10 @@ public:
         std::size_t min_cluster_size = 1U,
         int max_cluster_retry_count = 3,
         int candidate_unknown_margin_cells = 2,
+        int candidate_goal_inset_cells = 2,
         bool defer_small_clusters = true,
         std::size_t small_cluster_size_threshold = 3U,
+        bool require_reachable_goal = false,
         const rclcpp::Logger & logger = rclcpp::get_logger("frontier_explorer"));
 
     /// @brief: 在给定 CostmapAdapter 时选择最佳 frontier，会启用 unknown margin 等地图约束
@@ -52,7 +58,9 @@ public:
         const GridCell & robot_grid,
         double resolution,
         const CostmapAdapter & frontier_costmap,
-        const CostmapAdapter * safety_costmap = nullptr);
+        const CostmapAdapter * safety_costmap = nullptr,
+        const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+            reachability_check = {});
 
     /// @brief: 记录最近一次发给 Nav2 的目标点，用于避免重复选择
     /// @param goal 最近目标栅格
@@ -101,7 +109,9 @@ private:
 
     // 从一个候选池中打分并选择最高分候选。
     std::optional<ScoredFrontierCandidate> choose_best_scored_candidate(
-        const std::vector<FrontierCandidate> & candidates) const;
+        const std::vector<FrontierCandidate> & candidates,
+        const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+            reachability_check = {}) const;
 
 private:
     rclcpp::Logger logger_;
@@ -112,6 +122,7 @@ private:
     std::size_t min_cluster_size_{1U};
     bool defer_small_clusters_{true};
     std::size_t small_cluster_size_threshold_{3U};
+    bool require_reachable_goal_{false};
 
     // 决策流水线组件：pruner 负责候选生成，scorer 负责打分。
     FrontierPruner pruner_;

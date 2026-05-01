@@ -13,8 +13,10 @@ FrontierSelector::FrontierSelector(
     std::size_t min_cluster_size,
     int max_cluster_retry_count,
     int candidate_unknown_margin_cells,
+    int candidate_goal_inset_cells,
     bool defer_small_clusters,
     std::size_t small_cluster_size_threshold,
+    bool require_reachable_goal,
     const rclcpp::Logger & logger)
 : logger_(rclcpp::Logger(logger).get_child("selector")),
   min_goal_distance_m_(min_goal_distance_m),
@@ -24,12 +26,14 @@ FrontierSelector::FrontierSelector(
   defer_small_clusters_(defer_small_clusters),
   small_cluster_size_threshold_(
       std::max<std::size_t>(min_cluster_size_, small_cluster_size_threshold)),
+  require_reachable_goal_(require_reachable_goal),
   pruner_(
       min_goal_distance_m_,
       max_retry_count_,
       max_cluster_retry_count_,
       min_cluster_size_,
       candidate_unknown_margin_cells,
+      candidate_goal_inset_cells,
       logger_),
   scorer_(scoring_weights, max_retry_count_, logger_)
 {
@@ -40,7 +44,9 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
     const GridCell & robot_grid,
     double resolution,
     const CostmapAdapter & frontier_costmap,
-    const CostmapAdapter * safety_costmap)
+    const CostmapAdapter * safety_costmap,
+    const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+        reachability_check)
 {
     last_scored_candidates_.clear();
 
@@ -88,8 +94,8 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
     }
 
     const auto best = !normal_candidates.empty() ?
-        choose_best_scored_candidate(normal_candidates) :
-        choose_best_scored_candidate(small_candidates);
+        choose_best_scored_candidate(normal_candidates, reachability_check) :
+        choose_best_scored_candidate(small_candidates, reachability_check);
     if (!best.has_value()) {
         return std::nullopt;
     }
@@ -99,29 +105,59 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
 }
 
 std::optional<ScoredFrontierCandidate> FrontierSelector::choose_best_scored_candidate(
-    const std::vector<FrontierCandidate> & candidates) const
+    const std::vector<FrontierCandidate> & candidates,
+    const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+        reachability_check) const
 {
     last_scored_candidates_ = scorer_.score_candidates(candidates, state_.last_goal_grid);
     if (last_scored_candidates_.empty()) {
         return std::nullopt;
     }
 
-    const auto best_it = std::max_element(
-        last_scored_candidates_.begin(),
-        last_scored_candidates_.end(),
-        [](const ScoredFrontierCandidate & lhs, const ScoredFrontierCandidate & rhs) {
+    std::vector<std::size_t> sorted_indices(last_scored_candidates_.size());
+    for (std::size_t index = 0; index < sorted_indices.size(); ++index) {
+        sorted_indices[index] = index;
+    }
+    std::sort(
+        sorted_indices.begin(),
+        sorted_indices.end(),
+        [this](std::size_t lhs_index, std::size_t rhs_index) {
+            const auto & lhs = last_scored_candidates_[lhs_index];
+            const auto & rhs = last_scored_candidates_[rhs_index];
             if (lhs.total_score == rhs.total_score) {
                 return lhs.candidate.distance_m > rhs.candidate.distance_m;
             }
-            return lhs.total_score < rhs.total_score;
+            return lhs.total_score > rhs.total_score;
         });
 
-    if (best_it == last_scored_candidates_.end()) {
-        return std::nullopt;
+    for (const auto index : sorted_indices) {
+        auto & scored = last_scored_candidates_[index];
+        if (reachability_check) {
+            const auto reachability = reachability_check(scored.candidate);
+            if (reachability.checked) {
+                scored.candidate.reachability_checked = true;
+                scored.candidate.reachable = reachability.reachable;
+                scored.candidate.path_length_m = reachability.path_length_m;
+            }
+            if (reachability.checked && !reachability.reachable) {
+                RCLCPP_WARN(
+                    logger_,
+                    "Candidate unreachable: goal=(%d, %d), reason=%s",
+                    scored.candidate.goal.row,
+                    scored.candidate.goal.col,
+                    reachability.reason.c_str());
+                if (require_reachable_goal_) {
+                    continue;
+                }
+            }
+        }
+
+        log_scored_candidates(last_scored_candidates_, scored);
+        return scored;
     }
 
-    log_scored_candidates(last_scored_candidates_, *best_it);
-    return *best_it;
+    RCLCPP_WARN(logger_, "No reachable frontier candidates after planner feasibility check.");
+    return std::nullopt;
 }
 
 void FrontierSelector::set_last_goal(const GridCell & goal)

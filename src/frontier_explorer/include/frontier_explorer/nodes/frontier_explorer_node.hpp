@@ -1,78 +1,50 @@
 #pragma once
 
-// 日志宏
-#define __CLASS_NAME__ "FrontierExplorerNode"
-
 #include <atomic>
-#include <chrono>
 #include <memory>
 #include <mutex>
-#include <optional>
 #include <string>
 
-#include "geometry_msgs/msg/pose_stamped.hpp"   //目标位姿
-#include "nav2_msgs/action/navigate_to_pose.hpp"    //Nav2 的导航 action
-#include "nav_msgs/msg/occupancy_grid.hpp"  //地图
-#include "nav_msgs/msg/odometry.hpp"    //里程计
-#include "rclcpp/rclcpp.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
+#include "core/frontier_goal_provider.hpp"
 #include "core/types/frontier_types.hpp"
-#include "core/costmap/costmap_adapter.hpp"
-#include "core/detector/frontier_detector.hpp"
+#include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nodes/frontier_explorer_params.hpp"
-#include "visualization/frontier_marker_publisher.hpp"
-#include "core/selector/frontier_selector.hpp"
-#include "core/utils/map_utils.hpp"
-// 状态节点
-#include "std_srvs/srv/trigger.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "robot_interfaces/msg/exploration_state.hpp"
 #include "robot_interfaces/srv/clear_frontier_blacklist.hpp"
 #include "robot_interfaces/srv/get_exploration_state.hpp"
 #include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
-#include "robot_interfaces/msg/exploration_state.hpp"
-
-#include "friendly_logging/logging.h"
+#include "std_srvs/srv/trigger.hpp"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/transform_listener.h"
+#include "visualization/frontier_marker_publisher.hpp"
 
 namespace frontier_explorer
 {
 
-/// @brief: 计算下一个 frontier 目标的结果结构
-struct FrontierGoalResult
-{
-    bool success{false};
-    geometry_msgs::msg::PoseStamped goal;
-    uint16_t reason_code{0};
-    std::string reason_text;
-    float score{0.0F};
-    float distance_m{0.0F};
-    float clearance_m{0.0F};
-    uint32_t raw_frontier_count{0U};
-    uint32_t candidate_count{0U};
-    uint32_t blacklist_count{0U};
-    bool exploration_complete{false};
-    bool recoverable{false};
-    std::optional<GridCell> goal_cell;
-};
-
+/// @brief: FrontierExplorerNode 是 frontier 能力 ROS wrapper，负责 service/topic/marker/state，不负责导航编排
 class FrontierExplorerNode : public rclcpp::Node
 {
 public:
-    //  action起别名后面方便用
-    using NavigateToPose = nav2_msgs::action::NavigateToPose;
-    using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPose>;
-
+    /// @brief: 构造 frontier explorer 能力节点
+    /// @param options ROS2 节点选项
     explicit FrontierExplorerNode(
         const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
-
-    // init
+    /// @brief: 声明 ROS 参数
     void declare_params();
+
+    /// @brief: 从 ROS 参数服务器加载参数
     void load_params();
+
+    /// @brief: 修正参数边界并配置 frontier provider
     void apply_params();
+
+    /// @brief: 创建订阅、服务和 publisher
     void create_interfaces();
 
-    // 回调callback
     /// @brief: 处理用于 frontier 检测的 /map 更新
     /// @param msg OccupancyGrid 地图消息
     void map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
@@ -81,34 +53,34 @@ private:
     /// @param msg OccupancyGrid costmap 消息
     void global_costmap_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
 
-    /// @brief: 处理里程计更新
-    /// @param msg Odometry 消息
-    void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg);
-    void explore_timer_callback();
+    /// @brief: 周期发布能力节点状态
+    void state_timer_callback();
 
-    /// @brief: 计算下一个 frontier 目标，不直接触发导航
-    /// @return: frontier 目标计算结果
-    FrontierGoalResult compute_next_frontier_goal();
+    /// @brief: 通过 TF 查询 map frame 下的机器人位姿并更新 provider
+    /// @return: true 表示机器人位姿已成功更新
+    bool update_robot_pose_from_tf();
 
-    bool update_robot_grid_position();
+    /// @brief: 发布 frontier 可视化 marker
+    /// @param visualization provider 返回的可视化快照
+    void publish_markers(const FrontierGoalVisualization & visualization);
 
-    void send_navigation_goal(const GridCell & goal_cell
-        ,const geometry_msgs::msg::PoseStamped & pose);
-
-    void goal_response_callback(
-            const GoalHandleNavigateToPose::SharedPtr & goal_handle);
-    void result_callback(const GoalHandleNavigateToPose::WrappedResult & result);
-    void feedback_callback(GoalHandleNavigateToPose::SharedPtr,
-            const std::shared_ptr<const NavigateToPose::Feedback> feedback);
-
-    /// @brief 控制面部分
+    /// @brief: 发布能力节点状态
     void publish_state();
+
+    /// @brief: 获取当前状态字符串
+    /// @return: 当前状态字符串
     std::string state_to_string() const;
 
+    /// @brief: 处理旧控制面 start 请求，仅用于兼容旧调用方
+    /// @param request 服务请求
+    /// @param response 服务响应
     void handle_start(
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
+    /// @brief: 处理旧控制面 stop 请求，仅用于兼容旧调用方
+    /// @param request 服务请求
+    /// @param response 服务响应
     void handle_stop(
             const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
             std::shared_ptr<std_srvs::srv::Trigger::Response> response);
@@ -141,46 +113,38 @@ private:
             const std::shared_ptr<robot_interfaces::srv::GetExplorationState::Request> request,
             std::shared_ptr<robot_interfaces::srv::GetExplorationState::Response> response);
 
+    /// @brief: 设置能力节点状态
+    /// @param new_state 新状态
+    /// @param detail 状态详情
     void set_state(ExplorationState new_state, const std::string & detail = {});
+
+    /// @brief: 获取能力节点状态
+    /// @return: 当前状态
     ExplorationState get_state() const;
+
+    /// @brief: 将状态转换为字符串
+    /// @param state 待转换状态
+    /// @return: 状态字符串
     std::string state_to_string(ExplorationState state) const;
+
+    /// @brief: 获取状态详情
+    /// @return: 状态详情
     std::string state_detail() const;
 
 private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr global_costmap_sub_;
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
-    rclcpp_action::Client<NavigateToPose>::SharedPtr nav_client_;
-    rclcpp::TimerBase::SharedPtr explore_timer_;
-
-    nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
-    CostmapAdapter map_costmap_;
-    CostmapAdapter global_costmap_;
-    nav_msgs::msg::Odometry::SharedPtr odom_msg_;
-
-    std::optional<GridCell> robot_grid_;
-    std::optional<GridCell> current_goal_grid_;
-    GoalHandleNavigateToPose::SharedPtr goal_handle_;
+    rclcpp::TimerBase::SharedPtr state_timer_;
+    std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     FrontierExplorerParams params_;
-    FrontierDetector detector_;
-    FrontierSelector selector_;
+    FrontierGoalProvider goal_provider_;
     std::unique_ptr<FrontierMarkerPublisher> marker_publisher_;
 
-    bool is_navigating_{false};
-    bool enable_internal_navigation_loop_{false};
-    
-    /// @note:后续可以设计为多机控制
     std::atomic<ExplorationState> state_{ExplorationState::IDLE};
     mutable std::mutex state_mutex_;
     std::string state_detail_;
-
-    std::optional<rclcpp::Time> last_progress_time_;
-    double last_progress_distance_{0.0};
-    double initial_goal_distance_{0.0};
-    std::atomic<float> goal_progress_{0.0f};
-    rclcpp::Time last_map_update_time_;
-    std::size_t consecutive_frontier_failures_{0};
 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
@@ -191,7 +155,5 @@ private:
     rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr state_pub_;
     rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr legacy_state_pub_;
 };
-
-
 
 }  // namespace frontier_explorer

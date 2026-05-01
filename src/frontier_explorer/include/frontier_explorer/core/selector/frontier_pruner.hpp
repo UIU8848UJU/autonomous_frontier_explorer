@@ -39,6 +39,7 @@ public:
     /// @param max_cluster_retry_count 单个 cluster 最大重试次数
     /// @param min_cluster_size 最小 cluster 尺寸
     /// @param unknown_margin_cells 统计 unknown ratio 的邻域半径
+    /// @param goal_inset_cells 候选目标从 frontier 边界向机器人方向内缩的 cell 数
     /// @param logger ROS2 日志器
     FrontierPruner(
         double min_goal_distance_m,
@@ -46,6 +47,7 @@ public:
         int max_cluster_retry_count,
         std::size_t min_cluster_size,
         int unknown_margin_cells,
+        int goal_inset_cells,
         const rclcpp::Logger & logger = rclcpp::get_logger("frontier_explorer"));
 
     /// @brief: 将原始 frontier clusters 转换成可打分候选
@@ -99,6 +101,18 @@ private:
         const CostmapAdapter * frontier_costmap,
         double * unknown_ratio = nullptr) const;
 
+    /// @brief: 将 frontier 边界候选点向机器人所在 free space 内缩，避免目标贴 unknown 边界
+    /// @param frontier_goal 原始 frontier 候选点
+    /// @param robot_grid 机器人当前栅格
+    /// @param frontier_costmap frontier 检测来源地图适配器
+    /// @param context 选择状态上下文
+    /// @return: 内缩后的导航目标；无法内缩时返回原始点
+    GridCell inset_goal_toward_robot(
+        const GridCell & frontier_goal,
+        const GridCell & robot_grid,
+        const CostmapAdapter * frontier_costmap,
+        const FrontierPruningContext & context) const;
+
     /// @brief: 查询候选点到最近障碍物的安全距离
     /// @param cell 候选点在 frontier map 中的栅格坐标
     /// @param frontier_costmap frontier 检测来源地图适配器
@@ -117,6 +131,7 @@ private:
     int max_cluster_retry_count_{3};
     std::size_t min_cluster_size_{1U};
     int unknown_margin_cells_{2};
+    int goal_inset_cells_{2};
 };
 
 }  // namespace frontier_explorer

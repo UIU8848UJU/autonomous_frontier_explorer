@@ -10,7 +10,7 @@
 namespace frontier_explorer
 {
 
-/// @brief: 导航失败后通知 FrontierExplorerNode 记录 retry/blacklist 的 BT action 节点
+/// @brief: 导航失败后通知 FrontierExplorerNode 处理失败事件的 BT action 节点，不直接管理 retry/blacklist
 class MarkFrontierFailedAction : public BT::StatefulActionNode
 {
 public:

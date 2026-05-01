@@ -21,7 +21,15 @@ frontier_explorer_node:
       enable_unknown_risk_penalty: true
       enable_information_gain_score: false
       enable_revisit_penalty: false
+      enable_reachability_filter: true
+      require_reachable_goal: false
+      max_reachability_checks: 6
+      compute_path_to_pose_action: compute_path_to_pose
+      reachability_server_timeout_ms: 200
+      reachability_check_timeout_ms: 500
+      reachability_planner_id: ""
       candidate_unknown_margin_cells: 2
+      candidate_goal_inset_cells: 2
       candidate_max_unknown_ratio: 0.4
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
@@ -30,6 +38,10 @@ frontier_explorer_node:
     map_topic: /map
     global_costmap_topic: /global_costmap/costmap
     use_global_costmap_for_safety: true
+    global_frame: map
+    robot_base_frame: base_link
+    robot_pose_timeout_ms: 200
+    show_all_candidate_markers: true
     enable_internal_navigation_loop: false
 
 exploration_bt_orchestrator_node:

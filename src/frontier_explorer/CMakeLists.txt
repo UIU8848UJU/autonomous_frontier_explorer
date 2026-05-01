@@ -58,6 +58,7 @@ function(configure_frontier_explorer_target target_name)
 endfunction()
 
 add_library(frontier_explorer_core
+  src/core/frontier_goal_provider.cpp
   src/core/costmap/costmap_adapter.cpp
   src/core/detector/frontier_detector.cpp
   src/core/selector/frontier_pruner.cpp

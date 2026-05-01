@@ -342,6 +342,10 @@ bool MapManagerNode::is_unknown_ratio_stable() const
 
 bool MapManagerNode::is_no_frontier_state(const ExplorationStateMsg & msg) const
 {
+    if (msg.state == msg.COMPLETED) {
+        return true;
+    }
+
     if (msg.state != msg.STUCK) {
         return false;
     }
@@ -362,6 +366,10 @@ bool MapManagerNode::should_mark_completed() const
 
     if (no_frontier_rounds_ < config_.completion_no_frontier_rounds) {
         return false;
+    }
+
+    if (last_exploration_state_ == ExplorationStateMsg::COMPLETED) {
+        return true;
     }
 
     return is_unknown_ratio_stable();

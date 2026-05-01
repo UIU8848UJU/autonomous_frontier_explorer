@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -31,6 +33,9 @@ public:
     /// @brief: 清空候选点、评分文本和当前选中目标 marker
     void clearCandidateMarkers() const;
 
+    /// @brief: 清空被拒绝 frontier marker
+    void clearRejectedMarkers() const;
+
     /// @brief: 发布原始 frontier cluster 点云 marker
     /// @param clusters detector 输出的 frontier clusters
     /// @param costmap 用于把 grid cell 转换到世界坐标
@@ -41,9 +46,11 @@ public:
     /// @brief: 发布 pruner 产生的候选点 marker
     /// @param candidates frontier 候选点列表
     /// @param costmap 用于把 grid cell 转换到世界坐标
+    /// @param selected_goal 本轮最终选中的 goal，用于颜色区分
     void publishCandidates(
         const std::vector<FrontierCandidate> & candidates,
-        const CostmapAdapter & costmap) const;
+        const CostmapAdapter & costmap,
+        const std::optional<GridCell> & selected_goal = std::nullopt) const;
 
     /// @brief: 发布被拒绝候选点 marker，当前预留接口
     /// @param rejected_candidates 被拒绝候选点列表
@@ -62,9 +69,11 @@ public:
     /// @brief: 发布带评分文本的候选点 marker
     /// @param scored_candidates 已评分候选点列表
     /// @param costmap 用于把 grid cell 转换到世界坐标
+    /// @param selected_goal 本轮最终选中的 goal，用于颜色区分
     void publishScoredCandidates(
         const std::vector<ScoredFrontierCandidate> & scored_candidates,
-        const CostmapAdapter & costmap) const;
+        const CostmapAdapter & costmap,
+        const std::optional<GridCell> & selected_goal = std::nullopt) const;
 
     /// @brief: 发布最终选中的目标 marker
     /// @param goal 选中的目标栅格
@@ -88,6 +97,16 @@ private:
 
     visualization_msgs::msg::Marker makeDeleteAllMarker() const;
 
+    visualization_msgs::msg::Marker makeDeleteMarker(
+        const std::string & marker_namespace,
+        int id) const;
+
+    void appendStaleDeleteMarkers(
+        visualization_msgs::msg::MarkerArray & array,
+        const std::string & marker_namespace,
+        std::size_t current_count,
+        std::size_t previous_count) const;
+
     visualization_msgs::msg::Marker makeBaseMarker(
         const std::string & marker_namespace,
         int id,
@@ -109,6 +128,14 @@ private:
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr scored_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr selected_pub_;
     rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr blacklist_pub_;
+
+    mutable std::size_t raw_marker_count_{0U};
+    mutable std::size_t candidate_marker_count_{0U};
+    mutable std::size_t rejected_candidate_marker_count_{0U};
+    mutable std::size_t rejected_frontier_marker_count_{0U};
+    mutable std::size_t scored_marker_count_{0U};
+    mutable std::size_t selected_marker_count_{0U};
+    mutable std::size_t blacklist_marker_count_{0U};
 };
 
 }  // namespace frontier_explorer

@@ -11,7 +11,7 @@
 namespace frontier_explorer
 {
 
-/// @brief: 将当前 frontier goal 发送给 Nav2 NavigateToPose 的 BT action 节点
+/// @brief: 将当前 frontier goal 发送给 Nav2 NavigateToPose 的 BT action 节点，后续可替换为 NavigationNode 调用
 class NavigateToFrontierAction : public BT::StatefulActionNode
 {
 public:

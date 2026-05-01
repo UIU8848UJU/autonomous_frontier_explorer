@@ -32,6 +32,28 @@ struct ExplorerRuntimeConfig
     std::string global_costmap_topic{"/global_costmap/costmap"};
     /// @brief: 是否优先使用 global costmap 做目标安全检查
     bool use_global_costmap_for_safety{true};
+    /// @brief: frontier 计算使用的全局坐标系
+    std::string global_frame{"map"};
+    /// @brief: 机器人底盘坐标系
+    std::string robot_base_frame{"base_link"};
+    /// @brief: 查询机器人 TF 的超时时间
+    std::chrono::milliseconds robot_pose_timeout{std::chrono::milliseconds(200)};
+    /// @brief: 是否显示全部候选点；false 时 candidate marker 只显示最终选中目标
+    bool show_all_candidate_markers{false};
+    /// @brief: 是否使用 Nav2 planner 对候选点做可达性过滤
+    bool enable_reachability_filter{true};
+    /// @brief: 是否强制要求候选通过可达性检查；false 时不可达只作为诊断和排序提示
+    bool require_reachable_goal{false};
+    /// @brief: 每轮最多检查多少个评分靠前候选，避免 planner 负载过高
+    int max_reachability_checks{6};
+    /// @brief: ComputePathToPose action 名称
+    std::string compute_path_to_pose_action{"compute_path_to_pose"};
+    /// @brief: 等待 ComputePathToPose action server 的超时时间
+    std::chrono::milliseconds reachability_server_timeout{std::chrono::milliseconds(200)};
+    /// @brief: 单个候选可达性检查超时时间
+    std::chrono::milliseconds reachability_check_timeout{std::chrono::milliseconds(500)};
+    /// @brief: Nav2 planner_id，空字符串表示使用默认 planner
+    std::string reachability_planner_id;
 };
 
 // pruner 参数：只描述 frontier 硬过滤和候选修复需要的阈值。
@@ -40,6 +62,7 @@ struct FrontierPrunerConfig
     double min_goal_distance_m{0.45};
     std::size_t min_cluster_size{1U};
     int candidate_unknown_margin_cells{2};
+    int candidate_goal_inset_cells{2};
 };
 
 // scorer 参数：只描述打分权重和分项开关。

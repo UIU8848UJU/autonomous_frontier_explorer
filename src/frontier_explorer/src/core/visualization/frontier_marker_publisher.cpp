@@ -55,6 +55,13 @@ void FrontierMarkerPublisher::clearAll() const
     publishDeleteAll(scored_pub_);
     publishDeleteAll(selected_pub_);
     publishDeleteAll(blacklist_pub_);
+    raw_marker_count_ = 0U;
+    candidate_marker_count_ = 0U;
+    rejected_candidate_marker_count_ = 0U;
+    rejected_frontier_marker_count_ = 0U;
+    scored_marker_count_ = 0U;
+    selected_marker_count_ = 0U;
+    blacklist_marker_count_ = 0U;
 }
 
 void FrontierMarkerPublisher::clearCandidateMarkers() const
@@ -62,6 +69,16 @@ void FrontierMarkerPublisher::clearCandidateMarkers() const
     publishDeleteAll(candidate_pub_);
     publishDeleteAll(scored_pub_);
     publishDeleteAll(selected_pub_);
+    candidate_marker_count_ = 0U;
+    scored_marker_count_ = 0U;
+    selected_marker_count_ = 0U;
+}
+
+void FrontierMarkerPublisher::clearRejectedMarkers() const
+{
+    publishDeleteAll(rejected_pub_);
+    rejected_candidate_marker_count_ = 0U;
+    rejected_frontier_marker_count_ = 0U;
 }
 
 void FrontierMarkerPublisher::publishRawFrontiers(
@@ -95,13 +112,19 @@ void FrontierMarkerPublisher::publishRawFrontiers(
         }
     }
 
-    array.markers.push_back(marker);
+    const std::size_t current_count = marker.points.empty() ? 0U : 1U;
+    if (current_count > 0U) {
+        array.markers.push_back(marker);
+    }
+    appendStaleDeleteMarkers(array, "raw_frontiers", current_count, raw_marker_count_);
+    raw_marker_count_ = current_count;
     raw_pub_->publish(array);
 }
 
 void FrontierMarkerPublisher::publishCandidates(
     const std::vector<FrontierCandidate> & candidates,
-    const CostmapAdapter & costmap) const
+    const CostmapAdapter & costmap,
+    const std::optional<GridCell> & selected_goal) const
 {
     if (!candidate_pub_ || !costmap.isReady()) {
         return;
@@ -125,13 +148,38 @@ void FrontierMarkerPublisher::publishCandidates(
         marker.scale.x = kSphereScale;
         marker.scale.y = kSphereScale;
         marker.scale.z = kSphereScale;
-        marker.color.r = 0.0F;
-        marker.color.g = 0.9F;
-        marker.color.b = 1.0F;
+
+        if (candidate.reachability_checked && !candidate.reachable) {
+            marker.color.r = 0.45F;
+            marker.color.g = 0.45F;
+            marker.color.b = 0.45F;
+        } else if (selected_goal.has_value() && candidate.goal == selected_goal.value()) {
+            marker.color.r = 0.0F;
+            marker.color.g = 1.0F;
+            marker.color.b = 0.15F;
+            marker.scale.x = kSphereScale * 1.35;
+            marker.scale.y = kSphereScale * 1.35;
+            marker.scale.z = kSphereScale * 1.35;
+        } else if (candidate.retry_count > 0) {
+            marker.color.r = 0.7F;
+            marker.color.g = 0.2F;
+            marker.color.b = 1.0F;
+        } else if (candidate.used_fallback) {
+            marker.color.r = 1.0F;
+            marker.color.g = 0.55F;
+            marker.color.b = 0.0F;
+        } else {
+            marker.color.r = 0.0F;
+            marker.color.g = 0.9F;
+            marker.color.b = 1.0F;
+        }
         marker.color.a = kMarkerAlpha;
         array.markers.push_back(marker);
     }
 
+    const std::size_t current_count = static_cast<std::size_t>(id - 1);
+    appendStaleDeleteMarkers(array, "candidates", current_count, candidate_marker_count_);
+    candidate_marker_count_ = current_count;
     candidate_pub_->publish(array);
 }
 
@@ -168,6 +216,13 @@ void FrontierMarkerPublisher::publishRejectedCandidates(
         array.markers.push_back(marker);
     }
 
+    const std::size_t current_count = static_cast<std::size_t>(id - 1);
+    appendStaleDeleteMarkers(
+        array,
+        "rejected_candidates",
+        current_count,
+        rejected_candidate_marker_count_);
+    rejected_candidate_marker_count_ = current_count;
     rejected_pub_->publish(array);
 }
 
@@ -202,13 +257,23 @@ void FrontierMarkerPublisher::publishRejectedFrontiers(
         }
     }
 
-    array.markers.push_back(marker);
+    const std::size_t current_count = marker.points.empty() ? 0U : 1U;
+    if (current_count > 0U) {
+        array.markers.push_back(marker);
+    }
+    appendStaleDeleteMarkers(
+        array,
+        "rejected_frontiers",
+        current_count,
+        rejected_frontier_marker_count_);
+    rejected_frontier_marker_count_ = current_count;
     rejected_pub_->publish(array);
 }
 
 void FrontierMarkerPublisher::publishScoredCandidates(
     const std::vector<ScoredFrontierCandidate> & scored_candidates,
-    const CostmapAdapter & costmap) const
+    const CostmapAdapter & costmap,
+    const std::optional<GridCell> & selected_goal) const
 {
     if (!scored_pub_ || !costmap.isReady()) {
         return;
@@ -242,10 +307,22 @@ void FrontierMarkerPublisher::publishScoredCandidates(
         marker.pose.position.z += kTextHeightOffset;
         marker.scale.z = kTextScale;
 
-        if (scored.candidate.retry_count >= 2) {
+        if (scored.candidate.reachability_checked && !scored.candidate.reachable) {
+            marker.color.r = 0.45F;
+            marker.color.g = 0.45F;
+            marker.color.b = 0.45F;
+        } else if (selected_goal.has_value() && scored.candidate.goal == selected_goal.value()) {
+            marker.color.r = 0.0F;
+            marker.color.g = 1.0F;
+            marker.color.b = 0.15F;
+        } else if (scored.candidate.retry_count > 0) {
             marker.color.r = 0.7F;
             marker.color.g = 0.2F;
             marker.color.b = 1.0F;
+        } else if (scored.candidate.used_fallback) {
+            marker.color.r = 1.0F;
+            marker.color.g = 0.55F;
+            marker.color.b = 0.0F;
         } else {
             marker.color.r = 1.0F;
             marker.color.g = 0.95F;
@@ -263,6 +340,9 @@ void FrontierMarkerPublisher::publishScoredCandidates(
         array.markers.push_back(marker);
     }
 
+    const std::size_t current_count = static_cast<std::size_t>(id - 1);
+    appendStaleDeleteMarkers(array, "scored_candidates", current_count, scored_marker_count_);
+    scored_marker_count_ = current_count;
     scored_pub_->publish(array);
 }
 
@@ -299,6 +379,9 @@ void FrontierMarkerPublisher::publishSelectedGoal(
         array.markers.push_back(marker);
     }
 
+    const std::size_t current_count = array.markers.size() > 1U ? 1U : 0U;
+    appendStaleDeleteMarkers(array, "selected_goal", current_count, selected_marker_count_);
+    selected_marker_count_ = current_count;
     selected_pub_->publish(array);
 }
 
@@ -335,6 +418,9 @@ void FrontierMarkerPublisher::publishBlacklist(
         array.markers.push_back(marker);
     }
 
+    const std::size_t current_count = static_cast<std::size_t>(id - 1);
+    appendStaleDeleteMarkers(array, "blacklist", current_count, blacklist_marker_count_);
+    blacklist_marker_count_ = current_count;
     blacklist_pub_->publish(array);
 }
 
@@ -343,6 +429,30 @@ visualization_msgs::msg::Marker FrontierMarkerPublisher::makeDeleteAllMarker() c
     auto marker = makeBaseMarker("clear", 0, visualization_msgs::msg::Marker::CUBE);
     marker.action = visualization_msgs::msg::Marker::DELETEALL;
     return marker;
+}
+
+visualization_msgs::msg::Marker FrontierMarkerPublisher::makeDeleteMarker(
+    const std::string & marker_namespace,
+    int id) const
+{
+    auto marker = makeBaseMarker(marker_namespace, id, visualization_msgs::msg::Marker::CUBE);
+    marker.action = visualization_msgs::msg::Marker::DELETE;
+    return marker;
+}
+
+void FrontierMarkerPublisher::appendStaleDeleteMarkers(
+    visualization_msgs::msg::MarkerArray & array,
+    const std::string & marker_namespace,
+    std::size_t current_count,
+    std::size_t previous_count) const
+{
+    if (previous_count <= current_count) {
+        return;
+    }
+
+    for (std::size_t id = current_count + 1U; id <= previous_count; ++id) {
+        array.markers.push_back(makeDeleteMarker(marker_namespace, static_cast<int>(id)));
+    }
 }
 
 void FrontierMarkerPublisher::publishDeleteAll(
@@ -354,6 +464,13 @@ void FrontierMarkerPublisher::publishDeleteAll(
 
     visualization_msgs::msg::MarkerArray array;
     array.markers.push_back(makeDeleteAllMarker());
+    appendStaleDeleteMarkers(array, "raw_frontiers", 0U, raw_marker_count_);
+    appendStaleDeleteMarkers(array, "candidates", 0U, candidate_marker_count_);
+    appendStaleDeleteMarkers(array, "rejected_candidates", 0U, rejected_candidate_marker_count_);
+    appendStaleDeleteMarkers(array, "rejected_frontiers", 0U, rejected_frontier_marker_count_);
+    appendStaleDeleteMarkers(array, "scored_candidates", 0U, scored_marker_count_);
+    appendStaleDeleteMarkers(array, "selected_goal", 0U, selected_marker_count_);
+    appendStaleDeleteMarkers(array, "blacklist", 0U, blacklist_marker_count_);
     publisher->publish(array);
 }
 
