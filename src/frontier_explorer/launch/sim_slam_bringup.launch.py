@@ -59,10 +59,19 @@ def generate_launch_description():
         parameters=[frontier_params]
     )
 
+    exploration_bt_orchestrator_node = Node(
+        package="frontier_explorer",
+        executable="exploration_bt_orchestrator_node",
+        name="exploration_bt_orchestrator_node",
+        output="screen",
+        parameters=[frontier_params]
+    )
+
     return LaunchDescription([
         sim_launch,
         TimerAction(period=5.0, actions=[slam_launch]),
         TimerAction(period=8.0, actions=[nav2_launch]),
         TimerAction(period=10.0, actions=[rviz_node]),
         TimerAction(period=15.0, actions=[explorer_node]),
+        TimerAction(period=16.0, actions=[exploration_bt_orchestrator_node]),
     ])

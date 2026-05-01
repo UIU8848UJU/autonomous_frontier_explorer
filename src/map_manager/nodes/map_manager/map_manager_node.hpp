@@ -23,16 +23,18 @@ struct MapManagerConfig
     std::string exploration_state_topic{"/exploration_state"};
     /// @brief: 地图管理状态输出 topic
     std::string map_manager_state_topic{"/map_manager_state"};
+    /// @brief: 探索完成后发布最终地图的 topic
+    std::string final_map_topic{"/map_manager/final_map"};
     /// @brief: 是否启用探索完成后的自动保存
     bool enable_auto_save{true};
     /// @brief: 连续无有效 frontier 的检查次数阈值
-    int completion_no_frontier_rounds{5};
+    int completion_no_frontier_rounds{2};
     /// @brief: unknown ratio 在窗口内允许的最大变化量
-    double completion_unknown_delta_threshold{0.002};
+    double completion_unknown_delta_threshold{0.003};
     /// @brief: unknown ratio 稳定性检查窗口，单位秒
-    double completion_check_window_sec{20.0};
+    double completion_check_window_sec{8.0};
     /// @brief: 完成判定定时器周期，单位秒
-    double completion_check_period_sec{2.0};
+    double completion_check_period_sec{1.0};
 };
 
 /// @brief: 当前地图统计信息
@@ -116,6 +118,10 @@ private:
     /// @brief: 触发地图保存请求
     void trigger_save();
 
+    /// @brief: 发布当前缓存的最终地图
+    /// @param detail 发布原因说明
+    void publish_final_map(const std::string & detail);
+
     /// @brief: 将探索状态码转换为可读字符串
     /// @param state ExplorationState.state 字段
     /// @return: 状态名称
@@ -134,8 +140,10 @@ private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<ExplorationStateMsg>::SharedPtr exploration_state_sub_;
     rclcpp::Publisher<MapManagerStateMsg>::SharedPtr state_pub_;
+    rclcpp::Publisher<nav_msgs::msg::OccupancyGrid>::SharedPtr final_map_pub_;
     rclcpp::TimerBase::SharedPtr completion_timer_;
 
+    nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
     MapStatistics map_stats_;
     std::deque<std::pair<rclcpp::Time, double>> unknown_history_;
     int no_frontier_rounds_{0};

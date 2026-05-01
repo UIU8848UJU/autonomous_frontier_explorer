@@ -1,0 +1,14 @@
+<root main_tree_to_execute="ExplorationTree">
+  <BehaviorTree ID="ExplorationTree">
+    <Fallback name="ExploreOrComplete">
+      <IsExplorationComplete/>
+      <Sequence name="ExploreOneFrontier">
+        <ComputeNextFrontierGoal/>
+        <Fallback name="NavigateOrBlacklist">
+          <NavigateToFrontier/>
+          <MarkFrontierFailed/>
+        </Fallback>
+      </Sequence>
+    </Fallback>
+  </BehaviorTree>
+</root>

@@ -20,3 +20,6 @@ task_manager_node:
     start_mapping_service_name: "/start_mapping"
     start_navigation_service_name: "/start_navigation"
     stop_all_service_name: "/stop_all"
+    start_exploration_service_name: "/exploration_bt_orchestrator_node/start_exploration"
+    stop_exploration_service_name: "/exploration_bt_orchestrator_node/stop_exploration"
+    exploration_state_timeout_ms: 5000

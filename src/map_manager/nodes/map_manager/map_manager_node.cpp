@@ -11,6 +11,7 @@ namespace
 constexpr std::size_t kMapSubDepth = 1U;
 constexpr std::size_t kStateSubDepth = 10U;
 constexpr std::size_t kMapManagerStatePubDepth = 10U;
+constexpr std::size_t kFinalMapPubDepth = 1U;
 }  // namespace
 
 MapManagerNode::MapManagerNode(const rclcpp::NodeOptions & options)
@@ -35,6 +36,9 @@ void MapManagerNode::declare_params()
     this->declare_parameter<std::string>(
         "map_manager_state_topic",
         config_.map_manager_state_topic);
+    this->declare_parameter<std::string>(
+        "final_map_topic",
+        config_.final_map_topic);
     this->declare_parameter<bool>("enable_auto_save", config_.enable_auto_save);
     this->declare_parameter<int>(
         "completion_no_frontier_rounds",
@@ -78,6 +82,8 @@ void MapManagerNode::load_params()
         this->get_parameter("exploration_state_topic").as_string();
     config_.map_manager_state_topic =
         this->get_parameter("map_manager_state_topic").as_string();
+    config_.final_map_topic =
+        this->get_parameter("final_map_topic").as_string();
     config_.enable_auto_save = this->get_parameter("enable_auto_save").as_bool();
     config_.completion_no_frontier_rounds =
         static_cast<int>(this->get_parameter("completion_no_frontier_rounds").as_int());
@@ -120,11 +126,13 @@ void MapManagerNode::apply_params()
     RCLCPP_INFO(
         logger_,
         "Map manager params: map_topic=%s, state_topic=%s, auto_save=%s, "
-        "manager_state_topic=%s, no_frontier_rounds=%d, unknown_delta=%.6f, window=%.1fs",
+        "manager_state_topic=%s, final_map_topic=%s, no_frontier_rounds=%d, "
+        "unknown_delta=%.6f, window=%.1fs",
         config_.map_topic.c_str(),
         config_.exploration_state_topic.c_str(),
         config_.enable_auto_save ? "true" : "false",
         config_.map_manager_state_topic.c_str(),
+        config_.final_map_topic.c_str(),
         config_.completion_no_frontier_rounds,
         config_.completion_unknown_delta_threshold,
         config_.completion_check_window_sec);
@@ -153,6 +161,10 @@ void MapManagerNode::create_interfaces()
     state_pub_ = this->create_publisher<MapManagerStateMsg>(
         config_.map_manager_state_topic,
         rclcpp::QoS(rclcpp::KeepLast(kMapManagerStatePubDepth)).reliable().transient_local());
+
+    final_map_pub_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
+        config_.final_map_topic,
+        rclcpp::QoS(rclcpp::KeepLast(kFinalMapPubDepth)).reliable().transient_local());
 
     map_storage_ = std::make_unique<MapStorage>(*this, logger_, storage_config_);
 
@@ -190,6 +202,7 @@ void MapManagerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr 
         return;
     }
 
+    latest_map_ = msg;
     const auto previous_unknown_ratio = map_stats_.unknown_ratio;
     map_stats_.width = msg->info.width;
     map_stats_.height = msg->info.height;
@@ -198,7 +211,9 @@ void MapManagerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr 
     map_stats_.valid = msg->info.width > 0U && msg->info.height > 0U && !msg->data.empty();
 
     update_unknown_history(this->now(), map_stats_.unknown_ratio);
-    publish_state(MapManagerStateMsg::MAP_RECEIVED, "map_updated");
+    if (!save_succeeded_) {
+        publish_state(MapManagerStateMsg::MAP_RECEIVED, "map_updated");
+    }
 
     RCLCPP_INFO_THROTTLE(
         logger_,
@@ -278,6 +293,7 @@ void MapManagerNode::completion_timer_callback()
         exploration_state_to_string(last_exploration_state_).c_str(),
         last_exploration_detail_.c_str());
     publish_state(MapManagerStateMsg::COMPLETION_DETECTED, "completion_detected");
+    publish_final_map("completion_detected");
     trigger_save();
 }
 
@@ -379,6 +395,7 @@ void MapManagerNode::trigger_save()
                 logger_,
                 "Auto save finished: map_url=%s",
                 result.map_url.c_str());
+            publish_final_map("saved");
             publish_state(MapManagerStateMsg::SAVED, "saved");
         });
 
@@ -386,6 +403,28 @@ void MapManagerNode::trigger_save()
         save_requested_ = false;
         publish_state(MapManagerStateMsg::SAVE_FAILED, "save_request_not_sent");
     }
+}
+
+void MapManagerNode::publish_final_map(const std::string & detail)
+{
+    if (!final_map_pub_) {
+        RCLCPP_WARN(logger_, "Cannot publish final map because publisher is not initialized.");
+        return;
+    }
+
+    if (!latest_map_) {
+        RCLCPP_WARN(logger_, "Cannot publish final map because no map has been received.");
+        return;
+    }
+
+    final_map_pub_->publish(*latest_map_);
+    RCLCPP_INFO(
+        logger_,
+        "Published final map: topic=%s, width=%u, height=%u, reason=%s",
+        config_.final_map_topic.c_str(),
+        latest_map_->info.width,
+        latest_map_->info.height,
+        detail.c_str());
 }
 
 std::string MapManagerNode::exploration_state_to_string(std::uint8_t state) const

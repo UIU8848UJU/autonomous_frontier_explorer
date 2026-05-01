@@ -1,0 +1,4 @@
+---
+bool success
+uint32 cleared_count
+string message

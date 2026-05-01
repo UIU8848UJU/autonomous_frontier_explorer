@@ -1,0 +1,8 @@
+geometry_msgs/Point failed_goal
+uint16 failure_reason
+string failure_text
+---
+bool success
+uint32 retry_count
+bool blacklisted
+string message

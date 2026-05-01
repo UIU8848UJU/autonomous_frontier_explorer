@@ -5,6 +5,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(std_msgs REQUIRED)
 
 set(MSG_FILES
   "msg/ExplorationState.msg"
@@ -14,6 +15,10 @@ set(MSG_FILES
 
 set(SRV_FILES
   "srv/StartExploration.srv"
+  "srv/GetNextFrontierGoal.srv"
+  "srv/MarkFrontierFailed.srv"
+  "srv/ClearFrontierBlacklist.srv"
+  "srv/GetExplorationState.srv"
 )
 
 set(ACTION_FILES
@@ -24,7 +29,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   ${MSG_FILES}
   ${SRV_FILES}
   ${ACTION_FILES}
-  DEPENDENCIES builtin_interfaces geometry_msgs
+  DEPENDENCIES builtin_interfaces geometry_msgs std_msgs
 )
 
 ament_export_dependencies(rosidl_default_runtime)

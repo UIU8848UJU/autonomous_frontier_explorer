@@ -26,6 +26,17 @@ frontier_explorer_node:
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3
+    goal_reached_tolerance_m: 0.05
     map_topic: /map
     global_costmap_topic: /global_costmap/costmap
     use_global_costmap_for_safety: true
+    enable_internal_navigation_loop: false
+
+exploration_bt_orchestrator_node:
+  ros__parameters:
+    use_sim_time: true
+    frontier_goal_service: /frontier_explorer_node/get_next_frontier_goal
+    mark_failed_service: /frontier_explorer_node/mark_frontier_failed
+    navigate_to_pose_action: navigate_to_pose
+    tick_period_sec: 0.1
+    service_retry_delay_sec: 2.0

@@ -2,6 +2,29 @@
 frontier_explorer 包更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.0.6(2026-05-01)
+------------------
+* 将探索决策编排从 ``FrontierExplorerNode`` 中解耦，``FrontierExplorerNode`` 默认只作为 frontier 目标生成能力节点。
+* 新增 ``robot_interfaces/srv/GetNextFrontierGoal``，用于外部请求下一个 frontier goal，并返回 success、reason、score、distance、clearance、frontier count、blacklist count、exploration_complete、recoverable 等字段。
+* 新增 ``robot_interfaces/srv/MarkFrontierFailed``，用于导航失败后由外部编排层通知 frontier 能力节点更新 retry / blacklist。
+* 新增 ``robot_interfaces/srv/ClearFrontierBlacklist``，用于清空 frontier blacklist。
+* 新增 ``robot_interfaces/srv/GetExplorationState``，复用已有 ``ExplorationState`` 消息查询当前探索状态。
+* 新增 ``FrontierGoalResult`` 和 ``compute_next_frontier_goal()``，将 frontier 检测、过滤、打分、选择、marker 发布、状态发布封装为纯能力接口，不直接触发 Nav2 goal。
+* 新增 ``enable_internal_navigation_loop`` 参数，默认 ``false``。关闭时 ``FrontierExplorerNode`` 不主动发送 ``NavigateToPose``，只提供服务能力。
+* 保留 retry / blacklist 管理在 ``FrontierExplorerNode`` 内部，外部 BT 只通过 ``MarkFrontierFailed`` 通知失败事件。
+* 新增 ``ExplorationBtOrchestratorNode``，作为唯一探索编排层，加载 ``behavior_trees/exploration_tree.xml`` 并周期 tick BehaviorTree。
+* 新增 BT 节点 ``ComputeNextFrontierGoal``、``NavigateToFrontier``、``MarkFrontierFailed``、``IsExplorationComplete``。
+* 当前 BT 节点在 orchestrator 进程内注册，后续可以拆成 BehaviorTree.CPP plugin。
+* 删除普通 C++ 状态机版 ``ExplorationOrchestratorNode``，避免 BT 与状态机两套编排逻辑并存。
+* 更新 ``TaskManagerNode`` 配置，使探索启动/停止服务指向 ``/exploration_bt_orchestrator_node/start_exploration`` 和 ``/exploration_bt_orchestrator_node/stop_exploration``。
+* 更新 bringup 和 sim launch，默认启动 ``exploration_bt_orchestrator_node``。
+* 新增 ``/frontier_explorer/state`` 和 ``/exploration_orchestrator/state`` 职责区分；继续发布旧 ``/exploration_state`` 作为兼容 topic。
+* 整理源码目录：公共头文件迁移到 ``include/frontier_explorer``，源码迁移到 ``src``；BT 编排相关源码集中在 ``src/nodes/bt``。
+* 清理 CMake：新增 ``frontier_explorer_core`` library，抽出 ``configure_frontier_explorer_target`` 复用 include path 和 ament dependencies。
+* 统一内部 include 风格，通过 CMake 暴露 ``include/frontier_explorer``，源码内部使用 ``nodes/...``、``core/...`` 等短路径。
+* 新增 ``exploration_bt_defaults.hpp``，集中保存 BT orchestrator 的默认 service/action 名称和 tick 参数；生产部署仍通过 YAML 参数覆盖。
+* 新增 ``doc/exploration_architecture.md`` 和 ``doc/exploration_bt_design.md``，记录当前架构、服务接口、BT XML、启动方式和后续 plugin 化方向。
+
 0.0.5(2026-04-28)
 ------------------
 * 新增 ``CostmapAdapter``，内部基于 Nav2 ``nav2_costmap_2d::Costmap2D`` 统一封装 OccupancyGrid 更新、world/map 坐标转换、cost 查询、free/unknown/obstacle 判断和 frontier unknown 邻居判断。

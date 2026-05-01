@@ -35,6 +35,14 @@ def generate_launch_description():
         parameters=[frontier_params],
     )
 
+    exploration_bt_orchestrator_node = Node(
+        package="frontier_explorer",
+        executable="exploration_bt_orchestrator_node",
+        name="exploration_bt_orchestrator_node",
+        output="screen",
+        parameters=[frontier_params],
+    )
+
     task_params = os.path.join(bringup_pkg, "config", "task_manager.yaml")
     task_node = Node(
         package="task_manager",
@@ -57,6 +65,7 @@ def generate_launch_description():
         TimerAction(period=5.0, actions=[nav2_launch]),
         TimerAction(period=8.0, actions=[rviz_node]),
         TimerAction(period=10.0, actions=[frontier_node]),
+        TimerAction(period=11.0, actions=[exploration_bt_orchestrator_node]),
         TimerAction(period=12.0, actions=[task_node]),
         TimerAction(period=12.0, actions=[map_manager_node]),
     ])
