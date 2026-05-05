@@ -2,13 +2,9 @@
 
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <functional>
-#include <future>
 
-#include "nav2_msgs/action/compute_path_to_pose.hpp"
-#include "nav_msgs/msg/path.hpp"
-#include "rclcpp_action/rclcpp_action.hpp"
+#include "navigation/nav2_planner_reachability_checker.hpp"
 #include "tf2/exceptions.h"
 #include "tf2/time.h"
 
@@ -17,111 +13,6 @@ namespace frontier_explorer
 namespace
 {
 constexpr size_t kStatePublisherDepth = 10;
-
-double pathLength(const nav_msgs::msg::Path & path)
-{
-    if (path.poses.size() < 2U) {
-        return 0.0;
-    }
-
-    double length = 0.0;
-    for (std::size_t index = 1U; index < path.poses.size(); ++index) {
-        const auto & previous = path.poses[index - 1U].pose.position;
-        const auto & current = path.poses[index].pose.position;
-        length += std::hypot(current.x - previous.x, current.y - previous.y);
-    }
-    return length;
-}
-
-class Nav2PlannerReachabilityChecker : public FrontierReachabilityChecker
-{
-public:
-    using ComputePathToPose = nav2_msgs::action::ComputePathToPose;
-    using GoalHandle = rclcpp_action::ClientGoalHandle<ComputePathToPose>;
-
-    Nav2PlannerReachabilityChecker(
-        rclcpp::Node * node,
-        const FrontierExplorerParams & params)
-    : node_(node),
-      logger_(node->get_logger().get_child("reachability")),
-      params_(params),
-      client_(rclcpp_action::create_client<ComputePathToPose>(
-          node,
-          params.runtime.compute_path_to_pose_action))
-    {
-    }
-
-    FrontierReachabilityResult check(
-        const geometry_msgs::msg::PoseStamped & start,
-        const geometry_msgs::msg::PoseStamped & goal) override
-    {
-        FrontierReachabilityResult result;
-        result.checked = true;
-        result.reachable = false;
-
-        if (!client_->wait_for_action_server(params_.runtime.reachability_server_timeout)) {
-            result.checked = false;
-            result.reachable = true;
-            result.reason = "planner_action_unavailable";
-            RCLCPP_WARN_THROTTLE(
-                logger_,
-                *node_->get_clock(),
-                3000,
-                "ComputePathToPose action unavailable: %s",
-                params_.runtime.compute_path_to_pose_action.c_str());
-            return result;
-        }
-
-        ComputePathToPose::Goal planner_goal;
-        planner_goal.start = start;
-        planner_goal.goal = goal;
-        planner_goal.use_start = true;
-        planner_goal.planner_id = params_.runtime.reachability_planner_id;
-
-        auto goal_future = client_->async_send_goal(planner_goal);
-        if (goal_future.wait_for(params_.runtime.reachability_check_timeout) !=
-            std::future_status::ready)
-        {
-            result.reason = "planner_goal_timeout";
-            return result;
-        }
-
-        auto goal_handle = goal_future.get();
-        if (!goal_handle) {
-            result.reason = "planner_goal_rejected";
-            return result;
-        }
-
-        auto result_future = client_->async_get_result(goal_handle);
-        if (result_future.wait_for(params_.runtime.reachability_check_timeout) !=
-            std::future_status::ready)
-        {
-            client_->async_cancel_goal(goal_handle);
-            result.reason = "planner_result_timeout";
-            return result;
-        }
-
-        const auto wrapped_result = result_future.get();
-        if (wrapped_result.code != rclcpp_action::ResultCode::SUCCEEDED ||
-            !wrapped_result.result ||
-            wrapped_result.result->path.poses.empty())
-        {
-            result.reason = "planner_no_path";
-            return result;
-        }
-
-        result.reachable = true;
-        result.path_length_m = pathLength(wrapped_result.result->path);
-        result.reason = "reachable";
-        return result;
-    }
-
-private:
-    rclcpp::Node * node_{nullptr};
-    rclcpp::Logger logger_;
-    FrontierExplorerParams params_;
-    rclcpp_action::Client<ComputePathToPose>::SharedPtr client_;
-};
 }  // namespace
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
@@ -429,6 +320,15 @@ void FrontierExplorerNode::create_interfaces()
                 std::placeholders::_1,
                 std::placeholders::_2));
 
+    get_frontier_candidates_srv_ =
+        this->create_service<robot_interfaces::srv::GetFrontierCandidates>(
+            "~/get_frontier_candidates",
+            std::bind(
+                &FrontierExplorerNode::handle_get_frontier_candidates,
+                this,
+                std::placeholders::_1,
+                std::placeholders::_2));
+
     mark_frontier_failed_srv_ =
         this->create_service<robot_interfaces::srv::MarkFrontierFailed>(
             "~/mark_frontier_failed",
@@ -727,6 +627,63 @@ void FrontierExplorerNode::handle_get_next_frontier_goal(
     response->blacklist_count = result.blacklist_count;
     response->exploration_complete = result.exploration_complete;
     response->recoverable = result.recoverable;
+
+    if (result.exploration_complete) {
+        if (marker_publisher_) {
+            marker_publisher_->clearAll();
+        }
+    } else {
+        publish_markers(result.visualization);
+    }
+    set_state(result.state, result.state_detail);
+    publish_state();
+}
+
+void FrontierExplorerNode::handle_get_frontier_candidates(
+    const std::shared_ptr<robot_interfaces::srv::GetFrontierCandidates::Request> request,
+    std::shared_ptr<robot_interfaces::srv::GetFrontierCandidates::Response> response)
+{
+    update_robot_pose_from_tf();
+    const auto max_candidates = request ?
+        static_cast<std::size_t>(request->max_candidates) : 0U;
+    const auto result = goal_provider_.compute_frontier_candidates(this->now(), max_candidates);
+
+    response->success = result.success;
+    response->reason_code = result.reason_code;
+    response->reason_text = result.reason_text;
+    response->raw_frontier_count = result.raw_frontier_count;
+    response->candidate_count = result.candidate_count;
+    response->blacklist_count = result.blacklist_count;
+    response->exploration_complete = result.exploration_complete;
+    response->recoverable = result.recoverable;
+
+    response->goals.reserve(result.candidates.size());
+    response->scores.reserve(result.candidates.size());
+    response->distance_m.reserve(result.candidates.size());
+    response->clearance_m.reserve(result.candidates.size());
+    response->unknown_ratio.reserve(result.candidates.size());
+    response->cluster_sizes.reserve(result.candidates.size());
+    response->retry_counts.reserve(result.candidates.size());
+    response->used_fallback.reserve(result.candidates.size());
+    response->goal_inset_applied.reserve(result.candidates.size());
+    response->reachability_checked.reserve(result.candidates.size());
+    response->reachable.reserve(result.candidates.size());
+    response->path_length_m.reserve(result.candidates.size());
+
+    for (const auto & candidate : result.candidates) {
+        response->goals.push_back(candidate.goal);
+        response->scores.push_back(candidate.score);
+        response->distance_m.push_back(candidate.distance_m);
+        response->clearance_m.push_back(candidate.clearance_m);
+        response->unknown_ratio.push_back(candidate.unknown_ratio);
+        response->cluster_sizes.push_back(candidate.cluster_size);
+        response->retry_counts.push_back(candidate.retry_count);
+        response->used_fallback.push_back(candidate.used_fallback);
+        response->goal_inset_applied.push_back(candidate.goal_inset_applied);
+        response->reachability_checked.push_back(candidate.reachability_checked);
+        response->reachable.push_back(candidate.reachable);
+        response->path_length_m.push_back(candidate.path_length_m);
+    }
 
     if (result.exploration_complete) {
         if (marker_publisher_) {

@@ -55,6 +55,41 @@ struct FrontierGoalResult
     FrontierGoalVisualization visualization;
 };
 
+/// @brief: 单个 frontier 候选目标的服务输出数据
+struct FrontierCandidateResult
+{
+    geometry_msgs::msg::PoseStamped goal;
+    float score{0.0F};
+    float distance_m{0.0F};
+    float clearance_m{0.0F};
+    float unknown_ratio{0.0F};
+    uint32_t cluster_size{0U};
+    uint32_t retry_count{0U};
+    bool used_fallback{false};
+    bool goal_inset_applied{false};
+    bool reachability_checked{false};
+    bool reachable{true};
+    float path_length_m{0.0F};
+    GridCell goal_cell;
+};
+
+/// @brief: 计算 frontier 候选列表的结果结构
+struct FrontierCandidatesResult
+{
+    bool success{false};
+    std::vector<FrontierCandidateResult> candidates;
+    uint16_t reason_code{0};
+    std::string reason_text;
+    uint32_t raw_frontier_count{0U};
+    uint32_t candidate_count{0U};
+    uint32_t blacklist_count{0U};
+    bool exploration_complete{false};
+    bool recoverable{false};
+    ExplorationState state{ExplorationState::RUNNING};
+    std::string state_detail;
+    FrontierGoalVisualization visualization;
+};
+
 /// @brief: 标记 frontier 导航失败后的策略更新结果
 struct FrontierFailureResult
 {
@@ -106,6 +141,14 @@ public:
     /// @param now 当前 ROS 时间
     /// @return: frontier 目标计算结果
     FrontierGoalResult compute_next_frontier_goal(const rclcpp::Time & now);
+
+    /// @brief: 计算 frontier 候选目标列表，不触发导航、不更新 last goal
+    /// @param now 当前 ROS 时间
+    /// @param max_candidates 最多返回的候选数量；0 表示返回全部候选
+    /// @return: frontier 候选目标列表结果
+    FrontierCandidatesResult compute_frontier_candidates(
+        const rclcpp::Time & now,
+        std::size_t max_candidates = 0U);
 
     /// @brief: 记录一个 frontier goal 导航失败事件
     /// @param failed_goal 失败目标世界坐标

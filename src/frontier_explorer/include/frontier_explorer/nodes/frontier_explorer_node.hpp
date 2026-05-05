@@ -13,6 +13,7 @@
 #include "robot_interfaces/msg/exploration_state.hpp"
 #include "robot_interfaces/srv/clear_frontier_blacklist.hpp"
 #include "robot_interfaces/srv/get_exploration_state.hpp"
+#include "robot_interfaces/srv/get_frontier_candidates.hpp"
 #include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 #include "std_srvs/srv/trigger.hpp"
@@ -92,6 +93,13 @@ private:
             const std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Request> request,
             std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Response> response);
 
+    /// @brief: 处理外部请求 frontier 候选目标列表
+    /// @param request 服务请求
+    /// @param response 服务响应
+    void handle_get_frontier_candidates(
+            const std::shared_ptr<robot_interfaces::srv::GetFrontierCandidates::Request> request,
+            std::shared_ptr<robot_interfaces::srv::GetFrontierCandidates::Response> response);
+
     /// @brief: 处理外部通知 frontier 导航失败
     /// @param request 服务请求
     /// @param response 服务响应
@@ -148,6 +156,7 @@ private:
 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
+    rclcpp::Service<robot_interfaces::srv::GetFrontierCandidates>::SharedPtr get_frontier_candidates_srv_;
     rclcpp::Service<robot_interfaces::srv::GetNextFrontierGoal>::SharedPtr get_next_frontier_goal_srv_;
     rclcpp::Service<robot_interfaces::srv::MarkFrontierFailed>::SharedPtr mark_frontier_failed_srv_;
     rclcpp::Service<robot_interfaces::srv::ClearFrontierBlacklist>::SharedPtr clear_frontier_blacklist_srv_;

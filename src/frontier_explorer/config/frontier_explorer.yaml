@@ -3,25 +3,25 @@ frontier_explorer_node:
     use_sim_time: true
     explore_period_sec: 3.0
     obstacle_search_radius_cells: 1
-    min_frontier_cluster_size: 1
+    min_frontier_cluster_size: 2
     min_goal_distance_m: 0.45
     max_retry_count: 2
     frontier_decision:
       max_cluster_retry_count: 3
       defer_small_clusters: true
-      small_cluster_size_threshold: 3
-      weight_distance: 1.0
-      weight_cluster_size: 1.0
+      small_cluster_size_threshold: 5
+      weight_distance: 1.4
+      weight_cluster_size: 0.35
       weight_clearance: 0.25
       weight_retry_penalty: 1.0
-      weight_unknown_risk_penalty: 1.0
+      weight_unknown_risk_penalty: 2.0
       weight_information_gain: 0.0
       weight_revisit_penalty: 0.0
       enable_clearance_score: true
       enable_unknown_risk_penalty: true
       enable_information_gain_score: false
       enable_revisit_penalty: false
-      enable_reachability_filter: true
+      enable_reachability_filter: false
       require_reachable_goal: false
       max_reachability_checks: 6
       compute_path_to_pose_action: compute_path_to_pose
@@ -29,8 +29,8 @@ frontier_explorer_node:
       reachability_check_timeout_ms: 500
       reachability_planner_id: ""
       candidate_unknown_margin_cells: 2
-      candidate_goal_inset_cells: 2
-      candidate_max_unknown_ratio: 0.4
+      candidate_goal_inset_cells: 3
+      candidate_max_unknown_ratio: 0.25
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3
@@ -48,7 +48,34 @@ exploration_bt_orchestrator_node:
   ros__parameters:
     use_sim_time: true
     frontier_goal_service: /frontier_explorer_node/get_next_frontier_goal
+    frontier_candidates_service: /frontier_explorer_node/get_frontier_candidates
     mark_failed_service: /frontier_explorer_node/mark_frontier_failed
-    navigate_to_pose_action: navigate_to_pose
+    reachability_service: /navigation_node/check_pose_reachability
+    goal_feasibility_service: /navigation_node/check_goal_feasibility
+    navigation_action: /navigation_node/navigate_to_pose
+    max_frontier_candidates: 16
+    max_feasibility_recoverable_retries: 2
+    feasible_path_length_weight: 0.6
     tick_period_sec: 0.1
     service_retry_delay_sec: 2.0
+
+navigation_node:
+  ros__parameters:
+    use_sim_time: true
+    navigation_action: ~/navigate_to_pose
+    check_pose_reachability_service: ~/check_pose_reachability
+    check_goal_feasibility_service: ~/check_goal_feasibility
+    navigate_to_pose_action: navigate_to_pose
+    compute_path_to_pose_action: compute_path_to_pose
+    footprint_costmap_topic: /global_costmap/costmap
+    enable_footprint_collision_check: true
+    allow_unknown_footprint: false
+    enable_path_safety_check: true
+    allow_unknown_path: false
+    robot_radius: 0.1
+    footprint_padding: 0.0
+    footprint_cost_threshold: 253
+    path_cost_threshold: 253
+    reachability_planner_id: ""
+    nav2_server_timeout_ms: 1000
+    reachability_timeout_ms: 2000

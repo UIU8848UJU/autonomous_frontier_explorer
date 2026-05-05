@@ -40,6 +40,7 @@ public:
     /// @param min_cluster_size 最小 cluster 尺寸
     /// @param unknown_margin_cells 统计 unknown ratio 的邻域半径
     /// @param goal_inset_cells 候选目标从 frontier 边界向机器人方向内缩的 cell 数
+    /// @param max_unknown_ratio 候选点邻域允许的最大 unknown 比例
     /// @param logger ROS2 日志器
     FrontierPruner(
         double min_goal_distance_m,
@@ -48,6 +49,7 @@ public:
         std::size_t min_cluster_size,
         int unknown_margin_cells,
         int goal_inset_cells,
+        double max_unknown_ratio,
         const rclcpp::Logger & logger = rclcpp::get_logger("frontier_explorer"));
 
     /// @brief: 将原始 frontier clusters 转换成可打分候选
@@ -101,6 +103,16 @@ private:
         const CostmapAdapter * frontier_costmap,
         double * unknown_ratio = nullptr) const;
 
+    /// @brief: 检查候选点是否满足安全 costmap 硬约束，避免回退采样落到障碍或膨胀区
+    /// @param cell 候选点在 frontier map 中的栅格坐标
+    /// @param frontier_costmap frontier 检测来源地图适配器
+    /// @param safety_costmap 安全检查来源地图适配器，可为空
+    /// @return: true 表示候选点在安全 costmap 中可用
+    bool pass_safety_candidate_constraints(
+        const GridCell & cell,
+        const CostmapAdapter * frontier_costmap,
+        const CostmapAdapter * safety_costmap) const;
+
     /// @brief: 将 frontier 边界候选点向机器人所在 free space 内缩，避免目标贴 unknown 边界
     /// @param frontier_goal 原始 frontier 候选点
     /// @param robot_grid 机器人当前栅格
@@ -132,6 +144,7 @@ private:
     std::size_t min_cluster_size_{1U};
     int unknown_margin_cells_{2};
     int goal_inset_cells_{2};
+    double max_unknown_ratio_{0.4};
 };
 
 }  // namespace frontier_explorer

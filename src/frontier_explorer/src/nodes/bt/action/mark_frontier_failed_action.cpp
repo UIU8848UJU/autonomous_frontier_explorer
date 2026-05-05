@@ -12,6 +12,13 @@ constexpr uint16_t kNavigationFailedReason = 100U;
 
 MarkFrontierFailedAction::MarkFrontierFailedAction(
     const std::string & name,
+    const BT::NodeConfiguration & config)
+: MarkFrontierFailedAction(name, config, get_exploration_bt_context(config))
+{
+}
+
+MarkFrontierFailedAction::MarkFrontierFailedAction(
+    const std::string & name,
     const BT::NodeConfiguration & config,
     const std::shared_ptr<ExplorationBtContext> & context)
 : BT::StatefulActionNode(name, config), context_(context)

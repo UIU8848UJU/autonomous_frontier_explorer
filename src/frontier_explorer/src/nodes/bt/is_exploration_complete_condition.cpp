@@ -5,6 +5,13 @@ namespace frontier_explorer
 
 IsExplorationCompleteCondition::IsExplorationCompleteCondition(
     const std::string & name,
+    const BT::NodeConfiguration & config)
+: IsExplorationCompleteCondition(name, config, get_exploration_bt_context(config))
+{
+}
+
+IsExplorationCompleteCondition::IsExplorationCompleteCondition(
+    const std::string & name,
     const BT::NodeConfiguration & config,
     const std::shared_ptr<ExplorationBtContext> & context)
 : BT::ConditionNode(name, config), context_(context)

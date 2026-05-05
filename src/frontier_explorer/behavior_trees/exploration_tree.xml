@@ -3,9 +3,12 @@
     <Fallback name="ExploreOrComplete">
       <IsExplorationComplete/>
       <Sequence name="ExploreOneFrontier">
-        <ComputeNextFrontierGoal/>
-        <Fallback name="NavigateOrBlacklist">
-          <NavigateToFrontier/>
+        <ComputeFrontierCandidates/>
+        <Fallback name="SelectNavigateOrBlacklist">
+          <Sequence name="SelectAndNavigate">
+            <SelectFeasibleFrontier/>
+            <NavigateToFrontier/>
+          </Sequence>
           <MarkFrontierFailed/>
         </Fallback>
       </Sequence>

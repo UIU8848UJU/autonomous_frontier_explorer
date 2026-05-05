@@ -8,6 +8,13 @@ namespace frontier_explorer
 
 NavigateToFrontierAction::NavigateToFrontierAction(
     const std::string & name,
+    const BT::NodeConfiguration & config)
+: NavigateToFrontierAction(name, config, get_exploration_bt_context(config))
+{
+}
+
+NavigateToFrontierAction::NavigateToFrontierAction(
+    const std::string & name,
     const BT::NodeConfiguration & config,
     const std::shared_ptr<ExplorationBtContext> & context)
 : BT::StatefulActionNode(name, config), context_(context)
@@ -57,7 +64,10 @@ BT::NodeStatus NavigateToFrontierAction::onStart()
         };
     options.result_callback =
         [this](const GoalHandleNavigateToPose::WrappedResult & result) {
-            result_success_ = result.code == rclcpp_action::ResultCode::SUCCEEDED;
+            result_success_ =
+                result.code == rclcpp_action::ResultCode::SUCCEEDED &&
+                result.result &&
+                result.result->success;
             result_ready_ = true;
         };
 

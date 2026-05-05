@@ -7,6 +7,13 @@ namespace frontier_explorer
 
 ComputeNextFrontierGoalAction::ComputeNextFrontierGoalAction(
     const std::string & name,
+    const BT::NodeConfiguration & config)
+: ComputeNextFrontierGoalAction(name, config, get_exploration_bt_context(config))
+{
+}
+
+ComputeNextFrontierGoalAction::ComputeNextFrontierGoalAction(
+    const std::string & name,
     const BT::NodeConfiguration & config,
     const std::shared_ptr<ExplorationBtContext> & context)
 : BT::StatefulActionNode(name, config), context_(context)

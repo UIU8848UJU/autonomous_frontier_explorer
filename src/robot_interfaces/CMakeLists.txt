@@ -15,14 +15,18 @@ set(MSG_FILES
 
 set(SRV_FILES
   "srv/StartExploration.srv"
+  "srv/GetFrontierCandidates.srv"
   "srv/GetNextFrontierGoal.srv"
   "srv/MarkFrontierFailed.srv"
   "srv/ClearFrontierBlacklist.srv"
   "srv/GetExplorationState.srv"
+  "srv/CheckPoseReachability.srv"
+  "srv/CheckGoalFeasibility.srv"
 )
 
 set(ACTION_FILES
   "action/Explore.action"
+  "action/NavigateToPose.action"
 )
 
 rosidl_generate_interfaces(${PROJECT_NAME}

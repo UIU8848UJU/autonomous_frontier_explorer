@@ -5,7 +5,6 @@
 
 #include "behaviortree_cpp_v3/action_node.h"
 #include "nodes/exploration_bt_context.hpp"
-#include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
 namespace frontier_explorer
@@ -15,8 +14,15 @@ namespace frontier_explorer
 class NavigateToFrontierAction : public BT::StatefulActionNode
 {
 public:
-    using NavigateToPose = nav2_msgs::action::NavigateToPose;
+    using NavigateToPose = robot_interfaces::action::NavigateToPose;
     using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPose>;
+
+    /// @brief: 构造可插件化 frontier 导航节点，从 BT blackboard 获取共享上下文
+    /// @param name BT 节点实例名
+    /// @param config BT 节点配置
+    NavigateToFrontierAction(
+        const std::string & name,
+        const BT::NodeConfiguration & config);
 
     /// @brief: 构造 frontier 导航节点
     /// @param name BT 节点实例名
@@ -26,6 +32,13 @@ public:
         const std::string & name,
         const BT::NodeConfiguration & config,
         const std::shared_ptr<ExplorationBtContext> & context);
+
+    /// @brief: 声明 BT 端口；当前节点通过共享上下文通信，暂无 XML 端口
+    /// @return: 空端口列表
+    static BT::PortsList providedPorts()
+    {
+        return {};
+    }
 
     /// @brief: 首次 tick 时发送 Nav2 NavigateToPose goal
     /// @return: BT 节点状态

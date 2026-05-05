@@ -1,13 +1,24 @@
 #include "core/selector/frontier_pruner.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <limits>
+#include <unordered_set>
 
 #include "core/utils/frontier_selector_utils.hpp"
+#include "nav2_costmap_2d/cost_values.hpp"
 
 namespace frontier_explorer
 {
+namespace
+{
+constexpr std::array<double, 2U> kRetreatDistancesM{0.25, 0.4};
+constexpr std::array<double, 2U> kSampleRadiiM{0.35, 0.55};
+constexpr double kAngleStepDeg = 30.0;
+constexpr double kPi = 3.14159265358979323846;
+constexpr double kDegreesToRadians = kPi / 180.0;
+}  // namespace
 
 FrontierPruner::FrontierPruner(
     double min_goal_distance_m,
@@ -16,6 +27,7 @@ FrontierPruner::FrontierPruner(
     std::size_t min_cluster_size,
     int unknown_margin_cells,
     int goal_inset_cells,
+    double max_unknown_ratio,
     const rclcpp::Logger & logger)
 : logger_(rclcpp::Logger(logger).get_child("pruner")),
   min_goal_distance_m_(min_goal_distance_m),
@@ -23,7 +35,8 @@ FrontierPruner::FrontierPruner(
   max_cluster_retry_count_(max_cluster_retry_count),
   min_cluster_size_(min_cluster_size),
   unknown_margin_cells_(std::max(0, unknown_margin_cells)),
-  goal_inset_cells_(std::max(0, goal_inset_cells))
+  goal_inset_cells_(std::max(0, goal_inset_cells)),
+  max_unknown_ratio_(std::clamp(max_unknown_ratio, 0.0, 1.0))
 {
 }
 
@@ -151,7 +164,37 @@ bool FrontierPruner::pass_map_candidate_constraints(
     if (unknown_ratio != nullptr) {
         *unknown_ratio = ratio;
     }
-    return true;
+    return ratio <= max_unknown_ratio_;
+}
+
+bool FrontierPruner::pass_safety_candidate_constraints(
+    const GridCell & cell,
+    const CostmapAdapter * frontier_costmap,
+    const CostmapAdapter * safety_costmap) const
+{
+    if (frontier_costmap == nullptr || safety_costmap == nullptr || !safety_costmap->isReady()) {
+        return true;
+    }
+
+    double wx = 0.0;
+    double wy = 0.0;
+    frontier_costmap->mapToWorld(
+        static_cast<unsigned int>(cell.col),
+        static_cast<unsigned int>(cell.row),
+        wx,
+        wy);
+
+    unsigned int safety_col = 0U;
+    unsigned int safety_row = 0U;
+    if (!safety_costmap->worldToMap(wx, wy, safety_col, safety_row)) {
+        return false;
+    }
+
+    const auto cost = safety_costmap->getCost(safety_col, safety_row);
+    if (cost == nav2_costmap_2d::NO_INFORMATION) {
+        return false;
+    }
+    return cost < nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE;
 }
 
 GridCell FrontierPruner::inset_goal_toward_robot(
@@ -242,7 +285,8 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
     std::vector<GridCell> * failed_cluster_ids) const
 {
     std::vector<FrontierCandidate> valid_candidates;
-    valid_candidates.reserve(clusters.size());
+    valid_candidates.reserve(clusters.size() * 4U);
+    std::unordered_set<GridCell, GridCellHash> emitted_goals;
 
     for (std::size_t cluster_idx = 0; cluster_idx < clusters.size(); ++cluster_idx) {
         const auto & cluster = clusters[cluster_idx];
@@ -266,67 +310,165 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
             }
         }
 
-        GridCell candidate = cluster.centroid;
-        double dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
-        double unknown_ratio = 0.0;
-        bool used_fallback = false;
-        bool goal_inset_applied = false;
+        bool cluster_generated_candidate = false;
+        auto append_candidate =
+            [&](GridCell candidate, bool used_fallback, bool allow_inset) {
+                if (should_skip_goal(candidate, context)) {
+                    return false;
+                }
+                if (is_same_as_last_goal(candidate, context.last_goal)) {
+                    return false;
+                }
 
-        bool centroid_invalid = false;
-        if (should_skip_goal(candidate, context)) {
-            centroid_invalid = true;
-        } else if (dist_m < min_goal_distance_m_) {
-            centroid_invalid = true;
-        } else if (is_same_as_last_goal(candidate, context.last_goal)) {
-            centroid_invalid = true;
-        } else if (!pass_map_candidate_constraints(candidate, frontier_costmap, &unknown_ratio)) {
-            centroid_invalid = true;
+                double dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
+                if (dist_m < min_goal_distance_m_) {
+                    return false;
+                }
+
+                double unknown_ratio = 0.0;
+                if (!pass_map_candidate_constraints(candidate, frontier_costmap, &unknown_ratio)) {
+                    return false;
+                }
+                if (!pass_safety_candidate_constraints(
+                        candidate,
+                        frontier_costmap,
+                        safety_costmap))
+                {
+                    return false;
+                }
+
+                bool goal_inset_applied = false;
+                if (allow_inset) {
+                    const GridCell original_candidate = candidate;
+                    candidate = inset_goal_toward_robot(
+                        candidate,
+                        robot_grid,
+                        frontier_costmap,
+                        context);
+                    goal_inset_applied = !(candidate == original_candidate);
+                    if (goal_inset_applied) {
+                        if (should_skip_goal(candidate, context) ||
+                            is_same_as_last_goal(candidate, context.last_goal))
+                        {
+                            return false;
+                        }
+                        dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
+                        if (dist_m < min_goal_distance_m_) {
+                            return false;
+                        }
+                        if (!pass_map_candidate_constraints(
+                                candidate,
+                                frontier_costmap,
+                                &unknown_ratio))
+                        {
+                            return false;
+                        }
+                        if (!pass_safety_candidate_constraints(
+                                candidate,
+                                frontier_costmap,
+                                safety_costmap))
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                if (emitted_goals.count(candidate) > 0U) {
+                    return false;
+                }
+                emitted_goals.insert(candidate);
+
+                const double clearance_m = compute_clearance_m(
+                    candidate,
+                    frontier_costmap,
+                    safety_costmap);
+
+                valid_candidates.push_back(FrontierCandidate{
+                    candidate,
+                    cluster.centroid,
+                    cluster.cells.size(),
+                    dist_m,
+                    retry_count_of_goal(candidate, context),
+                    clearance_m,
+                    unknown_ratio,
+                    cluster_idx,
+                    used_fallback,
+                    goal_inset_applied,
+                    false,
+                    true,
+                    0.0
+                });
+                return true;
+            };
+
+        cluster_generated_candidate |= append_candidate(cluster.centroid, false, true);
+
+        const auto fallback = find_fallback_goal_in_cluster(
+            cluster,
+            robot_grid,
+            resolution,
+            frontier_costmap,
+            context);
+        if (fallback.has_value()) {
+            cluster_generated_candidate |= append_candidate(fallback.value(), true, true);
         }
 
-        if (centroid_invalid) {
-            const auto fallback = find_fallback_goal_in_cluster(
-                cluster, robot_grid, resolution, frontier_costmap, context);
-            if (!fallback.has_value()) {
-                if (failed_cluster_ids != nullptr) {
-                    failed_cluster_ids->push_back(cluster.centroid);
+        if (frontier_costmap != nullptr && frontier_costmap->isReady()) {
+            double centroid_x = 0.0;
+            double centroid_y = 0.0;
+            double robot_x = 0.0;
+            double robot_y = 0.0;
+            frontier_costmap->mapToWorld(
+                static_cast<unsigned int>(cluster.centroid.col),
+                static_cast<unsigned int>(cluster.centroid.row),
+                centroid_x,
+                centroid_y);
+            frontier_costmap->mapToWorld(
+                static_cast<unsigned int>(robot_grid.col),
+                static_cast<unsigned int>(robot_grid.row),
+                robot_x,
+                robot_y);
+
+            const double direction_x = robot_x - centroid_x;
+            const double direction_y = robot_y - centroid_y;
+            const double direction_norm = std::hypot(direction_x, direction_y);
+            if (direction_norm > 1e-6) {
+                for (const auto retreat_distance_m : kRetreatDistancesM) {
+                    unsigned int mx = 0U;
+                    unsigned int my = 0U;
+                    const double wx =
+                        centroid_x + direction_x / direction_norm * retreat_distance_m;
+                    const double wy =
+                        centroid_y + direction_y / direction_norm * retreat_distance_m;
+                    if (frontier_costmap->worldToMap(wx, wy, mx, my)) {
+                        cluster_generated_candidate |= append_candidate(
+                            GridCell{static_cast<int>(my), static_cast<int>(mx)},
+                            true,
+                            false);
+                    }
                 }
-                continue;
             }
 
-            candidate = fallback.value();
-            dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
-            pass_map_candidate_constraints(candidate, frontier_costmap, &unknown_ratio);
-            used_fallback = true;
+            for (const auto sample_radius_m : kSampleRadiiM) {
+                for (double angle_deg = 0.0; angle_deg < 360.0; angle_deg += kAngleStepDeg) {
+                    const double angle_rad = angle_deg * kDegreesToRadians;
+                    unsigned int mx = 0U;
+                    unsigned int my = 0U;
+                    const double wx = centroid_x + std::cos(angle_rad) * sample_radius_m;
+                    const double wy = centroid_y + std::sin(angle_rad) * sample_radius_m;
+                    if (frontier_costmap->worldToMap(wx, wy, mx, my)) {
+                        cluster_generated_candidate |= append_candidate(
+                            GridCell{static_cast<int>(my), static_cast<int>(mx)},
+                            true,
+                            false);
+                    }
+                }
+            }
         }
 
-        const GridCell frontier_goal = candidate;
-        candidate = inset_goal_toward_robot(candidate, robot_grid, frontier_costmap, context);
-        if (!(candidate == frontier_goal)) {
-            dist_m = grid_distance_in_meters(robot_grid, candidate, resolution);
-            pass_map_candidate_constraints(candidate, frontier_costmap, &unknown_ratio);
-            goal_inset_applied = true;
+        if (!cluster_generated_candidate && failed_cluster_ids != nullptr) {
+            failed_cluster_ids->push_back(cluster.centroid);
         }
-
-        const double clearance_m = compute_clearance_m(
-            candidate,
-            frontier_costmap,
-            safety_costmap);
-
-        valid_candidates.push_back(FrontierCandidate{
-            candidate,
-            cluster.centroid,
-            cluster.cells.size(),
-            dist_m,
-            retry_count_of_goal(candidate, context),
-            clearance_m,
-            unknown_ratio,
-            cluster_idx,
-            used_fallback,
-            goal_inset_applied,
-            false,
-            true,
-            0.0
-        });
     }
 
     return valid_candidates;

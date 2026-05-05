@@ -3,6 +3,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "behaviortree_cpp_v3/bt_factory.h"
 #include "nodes/exploration_bt_context.hpp"
@@ -33,8 +34,8 @@ public:
         const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
-    /// @brief: 注册当前进程内置的 Exploration BT 节点
-    void register_bt_nodes();
+    /// @brief: 加载 Exploration BT 插件库
+    void load_bt_plugins();
 
     /// @brief: 处理启动探索服务请求
     /// @param request Trigger 请求
@@ -68,8 +69,10 @@ private:
 private:
     std::shared_ptr<ExplorationBtContext> context_;
     BT::BehaviorTreeFactory factory_;
+    BT::Blackboard::Ptr blackboard_;
     std::optional<BT::Tree> tree_;
     std::string bt_xml_file_;
+    std::vector<std::string> bt_plugin_libraries_;
     double tick_period_sec_{0.1};
     ExplorationBtOrchestratorState state_{ExplorationBtOrchestratorState::IDLE};
 

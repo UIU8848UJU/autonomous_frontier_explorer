@@ -14,6 +14,13 @@ namespace frontier_explorer
 class MarkFrontierFailedAction : public BT::StatefulActionNode
 {
 public:
+    /// @brief: 构造可插件化失败 frontier 标记节点，从 BT blackboard 获取共享上下文
+    /// @param name BT 节点实例名
+    /// @param config BT 节点配置
+    MarkFrontierFailedAction(
+        const std::string & name,
+        const BT::NodeConfiguration & config);
+
     /// @brief: 构造失败 frontier 标记节点
     /// @param name BT 节点实例名
     /// @param config BT 节点配置
@@ -22,6 +29,13 @@ public:
         const std::string & name,
         const BT::NodeConfiguration & config,
         const std::shared_ptr<ExplorationBtContext> & context);
+
+    /// @brief: 声明 BT 端口；当前节点通过共享上下文通信，暂无 XML 端口
+    /// @return: 空端口列表
+    static BT::PortsList providedPorts()
+    {
+        return {};
+    }
 
     /// @brief: 首次 tick 时准备发送失败标记请求
     /// @return: BT 节点状态

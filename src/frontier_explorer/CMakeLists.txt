@@ -4,6 +4,7 @@ project(frontier_explorer)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Wpedantic)
@@ -59,6 +60,7 @@ endfunction()
 
 add_library(frontier_explorer_core
   src/core/frontier_goal_provider.cpp
+  src/navigation/nav2_planner_reachability_checker.cpp
   src/core/costmap/costmap_adapter.cpp
   src/core/detector/frontier_detector.cpp
   src/core/selector/frontier_pruner.cpp
@@ -88,21 +90,42 @@ target_link_libraries(frontier_explorer_node
 
 configure_frontier_explorer_target(frontier_explorer_node)
 
-add_executable(exploration_bt_orchestrator_node
+add_executable(navigation_node
+  src/nodes/navigation_main.cpp
+  src/nodes/navigation_node.cpp
+)
+
+configure_frontier_explorer_target(navigation_node)
+
+add_library(frontier_explorer_bt_nodes SHARED
   src/nodes/bt/exploration_bt_context.cpp
   src/nodes/bt/is_exploration_complete_condition.cpp
-  src/nodes/bt/orchestrator/exploration_bt_orchestrator_main.cpp
-  src/nodes/bt/orchestrator/exploration_bt_orchestrator_node.cpp
+  src/nodes/bt/action/compute_frontier_candidates_action.cpp
   src/nodes/bt/action/compute_next_frontier_goal_action.cpp
   src/nodes/bt/action/mark_frontier_failed_action.cpp
   src/nodes/bt/action/navigate_to_frontier_action.cpp
+  src/nodes/bt/action/select_feasible_frontier_action.cpp
+  src/nodes/bt/action/select_reachable_frontier_action.cpp
+  src/nodes/bt/plugins/exploration_bt_plugins.cpp
+)
+
+target_compile_definitions(frontier_explorer_bt_nodes PRIVATE BT_PLUGIN_EXPORT)
+
+configure_frontier_explorer_target(frontier_explorer_bt_nodes)
+
+add_executable(exploration_bt_orchestrator_node
+  src/nodes/bt/exploration_bt_context.cpp
+  src/nodes/bt/orchestrator/exploration_bt_orchestrator_main.cpp
+  src/nodes/bt/orchestrator/exploration_bt_orchestrator_node.cpp
 )
 
 configure_frontier_explorer_target(exploration_bt_orchestrator_node)
 
 install(TARGETS
     frontier_explorer_core
+    frontier_explorer_bt_nodes
     frontier_explorer_node
+    navigation_node
     exploration_bt_orchestrator_node
     DESTINATION lib/${PROJECT_NAME}
 )

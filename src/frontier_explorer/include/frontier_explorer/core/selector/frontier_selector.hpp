@@ -62,6 +62,23 @@ public:
         const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
             reachability_check = {});
 
+    /// @brief: 生成并按当前 scoring 策略排序 frontier 候选，不更新 last goal
+    /// @param clusters 原始 frontier clusters
+    /// @param robot_grid 机器人所在栅格
+    /// @param resolution 地图分辨率
+    /// @param frontier_costmap frontier 检测来源地图适配器
+    /// @param safety_costmap 安全检查来源地图适配器，可为空
+    /// @param reachability_check 可选 planner 可达性检查回调
+    /// @return: 按分数从高到低排序的 scored candidates
+    std::vector<ScoredFrontierCandidate> rank_frontier_candidates(
+        const std::vector<FrontierCluster> & clusters,
+        const GridCell & robot_grid,
+        double resolution,
+        const CostmapAdapter & frontier_costmap,
+        const CostmapAdapter * safety_costmap = nullptr,
+        const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+            reachability_check = {});
+
     /// @brief: 记录最近一次发给 Nav2 的目标点，用于避免重复选择
     /// @param goal 最近目标栅格
     void set_last_goal(const GridCell & goal);
@@ -109,6 +126,15 @@ private:
 
     // 从一个候选池中打分并选择最高分候选。
     std::optional<ScoredFrontierCandidate> choose_best_scored_candidate(
+        const std::vector<FrontierCandidate> & candidates,
+        const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+            reachability_check = {}) const;
+
+    /// @brief: 从一个候选池中打分、排序，并按需填充可达性诊断
+    /// @param candidates 待打分候选池
+    /// @param reachability_check 可选 planner 可达性检查回调
+    /// @return: 按分数从高到低排序的 scored candidates
+    std::vector<ScoredFrontierCandidate> score_and_rank_candidates(
         const std::vector<FrontierCandidate> & candidates,
         const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
             reachability_check = {}) const;

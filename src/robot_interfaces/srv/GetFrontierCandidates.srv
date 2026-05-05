@@ -1,0 +1,22 @@
+uint32 max_candidates
+---
+bool success
+geometry_msgs/PoseStamped[] goals
+float32[] scores
+float32[] distance_m
+float32[] clearance_m
+float32[] unknown_ratio
+uint32[] cluster_sizes
+uint32[] retry_counts
+bool[] used_fallback
+bool[] goal_inset_applied
+bool[] reachability_checked
+bool[] reachable
+float32[] path_length_m
+uint16 reason_code
+string reason_text
+uint32 raw_frontier_count
+uint32 candidate_count
+uint32 blacklist_count
+bool exploration_complete
+bool recoverable

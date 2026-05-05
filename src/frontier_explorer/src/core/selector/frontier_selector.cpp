@@ -34,6 +34,7 @@ FrontierSelector::FrontierSelector(
       min_cluster_size_,
       candidate_unknown_margin_cells,
       candidate_goal_inset_cells,
+      scoring_weights.unknown_risk_threshold,
       logger_),
   scorer_(scoring_weights, max_retry_count_, logger_)
 {
@@ -104,34 +105,101 @@ std::optional<GridCell> FrontierSelector::choose_best_frontier(
     return best->candidate.goal;
 }
 
-std::optional<ScoredFrontierCandidate> FrontierSelector::choose_best_scored_candidate(
+std::vector<ScoredFrontierCandidate> FrontierSelector::rank_frontier_candidates(
+    const std::vector<FrontierCluster> & clusters,
+    const GridCell & robot_grid,
+    double resolution,
+    const CostmapAdapter & frontier_costmap,
+    const CostmapAdapter * safety_costmap,
+    const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+        reachability_check)
+{
+    last_scored_candidates_.clear();
+
+    const FrontierPruningContext context{
+        state_.last_goal_grid,
+        &state_.failed_goal_counts,
+        &state_.blacklist,
+        &state_.failed_cluster_counts,
+        &state_.cluster_blacklist};
+
+    std::vector<GridCell> fallback_failed_clusters;
+    auto valid_candidates = pruner_.prune_clusters(
+        clusters,
+        robot_grid,
+        resolution,
+        &frontier_costmap,
+        safety_costmap,
+        context,
+        &fallback_failed_clusters);
+
+    for (const auto & cluster_id : fallback_failed_clusters) {
+        mark_cluster_failed(cluster_id);
+    }
+
+    if (valid_candidates.empty()) {
+        RCLCPP_WARN(logger_, "No valid frontier candidates after pruning.");
+        return {};
+    }
+
+    std::vector<FrontierCandidate> normal_candidates;
+    std::vector<FrontierCandidate> small_candidates;
+    normal_candidates.reserve(valid_candidates.size());
+    small_candidates.reserve(valid_candidates.size());
+
+    if (defer_small_clusters_) {
+        for (const auto & candidate : valid_candidates) {
+            if (candidate.cluster_size < small_cluster_size_threshold_) {
+                small_candidates.push_back(candidate);
+            } else {
+                normal_candidates.push_back(candidate);
+            }
+        }
+    } else {
+        normal_candidates = valid_candidates;
+    }
+
+    if (defer_small_clusters_ && !normal_candidates.empty() && !small_candidates.empty()) {
+        last_scored_candidates_ = score_and_rank_candidates(normal_candidates, reachability_check);
+        auto scored_small_candidates =
+            score_and_rank_candidates(small_candidates, reachability_check);
+        last_scored_candidates_.insert(
+            last_scored_candidates_.end(),
+            scored_small_candidates.begin(),
+            scored_small_candidates.end());
+    } else {
+        last_scored_candidates_ = !normal_candidates.empty() ?
+            score_and_rank_candidates(normal_candidates, reachability_check) :
+            score_and_rank_candidates(small_candidates, reachability_check);
+    }
+
+    if (!last_scored_candidates_.empty()) {
+        mark_cluster_succeeded(last_scored_candidates_.front().candidate.cluster_centroid);
+    }
+    return last_scored_candidates_;
+}
+
+std::vector<ScoredFrontierCandidate> FrontierSelector::score_and_rank_candidates(
     const std::vector<FrontierCandidate> & candidates,
     const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
         reachability_check) const
 {
-    last_scored_candidates_ = scorer_.score_candidates(candidates, state_.last_goal_grid);
-    if (last_scored_candidates_.empty()) {
-        return std::nullopt;
+    auto scored_candidates = scorer_.score_candidates(candidates, state_.last_goal_grid);
+    if (scored_candidates.empty()) {
+        return {};
     }
 
-    std::vector<std::size_t> sorted_indices(last_scored_candidates_.size());
-    for (std::size_t index = 0; index < sorted_indices.size(); ++index) {
-        sorted_indices[index] = index;
-    }
     std::sort(
-        sorted_indices.begin(),
-        sorted_indices.end(),
-        [this](std::size_t lhs_index, std::size_t rhs_index) {
-            const auto & lhs = last_scored_candidates_[lhs_index];
-            const auto & rhs = last_scored_candidates_[rhs_index];
+        scored_candidates.begin(),
+        scored_candidates.end(),
+        [](const ScoredFrontierCandidate & lhs, const ScoredFrontierCandidate & rhs) {
             if (lhs.total_score == rhs.total_score) {
                 return lhs.candidate.distance_m > rhs.candidate.distance_m;
             }
             return lhs.total_score > rhs.total_score;
         });
 
-    for (const auto index : sorted_indices) {
-        auto & scored = last_scored_candidates_[index];
+    for (auto & scored : scored_candidates) {
         if (reachability_check) {
             const auto reachability = reachability_check(scored.candidate);
             if (reachability.checked) {
@@ -146,12 +214,30 @@ std::optional<ScoredFrontierCandidate> FrontierSelector::choose_best_scored_cand
                     scored.candidate.goal.row,
                     scored.candidate.goal.col,
                     reachability.reason.c_str());
-                if (require_reachable_goal_) {
-                    continue;
-                }
             }
         }
+    }
 
+    return scored_candidates;
+}
+
+std::optional<ScoredFrontierCandidate> FrontierSelector::choose_best_scored_candidate(
+    const std::vector<FrontierCandidate> & candidates,
+    const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
+        reachability_check) const
+{
+    last_scored_candidates_ = score_and_rank_candidates(candidates, reachability_check);
+    if (last_scored_candidates_.empty()) {
+        return std::nullopt;
+    }
+
+    for (const auto & scored : last_scored_candidates_) {
+        if (require_reachable_goal_ &&
+            scored.candidate.reachability_checked &&
+            !scored.candidate.reachable)
+        {
+            continue;
+        }
         log_scored_candidates(last_scored_candidates_, scored);
         return scored;
     }

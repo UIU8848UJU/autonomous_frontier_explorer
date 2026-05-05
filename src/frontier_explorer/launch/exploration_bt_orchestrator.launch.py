@@ -16,6 +16,15 @@ def generate_launch_description():
         parameters=[params_file],
     )
 
+    navigation_node = Node(
+        package="frontier_explorer",
+        executable="navigation_node",
+        name="navigation_node",
+        output="screen",
+        parameters=[params_file],
+    )
+
     return LaunchDescription([
+        navigation_node,
         bt_orchestrator_node,
     ])

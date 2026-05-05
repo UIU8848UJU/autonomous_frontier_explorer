@@ -2,6 +2,25 @@
 frontier_explorer 包更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.0.7 (2026-05-05)
+-------------------
+* 新增包级 ``README.md``，补充当前 BT-ready exploration 架构、关键接口、启动命令、状态 topic、marker topic 和已知现象。
+* 在 README 顶部新增架构徽章，链接到 ``doc/exploration_architecture.md``。
+* 更新 ``doc/exploration_architecture.md``，加入 Mermaid 架构图，明确 ``TaskManagerNode``、``ExplorationBtOrchestratorNode``、BT 插件、``FrontierExplorerNode``、``FrontierGoalProvider``、``NavigationNode`` 和 Nav2 之间的边界。
+* 更新技术文档，记录当前商业落地风格的核心边界：frontier 能力层只生成候选和维护 retry / blacklist，BT 编排层负责流程，NavigationNode 负责导航可执行性和 Nav2 桥接。
+* ``FrontierPruner`` 增加向机器人方向退避候选和环形采样候选，候选 yaw 默认朝向 frontier centroid，用于缓解 centroid 贴边或小毛刺导致无点可选的问题。
+* 退避候选和环形采样候选增加去重，避免多个距离/角度落到同一个地图 cell 后重复参与评分。
+* 将 fallback 采样层数收窄：退避距离保留 ``0.25``、``0.4``，环形半径保留 ``0.35``、``0.55``，减少末期 RViz 中候选点铺得过厚。
+* ``FrontierPruner`` 增加 safety costmap 硬约束，候选点会映射到 ``/global_costmap/costmap``，并拒绝 costmap 外、unknown、障碍和 inflation 碰撞区的候选，避免退避/采样点落到障碍区域。
+* ``FrontierGoalProvider`` 生成候选 ``PoseStamped`` 时使用 map frame，并将候选朝向设置为从 candidate 看向 frontier centroid。
+* ``SelectFeasibleFrontier`` 不再简单选择第一个可执行候选，而是在检查窗口内综合 frontier score 和 path length 选择更优可执行目标，降低第一点过远或路径绕行过长的问题。
+* ``NavigationNode`` 增加 path safety check，使用 global costmap 审计 Nav2 planner 返回 path 是否穿越 unknown、越界或高代价区域。
+* ``NavigationNode`` 增加单目标执行边界：已有探索导航 goal 执行或取消中时，新 goal 会被拒绝，避免多个外部 goal 短时间抢占 Nav2 ``NavigateToPose``。
+* 更新参数文档，记录 ``enable_path_safety_check``、``allow_unknown_path``、``path_cost_threshold``、``feasible_path_length_weight`` 等当前已接入参数。
+* 记录当前已知现象：RViz 中 global path 在选点阶段可能短暂跳动，通常来自 BT 对多个候选调用 ``ComputePathToPose`` 做可执行性检查时 planner 临时 path 被显示，不一定代表真正导航 goal 被反复发送。
+* 记录当前已知限制：探索末期仍可能残留一格左右 unknown，通常由小 cluster 延后、unknown ratio、goal inset、footprint/path safety 等保守策略共同导致；后续建议引入独立 cleanup exploration 收尾模式，而不是继续在主策略上叠加特殊规则。
+* 记录当前策略风险：候选生成、fallback、可执行性过滤、path safety 与 blacklist 已形成较长策略链，后续需要拆分 normal exploration 与 cleanup exploration，降低调参互相影响。
+
 0.0.6(2026-05-01)
 ------------------
 * 将探索决策编排从 ``FrontierExplorerNode`` 中解耦，``FrontierExplorerNode`` 默认只作为 frontier 目标生成能力节点。
@@ -23,7 +42,19 @@ frontier_explorer 包更新日志
 * 保留 retry / blacklist 管理在 ``FrontierGoalProvider`` 内部，外部 BT 只通过 ``MarkFrontierFailed`` 通知失败事件。
 * 新增 ``ExplorationBtOrchestratorNode``，作为唯一探索编排层，加载 ``behavior_trees/exploration_tree.xml`` 并周期 tick BehaviorTree。
 * 新增 BT 节点 ``ComputeNextFrontierGoal``、``NavigateToFrontier``、``MarkFrontierFailed``、``IsExplorationComplete``。
-* 当前 BT 节点在 orchestrator 进程内注册，后续可以拆成 BehaviorTree.CPP plugin。
+* 将 BT 节点拆成 BehaviorTree.CPP 动态插件库 ``libfrontier_explorer_bt_nodes.so``，orchestrator 通过 ``bt_plugin_libraries`` 参数加载插件。
+* ``ExplorationBtContext`` 通过 BehaviorTree blackboard 注入插件节点，blackboard key 为 ``exploration_bt_context``，orchestrator 不再手写注册具体 BT 节点。
+* 新增 ``robot_interfaces/srv/GetFrontierCandidates`` 和 ``FrontierGoalProvider::compute_frontier_candidates()``，为下一步 ``ComputeFrontierCandidates`` / ``SelectReachableFrontier`` BT 插件预留候选列表接口。
+* 新增 ``robot_interfaces/action/NavigateToPose`` 和 ``navigation_node``，对 BT 暴露 ``/navigation_node/navigate_to_pose`` action，内部桥接 Nav2 ``NavigateToPose``。
+* ``NavigateToFrontier`` BT 插件改为调用 ``NavigationNode`` action，不再直接依赖 ``nav2_msgs/action/NavigateToPose``，导航能力边界进一步收敛。
+* 新增 ``navigation_action`` 参数；``navigate_to_pose_action`` 现在由 ``NavigationNode`` 内部用于配置 Nav2 action 名称。
+* 新增 ``robot_interfaces/srv/CheckPoseReachability``，``navigation_node`` 内部通过 Nav2 ``ComputePathToPose`` 判断目标可达性并返回 path length。
+* 新增 BT 插件 ``ComputeFrontierCandidates`` 和 ``SelectReachableFrontier``，默认 BT XML 改为先取候选列表、再由 BT 调用 NavigationNode 过滤可达目标。
+* 新增 ``robot_interfaces/srv/CheckGoalFeasibility`` 和 BT 插件 ``SelectFeasibleFrontier``，在 planner 可达性前增加 goal pose footprint 落脚碰撞检查。
+* ``navigation_node`` 新增 ``/navigation_node/check_goal_feasibility``，组合 ``/global_costmap/costmap`` footprint 检查与 Nav2 ``ComputePathToPose``，返回 feasible / reachable / footprint_valid。
+* 默认 BT XML 从 ``SelectReachableFrontier`` 切换到 ``SelectFeasibleFrontier``，候选必须满足 footprint 落脚和 planner path 两类约束后才会导航。
+* 默认关闭 ``frontier_decision.enable_reachability_filter``，避免 FrontierExplorerNode 和 BT 同时做可达性过滤；FrontierExplorerNode 只负责候选生成和 marker/state。
+* 新增 ``frontier_candidates_service``、``reachability_service``、``goal_feasibility_service``、``max_frontier_candidates``、``check_pose_reachability_service``、``check_goal_feasibility_service``、``footprint_costmap_topic``、``enable_footprint_collision_check``、``allow_unknown_footprint``、``robot_radius``、``footprint_padding``、``footprint_cost_threshold``、``compute_path_to_pose_action``、``reachability_timeout_ms`` 等参数。
 * 删除普通 C++ 状态机版 ``ExplorationOrchestratorNode``，避免 BT 与状态机两套编排逻辑并存。
 * 更新 ``TaskManagerNode`` 配置，使探索启动/停止服务指向 ``/exploration_bt_orchestrator_node/start_exploration`` 和 ``/exploration_bt_orchestrator_node/stop_exploration``。
 * 更新 bringup 和 sim launch，默认启动 ``exploration_bt_orchestrator_node``。

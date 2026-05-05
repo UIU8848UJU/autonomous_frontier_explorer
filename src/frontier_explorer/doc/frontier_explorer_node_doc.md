@@ -17,9 +17,15 @@ FrontierExplorerNode
       -> FrontierSelector
 
 ExplorationBtOrchestratorNode
-  -> ComputeNextFrontierGoal service
+  -> ComputeFrontierCandidates service
+  -> SelectFeasibleFrontier
   -> NavigateToFrontier
   -> MarkFrontierFailed service
+
+NavigationNode
+  -> CheckGoalFeasibility service
+  -> NavigateToPose action
+  -> Nav2 ComputePathToPose / NavigateToPose
 ```
 
 `FrontierExplorerNode` 输出 `/frontier_explorer/state` 和兼容旧系统的
@@ -42,7 +48,7 @@ ExplorationBtOrchestratorNode
 | 接口 | 类型 | 方向 | 说明 |
 | --- | --- | --- | --- |
 | `/map` | `nav_msgs/msg/OccupancyGrid` | 订阅 | frontier 检测、unknown 语义和候选基础合法性判断。 |
-| `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | 可选 safety costmap 来源，用于 clearance 软评分，不作为 frontier 硬过滤。 |
+| `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | safety costmap 来源，用于 clearance 评分、fallback 候选落脚硬约束和 NavigationNode footprint/path safety 检查。 |
 | `map <- base_link` | TF | 查询 | 获取 map frame 下的机器人位姿，用于转换为地图栅格坐标。 |
 | `/exploration_state` | `robot_interfaces/msg/ExplorationState` | 发布 | 发布 IDLE/RUNNING/STOPPED/COMPLETED/STUCK 等状态。 |
 | `/frontier_explorer/state` | `robot_interfaces/msg/ExplorationState` | 发布 | frontier 能力节点状态。 |
@@ -72,6 +78,9 @@ ExplorationBtOrchestratorNode
 6. 返回候选点、Top 5 评分文本、blacklist 和 selected goal 所需的可视化快照。
 7. 将 goal grid 转换为 `PoseStamped` 并填充服务响应。
 
+BT 默认使用 `get_frontier_candidates` 获取候选列表，再由 `SelectFeasibleFrontier`
+通过 NavigationNode 检查 footprint 和 path safety 后选择最终导航目标。
+
 当前节点会周期性输出 frontier cell 数量、raw cluster 数量和
 `min_cluster_size`，用于判断小边界是否在 detector 阶段被发现。
 
@@ -98,11 +107,13 @@ ExplorationBtOrchestratorNode
 /global_costmap/costmap
   -> clearance_m 计算
   -> ClearanceScore 软评分
-  -> 不直接删除 frontier 候选
+  -> fallback 候选落脚安全硬约束
+  -> NavigationNode footprint / path safety 检查
 ```
 
 注意：global costmap 通常包含 inflation layer，代价会比 `/map` 更保守。
-因此它只进入评分体系，不作为 pruner 的一票否决条件，避免小边界 frontier 被过早过滤。
+当前策略不会用 global costmap 删除 raw frontier cluster，但会用它检查候选 goal cell 是否能安全落脚。
+越界、unknown、障碍和 inflation 碰撞区的候选会被拒绝，避免退避采样和环形采样生成不可执行目标。
 
 ### 4.2 FrontierDetector
 
@@ -127,6 +138,10 @@ ExplorationBtOrchestratorNode
 - `min_goal_distance_m` 过滤；
 - goal 必须落在当前 map 的 free cell；
 - centroid 不可用时，在 cluster 内寻找 fallback goal；
+- centroid / cluster fallback 不足时，生成向机器人方向退避候选；
+- 以 frontier centroid 为中心生成少量环形采样候选；
+- 对 fallback 候选按 map cell 去重；
+- 候选 yaw 由后续 `FrontierGoalProvider` 设置为朝向 frontier centroid；
 - 统计候选点局部窗口内的 `unknown_ratio`；
 - 查询候选点的 `clearance_m`，供 scorer 做软评分。
 
@@ -136,7 +151,8 @@ ExplorationBtOrchestratorNode
 frontier_decision.candidate_unknown_margin_cells
 ```
 
-控制。当前 `unknown_ratio` 不再作为硬过滤直接丢弃候选，而是交给
+控制。当前 `candidate_max_unknown_ratio` 会作为候选点局部 unknown 比例硬约束；
+通过硬约束后的 unknown ratio 仍会写入候选事实数据，供
 `UnknownRiskPenaltyScore` 做风险扣分。
 
 `clearance_m` 已接入 `CostmapAdapter::distanceToNearestObstacle()`。
@@ -144,7 +160,8 @@ frontier_decision.candidate_unknown_margin_cells
 候选点从 `/map` 栅格转换到世界坐标，再转换到 global costmap 栅格，计算最近障碍距离。
 如果 global costmap 不可用，则回退到 `/map` adapter。
 
-`clearance_m` 只作为候选事实数据写入 `FrontierCandidate`，不改变 pruner 的硬过滤边界。
+同时，候选点会在 global costmap 中做硬约束检查：越界、unknown、障碍和
+`INSCRIBED_INFLATED_OBSTACLE` 及以上代价的 cell 会被拒绝。
 
 ### 4.4 FrontierScorer
 
@@ -255,37 +272,48 @@ full system 实际使用的是 bringup 包下的配置。
 | --- | --- | --- |
 | `explore_period_sec` | 3.0 | 探索定时器周期。 |
 | `obstacle_search_radius_cells` | 1 | frontier cell 周围障碍检查半径。 |
-| `min_frontier_cluster_size` | 1 | pruner 的最小 cluster size；保留小边界候选。 |
+| `min_frontier_cluster_size` | 2 | pruner 的最小 cluster size；过小会引入噪声，过大会漏掉末期小边界。 |
 | `min_goal_distance_m` | 0.45 | 目标点离机器人过近时跳过，避免 Nav2 立即判定成功。 |
 | `max_retry_count` | 2 | 单个 goal 失败达到阈值后加入黑名单。 |
 | `frontier_decision.max_cluster_retry_count` | 3 | cluster 连续失败达到阈值后加入 cluster blacklist。 |
 | `frontier_decision.defer_small_clusters` | true | 是否把小 cluster 延后到兜底阶段选择。 |
-| `frontier_decision.small_cluster_size_threshold` | 3 | 小 cluster 阈值，低于该值时视为兜底候选。 |
-| `frontier_decision.weight_distance` | 1.0 | 距离分权重，越高越偏向近目标。 |
-| `frontier_decision.weight_cluster_size` | 1.0 | cluster size 分权重，越高越偏向大 frontier。 |
+| `frontier_decision.small_cluster_size_threshold` | 5 | 小 cluster 阈值，低于该值时视为兜底候选。 |
+| `frontier_decision.weight_distance` | 1.4 | 距离分权重，越高越偏向近目标。 |
+| `frontier_decision.weight_cluster_size` | 0.35 | cluster size 分权重，越高越偏向大 frontier。 |
 | `frontier_decision.weight_clearance` | 0.25 | clearance 分权重，越高越偏向远离障碍或高 cost 区的目标。 |
 | `frontier_decision.enable_clearance_score` | true | 是否启用 clearance 软评分。 |
-| `frontier_decision.weight_unknown_risk_penalty` | 1.0 | unknown risk 扣分权重。 |
+| `frontier_decision.weight_unknown_risk_penalty` | 2.0 | unknown risk 扣分权重。 |
 | `frontier_decision.enable_unknown_risk_penalty` | true | 是否启用 unknown ratio 风险扣分。 |
 | `frontier_decision.candidate_unknown_margin_cells` | 2 | 局部 unknown ratio 统计窗口半径。 |
-| `frontier_decision.candidate_goal_inset_cells` | 2 | 将 frontier 候选目标沿目标到机器人方向向已知 free space 内缩的 cell 数，避免目标贴 unknown 边界。 |
-| `frontier_decision.candidate_max_unknown_ratio` | 0.4 | unknown risk 开始扣分的阈值。 |
+| `frontier_decision.candidate_goal_inset_cells` | 3 | 将 frontier 候选目标沿目标到机器人方向向已知 free space 内缩的 cell 数，避免目标贴 unknown 边界。 |
+| `frontier_decision.candidate_max_unknown_ratio` | 0.25 | 候选点局部 unknown 比例硬约束，同时作为 unknown risk 参考阈值。 |
 | `map_stale_timeout_ms` | 5000 | 地图长时间不更新时进入 STUCK。 |
 | `max_frontier_failures` | 3 | 连续找不到目标后进入 STUCK。 |
 | `edge_tolerance_m` | 0.3 | 判断机器人是否靠近 map 边缘。 |
 | `map_topic` | `/map` | 用于 frontier 检测的 OccupancyGrid topic。 |
 | `global_costmap_topic` | `/global_costmap/costmap` | 用于 clearance 评分的 global costmap topic。 |
-| `use_global_costmap_for_safety` | true | 是否订阅 global costmap 并将其作为 clearance 评分来源；不会作为硬过滤。 |
+| `use_global_costmap_for_safety` | true | 是否订阅 global costmap 并将其作为 clearance 评分和候选落脚安全约束来源。 |
 | `global_frame` | `map` | frontier goal 和机器人位姿查询使用的全局坐标系。 |
 | `robot_base_frame` | `base_link` | 机器人底盘坐标系。 |
 | `robot_pose_timeout_ms` | 200 | 查询 `global_frame <- robot_base_frame` TF 的超时时间。 |
-| `show_all_candidate_markers` | false | 是否在 RViz 中显示全部候选球；默认只显示最终选中候选，避免备选点被误认为残留目标。 |
-| `frontier_decision.enable_reachability_filter` | true | 是否用 Nav2 `ComputePathToPose` 对评分靠前候选做可达性过滤。 |
+| `show_all_candidate_markers` | true | 是否在 RViz 中显示全部候选球；调试时建议开启，产品演示可关闭以降低视觉噪声。 |
+| `frontier_decision.enable_reachability_filter` | false | 是否在 FrontierExplorerNode 内部用 Nav2 `ComputePathToPose` 对评分靠前候选做可达性过滤；默认关闭，当前由 BT + NavigationNode 做可执行性过滤。 |
 | `frontier_decision.max_reachability_checks` | 6 | 每轮最多检查多少个评分靠前候选，控制 planner 负载。 |
 | `frontier_decision.compute_path_to_pose_action` | `compute_path_to_pose` | Nav2 planner action 名称。 |
 | `frontier_decision.reachability_server_timeout_ms` | 200 | 等待 planner action server 的超时时间。 |
 | `frontier_decision.reachability_check_timeout_ms` | 500 | 单个候选规划检查超时时间。 |
 | `frontier_decision.reachability_planner_id` | 空 | Nav2 planner_id；空字符串使用默认 planner。 |
+
+BT / NavigationNode 关键参数：
+
+| 参数 | 当前默认 | 说明 |
+| --- | --- | --- |
+| `enable_footprint_collision_check` | true | 是否检查目标位姿处 footprint 落脚碰撞。 |
+| `allow_unknown_footprint` | false | footprint 区域是否允许 unknown。 |
+| `enable_path_safety_check` | true | 是否审计 planner 返回 path 的 costmap 安全性。 |
+| `allow_unknown_path` | false | path 是否允许穿越 unknown。 |
+| `path_cost_threshold` | 253 | path 上允许的最大 cost。 |
+| `feasible_path_length_weight` | 0.6 | `exploration_bt_orchestrator_node` 参数，BT 选择可执行候选时对 path length 的扣分权重。 |
 
 ## 7. 策略调参方向
 
@@ -314,9 +342,9 @@ small_cluster_size_threshold: 3
 小边界完备性：
 
 - 不建议把 `min_frontier_cluster_size` 重新拉得很高；
-- 推荐保留 `min_frontier_cluster_size: 1`；
+- 当前主策略用 `min_frontier_cluster_size: 2` 抑制噪声；
 - 用 `defer_small_clusters` 把小边界延后，而不是删除。
-- global costmap 不应用于硬过滤小边界，只通过 `clearance_score` 影响排序。
+- 末期仍残留单格 unknown 时，后续更适合新增 cleanup exploration 收尾模式，而不是继续放宽主策略。
 
 ## 8. Nav2 调试结论
 
@@ -327,6 +355,7 @@ small_cluster_size_threshold: 3
 - RPP 更适合当前 frontier 目标跟踪，能更自然地对齐 path；
 - 若 `min_goal_distance_m` 小于 Nav2 `xy_goal_tolerance`，目标可能刚发出就被判定成功，机器人看起来不动；
 - `allow_unknown: false` 已用于禁止 planner 穿真正 unknown cell，但 path 仍可能贴近 inflation/cost 灰色区域。
+- `SelectFeasibleFrontier` 会连续调用 `ComputePathToPose` 检查多个候选，RViz 如果显示 planner path，可能在选点阶段看到 global path 短暂跳动。
 
 速度链路：
 
@@ -391,3 +420,5 @@ ros2 topic info /frontier/blacklist_markers -v
 - 将 information gain 从当前 `unknown_ratio` 代理升级为更稳定的窗口信息量估计。
 - 后续可以把 rejected candidate 拆成更细的拒绝原因 topic 或文本，但不建议默认全部打开，避免 RViz 过载。
 - 如果需要更强解释性，可以增加一个低频 debug topic，发布完整候选评分表，替代 RViz 上的大量文本。
+- 将普通探索和末期 cleanup exploration 拆成两套策略参数，解决单格 unknown 收尾和主策略稳定性互相牵制的问题。
+- 将 feasibility check 的临时 planner path 与真正导航 path 分开可视化，避免 RViz 中 global path 短暂跳动被误判为导航 goal 抢占。

@@ -16,7 +16,7 @@ struct FrontierReachabilityResult
     std::string reason;
 };
 
-/// @brief: frontier 可达性检查接口，能力层依赖抽象，ROS wrapper 注入 Nav2 实现
+/// @brief: frontier planner 可达性检查接口，只表达能否规划路径，不表达 footprint 落脚碰撞
 class FrontierReachabilityChecker
 {
 public:

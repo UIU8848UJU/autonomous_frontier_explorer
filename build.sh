@@ -1,43 +1,100 @@
 #!/usr/bin/env bash
-set -e  # 出错就退出
+set -euo pipefail
 
 # ------------------------------------------
 # Usage:
-# ./build.sh                  -> build whole workspace
-# ./build.sh frontier_explorer -> build util_package + frontier_explorer
-# ./build.sh util_package      -> build only util_package
+# ./build.sh                         -> build whole workspace
+# ./build.sh frontier_explorer        -> build frontier_explorer and its deps
+# ./build.sh exploration              -> build robot_interfaces/frontier_explorer/bringup/task_manager
+# ./build.sh util_package             -> build util_package and its deps
+# BUILD_TYPE=Debug ./build.sh frontier_explorer
 # ------------------------------------------
 
-# 要构建的包，如果没传参数，就 build 所有
-PACKAGES="$@"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_ROOT="$SCRIPT_DIR"
+BUILD_TYPE="${BUILD_TYPE:-RelWithDebInfo}"
 
-WORKSPACE_ROOT="$(pwd)"
+cd "$WORKSPACE_ROOT"
+
+if [ -f /opt/ros/humble/setup.bash ]; then
+    set +u
+    # shellcheck disable=SC1091
+    source /opt/ros/humble/setup.bash
+    set -u
+fi
+
+refresh_compile_commands() {
+    if [ -f "$WORKSPACE_ROOT/build/compile_commands.json" ]; then
+        ln -sf build/compile_commands.json "$WORKSPACE_ROOT/compile_commands.json"
+    elif [ -f "$WORKSPACE_ROOT/build/frontier_explorer/compile_commands.json" ]; then
+        ln -sf build/frontier_explorer/compile_commands.json "$WORKSPACE_ROOT/compile_commands.json"
+    fi
+
+    if [ -f "$WORKSPACE_ROOT/compile_commands.json" ]; then
+        echo "compile_commands.json -> $(readlink "$WORKSPACE_ROOT/compile_commands.json" || true)"
+    fi
+}
+
+repair_robot_interfaces_environment() {
+    local generated_dsv="$WORKSPACE_ROOT/build/robot_interfaces/ament_cmake_environment_hooks/package.dsv"
+    local installed_dsv="$WORKSPACE_ROOT/install/robot_interfaces/share/robot_interfaces/package.dsv"
+
+    if [ -f "$generated_dsv" ] && [ -f "$installed_dsv" ]; then
+        cp "$generated_dsv" "$installed_dsv"
+    fi
+}
+
+build_all() {
+    colcon build \
+        --symlink-install \
+        --cmake-args \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+}
+
+build_up_to() {
+    colcon build \
+        --packages-up-to "$@" \
+        --symlink-install \
+        --cmake-args \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+}
+
+build_select() {
+    colcon build \
+        --packages-select "$@" \
+        --symlink-install \
+        --cmake-args \
+        -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+}
 
 echo "Workspace root: $WORKSPACE_ROOT"
-echo "Packages to build: ${PACKAGES:-ALL}"
+echo "Build type: $BUILD_TYPE"
 
-# 1️⃣ 如果没指定包，就 build 整个 workspace
-if [ -z "$PACKAGES" ]; then
+if [ "$#" -eq 0 ] || [ "$1" = "all" ]; then
     echo "Building entire workspace..."
-    colcon build --symlink-install 
-    echo "Sourcing workspace..."
-    source install/setup.bash
-    exit 0
+    build_all
+elif [ "$1" = "exploration" ]; then
+    echo "Building exploration runtime packages..."
+    build_select robot_interfaces frontier_explorer autonomousr_explorer_bringup task_manager
+elif [ "$1" = "frontier" ] || [ "$1" = "frontier_explorer" ]; then
+    echo "Building frontier_explorer and dependencies..."
+    build_up_to frontier_explorer
+else
+    echo "Building packages and dependencies: $*"
+    build_up_to "$@"
 fi
 
-# 2️⃣ 如果指定了包，先判断是否依赖 util_package
-if [[ "$PACKAGES" != "util_package" ]]; then
-    echo "Building util_package first..."
-    colcon build --packages-select util_package --symlink-install 
-    echo "Sourcing workspace..."
-    source install/setup.bash
+repair_robot_interfaces_environment
+refresh_compile_commands
+
+if [ -f "$WORKSPACE_ROOT/install/setup.bash" ]; then
+    set +u
+    # shellcheck disable=SC1091
+    source "$WORKSPACE_ROOT/install/setup.bash"
+    set -u
 fi
-
-# 3️⃣ 构建指定包
-echo "Building requested packages: $PACKAGES"
-colcon build --packages-select $PACKAGES --symlink-install
-
-echo "Sourcing workspace again..."
-source install/setup.bash
 
 echo "Build complete!"

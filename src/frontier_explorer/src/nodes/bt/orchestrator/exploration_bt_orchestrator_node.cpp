@@ -6,11 +6,8 @@
 #include <mutex>
 
 #include "ament_index_cpp/get_package_share_directory.hpp"
+#include "ament_index_cpp/get_package_prefix.hpp"
 #include "nodes/exploration_bt_defaults.hpp"
-#include "nodes/bt/action/compute_next_frontier_goal_action.hpp"
-#include "nodes/bt/is_exploration_complete_condition.hpp"
-#include "nodes/bt/action/mark_frontier_failed_action.hpp"
-#include "nodes/bt/action/navigate_to_frontier_action.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
@@ -28,23 +25,50 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
 {
     const auto default_bt_xml = ament_index_cpp::get_package_share_directory(
         "frontier_explorer") + "/behavior_trees/exploration_tree.xml";
+    const auto default_bt_plugin = ament_index_cpp::get_package_prefix(
+        "frontier_explorer") + "/lib/frontier_explorer/libfrontier_explorer_bt_nodes.so";
 
     declare_parameter<std::string>("bt_xml_file", default_bt_xml);
+    declare_parameter<std::vector<std::string>>(
+        "bt_plugin_libraries",
+        std::vector<std::string>{default_bt_plugin});
     declare_parameter<std::string>(
         "frontier_goal_service",
         exploration_bt_defaults::kFrontierGoalService);
     declare_parameter<std::string>(
+        "frontier_candidates_service",
+        exploration_bt_defaults::kFrontierCandidatesService);
+    declare_parameter<std::string>(
         "mark_failed_service",
         exploration_bt_defaults::kMarkFailedService);
     declare_parameter<std::string>(
+        "reachability_service",
+        exploration_bt_defaults::kReachabilityService);
+    declare_parameter<std::string>(
+        "goal_feasibility_service",
+        exploration_bt_defaults::kGoalFeasibilityService);
+    declare_parameter<std::string>(
+        "navigation_action",
+        exploration_bt_defaults::kNavigationAction);
+    declare_parameter<std::string>(
         "navigate_to_pose_action",
-        exploration_bt_defaults::kNavigateToPoseAction);
+        exploration_bt_defaults::kNavigationAction);
     declare_parameter<double>("tick_period_sec", exploration_bt_defaults::kTickPeriodSec);
     declare_parameter<double>(
         "service_retry_delay_sec",
         exploration_bt_defaults::kServiceRetryDelaySec);
+    declare_parameter<int>(
+        "max_frontier_candidates",
+        exploration_bt_defaults::kMaxFrontierCandidates);
+    declare_parameter<int>(
+        "max_feasibility_recoverable_retries",
+        exploration_bt_defaults::kMaxFeasibilityRecoverableRetries);
+    declare_parameter<double>(
+        "feasible_path_length_weight",
+        exploration_bt_defaults::kFeasiblePathLengthWeight);
 
     bt_xml_file_ = get_parameter("bt_xml_file").as_string();
+    bt_plugin_libraries_ = get_parameter("bt_plugin_libraries").as_string_array();
     tick_period_sec_ = std::max(0.02, get_parameter("tick_period_sec").as_double());
 
     context_ = std::make_shared<ExplorationBtContext>();
@@ -52,18 +76,35 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
     context_->logger = get_logger();
     context_->service_retry_delay_sec =
         std::max(0.1, get_parameter("service_retry_delay_sec").as_double());
+    context_->max_frontier_candidates = static_cast<uint32_t>(
+        std::max(1, static_cast<int>(get_parameter("max_frontier_candidates").as_int())));
+    context_->max_feasibility_recoverable_retries = static_cast<uint32_t>(
+        std::max(
+            0,
+            static_cast<int>(get_parameter("max_feasibility_recoverable_retries").as_int())));
+    context_->feasible_path_length_weight =
+        std::max(0.0, get_parameter("feasible_path_length_weight").as_double());
     context_->get_next_client =
         create_client<robot_interfaces::srv::GetNextFrontierGoal>(
             get_parameter("frontier_goal_service").as_string());
+    context_->get_candidates_client =
+        create_client<robot_interfaces::srv::GetFrontierCandidates>(
+            get_parameter("frontier_candidates_service").as_string());
     context_->mark_failed_client =
         create_client<robot_interfaces::srv::MarkFrontierFailed>(
             get_parameter("mark_failed_service").as_string());
+    context_->reachability_client =
+        create_client<robot_interfaces::srv::CheckPoseReachability>(
+            get_parameter("reachability_service").as_string());
+    context_->feasibility_client =
+        create_client<robot_interfaces::srv::CheckGoalFeasibility>(
+            get_parameter("goal_feasibility_service").as_string());
     context_->nav_client =
         rclcpp_action::create_client<ExplorationBtContext::NavigateToPose>(
             this,
-            get_parameter("navigate_to_pose_action").as_string());
+            get_parameter("navigation_action").as_string());
 
-    register_bt_nodes();
+    load_bt_plugins();
 
     state_pub_ = create_publisher<robot_interfaces::msg::ExplorationState>(
         "/exploration_orchestrator/state",
@@ -109,28 +150,18 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
         bt_xml_file_.c_str());
 }
 
-void ExplorationBtOrchestratorNode::register_bt_nodes()
+void ExplorationBtOrchestratorNode::load_bt_plugins()
 {
-    factory_.registerBuilder(
-        BT::TreeNodeManifest{BT::NodeType::CONDITION, "IsExplorationComplete", {}, {}},
-        [this](const std::string & name, const BT::NodeConfiguration & config) {
-            return std::make_unique<IsExplorationCompleteCondition>(name, config, context_);
-        });
-    factory_.registerBuilder(
-        BT::TreeNodeManifest{BT::NodeType::ACTION, "ComputeNextFrontierGoal", {}, {}},
-        [this](const std::string & name, const BT::NodeConfiguration & config) {
-            return std::make_unique<ComputeNextFrontierGoalAction>(name, config, context_);
-        });
-    factory_.registerBuilder(
-        BT::TreeNodeManifest{BT::NodeType::ACTION, "NavigateToFrontier", {}, {}},
-        [this](const std::string & name, const BT::NodeConfiguration & config) {
-            return std::make_unique<NavigateToFrontierAction>(name, config, context_);
-        });
-    factory_.registerBuilder(
-        BT::TreeNodeManifest{BT::NodeType::ACTION, "MarkFrontierFailed", {}, {}},
-        [this](const std::string & name, const BT::NodeConfiguration & config) {
-            return std::make_unique<MarkFrontierFailedAction>(name, config, context_);
-        });
+    for (const auto & plugin_library : bt_plugin_libraries_) {
+        if (plugin_library.empty()) {
+            continue;
+        }
+        factory_.registerFromPlugin(plugin_library);
+        RCLCPP_INFO(
+            get_logger(),
+            "Loaded Exploration BT plugin library: %s",
+            plugin_library.c_str());
+    }
 }
 
 void ExplorationBtOrchestratorNode::handle_start(
@@ -147,7 +178,11 @@ void ExplorationBtOrchestratorNode::handle_start(
     }
 
     try {
-        tree_ = factory_.createTreeFromFile(bt_xml_file_);
+        blackboard_ = BT::Blackboard::create();
+        blackboard_->set<std::shared_ptr<ExplorationBtContext>>(
+            kExplorationBtContextBlackboardKey,
+            context_);
+        tree_ = factory_.createTreeFromFile(bt_xml_file_, blackboard_);
     } catch (const std::exception & ex) {
         state_ = ExplorationBtOrchestratorState::FAILED;
         response->success = false;
@@ -205,7 +240,11 @@ void ExplorationBtOrchestratorNode::tick_tree()
 
     if (status == BT::NodeStatus::SUCCESS) {
         try {
-            tree_ = factory_.createTreeFromFile(bt_xml_file_);
+            blackboard_ = BT::Blackboard::create();
+            blackboard_->set<std::shared_ptr<ExplorationBtContext>>(
+                kExplorationBtContextBlackboardKey,
+                context_);
+            tree_ = factory_.createTreeFromFile(bt_xml_file_, blackboard_);
         } catch (const std::exception & ex) {
             state_ = ExplorationBtOrchestratorState::FAILED;
             publish_state(std::string("BT_RELOAD_FAILED: ") + ex.what());

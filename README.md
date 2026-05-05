@@ -34,11 +34,30 @@
   <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
     <img alt="Frontier Explorer Docs" src="https://img.shields.io/badge/docs-frontier_explorer-0ea5e9">
   </a>
+  <a href="src/frontier_explorer/doc/exploration_architecture.md">
+    <img alt="Exploration Architecture" src="https://img.shields.io/badge/architecture-BT--ready%20exploration-blue">
+  </a>
 </p>
 
-面向自主探索、在线建图和导航验证的一体化 ROS 2 Workspace。当前阶段已经完成了基于 frontier 的自主探索闭环：Gazebo 仿真、SLAM Toolbox 建图、Nav2 路径规划与控制、frontier 目标决策、TaskManager 任务编排可以通过 bringup 一起运行。
+面向自主探索、在线建图和导航验证的一体化 ROS 2 Workspace。当前阶段已经完成了基于 2D frontier 的自主探索闭环：Gazebo 仿真、SLAM Toolbox 建图、Nav2 路径规划与控制、frontier 能力节点、BehaviorTree.CPP 探索编排、NavigationNode 导航中间层、TaskManager 任务入口可以通过 bringup 一起运行。
 
 当前演示使用 **RPP（Regulated Pure Pursuit）控制器**。DWB 在本仓库当前场景下更容易出现抖动、原地调整或短暂停滞，依赖决策层兜底恢复；因此阶段性演示主要采用 RPP，并展示不同探索策略风格下的效果。
+
+## 当前阶段结论
+
+当前 2D frontier exploration 版本已经阶段性收口。它可以作为一个完整的规则探索 baseline：规则负责安全边界，BT 负责执行、恢复和失败重选，NavigationNode 负责落脚和路径可执行性检查。
+
+近期调试也暴露出一个明确问题：继续在 2D frontier 主策略中叠加规则，会逐渐进入“策略链地狱”。候选退避、环形采样、unknown ratio、goal inset、footprint、path safety、retry / blacklist 都有价值，但组合维护成本会快速升高。后续不再继续深挖规则策略调参，而是优先优化代码架构和决策数据闭环。
+
+下一阶段方向暂定为：
+
+```text
+规则负责安全
+ML 负责排序
+BT 负责执行恢复
+```
+
+计划先记录每次探索决策数据，再训练 success / gain ranker，用机器学习排序替代继续堆叠人工规则。BT 仍作为执行和恢复骨架，规则层继续保证碰撞、unknown、可执行性等硬安全边界。
 
 ## 演示
 
@@ -52,35 +71,36 @@
 
 ## 🎬 Demo Preview
 
-### 激进探索
+### 第一版收口
+
+https://github.com/user-attachments/assets/cac2c7f5-62c3-438f-a46b-0e572ae47c14
+
+### 激进探索demo（旧版本）
 
 https://github.com/user-attachments/assets/9e4f8a30-9b6f-4366-87e5-293d407cfe1d
-
-
-
-### 保守探索
-
-https://github.com/user-attachments/assets/4116bd11-13f0-4c1d-8bfb-4c77dc61bf0e
-
-
-### 目前加入了可视化决策功能
-`后续视频会重做`
-![alt text](image/image.png)
 
 ## 当前能力
 
 - 一键 bringup：仿真、SLAM、Nav2、RViz、FrontierExplorer、TaskManager 分阶段启动。
-- 自主探索：基于 OccupancyGrid 检测 frontier，并通过 Nav2 `navigate_to_pose` 连续发送目标。
-- 决策分层：frontier 决策拆成 Pruning、Scoring、Selection 三段，便于调参与扩展。
-- 权重策略：通过 YAML 权重组合表达探索风格，不再依赖字符串策略类切换。
+- 自主探索：基于 OccupancyGrid 检测 frontier，通过 BT 请求候选、选择可执行目标并触发 NavigationNode 导航。
+- 架构分层：`FrontierExplorerNode` 只负责 frontier 能力，`ExplorationBtOrchestratorNode` 负责流程，`NavigationNode` 负责 Nav2 桥接和可执行性检查。
+- 决策分层：frontier 决策拆成 detector、pruner、scorer、selector，BT 插件负责流程节点组合。
+- 权重策略：通过 YAML 权重组合表达探索风格，当前作为规则 baseline 保留。
 - 小边界兜底：小 frontier 不会被直接删除，但会延后到正常候选耗尽后再选择。
-- 状态发布：探索节点发布 `/exploration_state`，TaskManager 汇总并发布 `/task_manager_state`。
+- 可执行性检查：NavigationNode 组合 footprint 落脚检查、Nav2 `ComputePathToPose` 和 path safety 检查。
+- 状态发布：frontier 能力、BT 编排和 TaskManager 分别发布状态，旧 `/exploration_state` 保留兼容。
 
 探索节点这里只做概览。详细设计、状态机、参数和调试说明见：
 
 <p>
+  <a href="src/frontier_explorer/README.md">
+    <img alt="Open Frontier Explorer README" src="https://img.shields.io/badge/open-frontier_explorer_README-blue">
+  </a>
   <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
     <img alt="Open Frontier Explorer Docs" src="https://img.shields.io/badge/open-frontier_explorer_doc-0ea5e9">
+  </a>
+  <a href="src/frontier_explorer/doc/exploration_architecture.md">
+    <img alt="Open Exploration Architecture" src="https://img.shields.io/badge/open-exploration_architecture-2563eb">
   </a>
 </p>
 
@@ -117,17 +137,18 @@ mk_nav2/
 
 ### frontier_explorer
 
-负责从 `/map` 中寻找 frontier，选择下一个探索目标，并调用 Nav2 action。当前决策链路是：
+负责从 `/map` 中寻找 frontier，提供候选生成、失败标记、blacklist、marker 和 state。当前探索链路是：
 
 ```text
-FrontierDetector
-  -> FrontierPruner
-  -> FrontierScorer
-  -> FrontierSelector
-  -> NavigateToPose
+TaskManagerNode
+  -> ExplorationBtOrchestratorNode
+  -> BehaviorTree.CPP XML + BT plugins
+  -> FrontierExplorerNode / FrontierGoalProvider
+  -> NavigationNode
+  -> Nav2
 ```
 
-其中 score component 以普通 C++ 类组织，不使用 ROS node、pluginlib 或动态插件。后续新增策略时，优先通过新增 score component 和调整 YAML 权重实现。
+`FrontierExplorerNode` 不再直接发送 Nav2 goal。BT 负责什么时候请求候选、什么时候导航、失败后什么时候标记失败和重新选点。`NavigationNode` 对外提供 `/navigation_node/navigate_to_pose`，内部桥接 Nav2 `NavigateToPose`。
 
 ### task_manager
 
@@ -181,16 +202,16 @@ ros2 launch autonomousr_explorer_bringup full_system.launch.py
 ros2 service call /start_mapping std_srvs/srv/Trigger {}
 ```
 
-TaskManager 会进入建图流程，并触发 FrontierExplorer 开始选择 frontier 目标。
+TaskManager 会进入建图流程，并触发 `ExplorationBtOrchestratorNode` 开始探索 BT。
 
 ### 常用控制
 
 ```bash
-# 直接启动 frontier 探索节点逻辑
-ros2 service call /start_exploration std_srvs/srv/Trigger {}
+# 直接启动探索 BT
+ros2 service call /exploration_bt_orchestrator_node/start_exploration std_srvs/srv/Trigger {}
 
-# 停止 frontier 探索
-ros2 service call /stop_exploration std_srvs/srv/Trigger {}
+# 停止探索 BT
+ros2 service call /exploration_bt_orchestrator_node/stop_exploration std_srvs/srv/Trigger {}
 
 # 停止任务管理器中的当前任务
 ros2 service call /stop_all std_srvs/srv/Trigger {}
@@ -206,26 +227,27 @@ ros2 topic echo /behavior_tree_log
 
 ## 策略配置
 
-当前 frontier 决策通过 YAML 表达探索风格：
+当前 frontier 决策通过 YAML 表达规则 baseline：
 
 ```yaml
 frontier_decision:
-  weight_distance: 1.0
-  weight_cluster_size: 1.0
-  weight_unknown_risk_penalty: 1.0
+  weight_distance: 1.4
+  weight_cluster_size: 0.35
+  weight_unknown_risk_penalty: 2.0
   candidate_unknown_margin_cells: 2
-  candidate_max_unknown_ratio: 0.4
+  candidate_goal_inset_cells: 3
+  candidate_max_unknown_ratio: 0.25
   defer_small_clusters: true
-  small_cluster_size_threshold: 3
+  small_cluster_size_threshold: 5
 ```
 
 调参方向：
 
-- 更激进：提高 `weight_cluster_size` 或启用信息增益类评分。
-- 更保守：提高 `weight_unknown_risk_penalty`，降低 `candidate_max_unknown_ratio`。
-- 保留小边界完备性：保持 `min_frontier_cluster_size` 较低，同时开启 `defer_small_clusters`。
+- 当前 2D frontier 规则策略已阶段性收口，不再继续深挖策略调参。
+- 更激进或更保守的风格仍可通过 YAML 权重表达，但后续重点转向数据记录和 ranker 学习。
+- 保留小边界完备性仍依赖较低 `min_frontier_cluster_size`、small cluster 延后和 BT 失败重选。
 
-当前实现中，小 cluster 不会被直接丢弃；当存在正常候选时，小 cluster 会延后选择，只有没有正常候选时才作为兜底目标。
+当前实现中，小 cluster 不会被直接丢弃；当存在正常候选时，小 cluster 会延后选择，只有没有正常候选时才作为兜底目标。探索末期若残留单格 unknown，后续更适合通过独立 cleanup exploration 或 ML ranker 处理，而不是继续在主策略中追加规则。
 
 ## Nav2 控制器
 
@@ -283,12 +305,26 @@ ros2 topic echo /cmd_vel
 
 ## 当前阶段限制
 
-- information gain 已接入 score component，但默认未启用。
-- clearance score 预留了字段和组件，但当前候选 `clearance_m` 仍未接入真实 costmap 距离统计。
-- 小边界探索已经通过延后选择保留完备性，但不同地图下可能仍然需要继续调权重。
+- 当前 2D frontier exploration 可以作为阶段性规则 baseline，但不再继续追加复杂策略规则。
+- 候选策略链已经较长，继续维护退避、环形采样、unknown ratio、goal inset、path safety、blacklist 等规则组合成本较高。
+- RViz 中 global path 在选点阶段可能短暂跳动，通常来自候选可执行性检查连续调用 planner 产生的临时 path。
+- 探索末期仍可能残留单格 unknown，需要后续 cleanup exploration 或数据驱动排序解决。
 - 真实机器人部署前还需要重新标定 footprint、inflation、速度限制和传感器噪声参数。
+
+## 后续演进方向
+
+后续重点从“继续手写策略”转向“记录数据 + 学习排序 + BT 执行恢复”：
+
+- 记录每次 frontier 决策数据：候选几何、score 分项、costmap 特征、path 长度、footprint/path safety、是否成功、实际 gain。
+- 训练 success / gain ranker，让 ML 负责候选排序。
+- 规则层只保留硬安全约束：碰撞、unknown、越界、不可执行路径、blacklist。
+- BT 继续负责任务执行、恢复、失败标记、重试、完成判断。
+- 架构层继续收口接口和数据结构，为后续策略树和学习式 ranker 接入做准备。
 
 ## 参考文档
 
 - [Frontier Explorer 详细设计](src/frontier_explorer/doc/frontier_explorer_node_doc.md)
+- [Frontier Explorer README](src/frontier_explorer/README.md)
+- [Exploration 架构说明](src/frontier_explorer/doc/exploration_architecture.md)
+- [Exploration BT 设计](src/frontier_explorer/doc/exploration_bt_design.md)
 - [顶层变更记录](CHANGELOG.rst)

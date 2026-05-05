@@ -1,0 +1,12 @@
+geometry_msgs/PoseStamped start
+geometry_msgs/PoseStamped goal
+bool use_start
+string planner_id
+---
+bool success
+bool reachable
+bool recoverable
+uint16 result_code
+string message
+float32 path_length_m
+uint32 pose_count
