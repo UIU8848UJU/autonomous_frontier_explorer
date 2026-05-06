@@ -1,8 +1,10 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
@@ -35,6 +37,8 @@ public:
     /// @param options ROS2 节点选项
     explicit NavigationNode(
         const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+
+    ~NavigationNode() override;
 
 private:
     /// @brief: 处理外部导航 goal 请求
@@ -132,6 +136,9 @@ private:
     /// @brief: 标记当前是否已有一个外部探索导航 goal 正在执行或取消中
     bool navigation_goal_active_{false};
     Nav2GoalHandle::SharedPtr active_nav2_goal_;
+    std::atomic_bool navigation_stop_requested_{false};
+    std::mutex navigation_thread_mutex_;
+    std::thread navigation_thread_;
     mutable std::mutex footprint_costmap_mutex_;
     std::unique_ptr<nav2_costmap_2d::Costmap2D> footprint_costmap_;
     rclcpp::CallbackGroup::SharedPtr navigation_callback_group_;

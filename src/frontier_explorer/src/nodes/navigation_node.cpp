@@ -200,6 +200,42 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
         enable_path_safety_check_ ? "true" : "false");
 }
 
+NavigationNode::~NavigationNode()
+{
+    navigation_stop_requested_.store(true);
+
+    Nav2GoalHandle::SharedPtr nav2_goal_handle;
+    {
+        std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
+        nav2_goal_handle = active_nav2_goal_;
+    }
+    if (nav2_goal_handle && nav2_client_) {
+        try {
+            nav2_client_->async_cancel_goal(nav2_goal_handle);
+        } catch (const std::exception & ex) {
+            RCLCPP_WARN(
+                logger_,
+                "Failed to cancel active Nav2 goal during NavigationNode shutdown: %s",
+                ex.what());
+        }
+    }
+
+    std::thread navigation_thread;
+    {
+        std::lock_guard<std::mutex> lock(navigation_thread_mutex_);
+        if (navigation_thread_.joinable()) {
+            navigation_thread = std::move(navigation_thread_);
+        }
+    }
+    if (navigation_thread.joinable()) {
+        if (navigation_thread.get_id() == std::this_thread::get_id()) {
+            navigation_thread.detach();
+        } else {
+            navigation_thread.join();
+        }
+    }
+}
+
 rclcpp_action::GoalResponse NavigationNode::handle_goal(
     const rclcpp_action::GoalUUID &,
     std::shared_ptr<const NavigateToPose::Goal> goal)
@@ -209,6 +245,10 @@ rclcpp_action::GoalResponse NavigationNode::handle_goal(
     }
     if (goal->pose.header.frame_id.empty()) {
         RCLCPP_WARN(logger_, "Rejecting navigation goal with empty frame_id.");
+        return rclcpp_action::GoalResponse::REJECT;
+    }
+    if (navigation_stop_requested_.load()) {
+        RCLCPP_WARN(logger_, "Rejecting navigation goal while NavigationNode is shutting down.");
         return rclcpp_action::GoalResponse::REJECT;
     }
     {
@@ -237,24 +277,42 @@ rclcpp_action::CancelResponse NavigationNode::handle_cancel(
 void NavigationNode::handle_accepted(
     const std::shared_ptr<NavigateGoalHandle> goal_handle)
 {
-    std::thread{
-        std::bind(&NavigationNode::execute_navigation, this, goal_handle)
-    }.detach();
+    std::lock_guard<std::mutex> lock(navigation_thread_mutex_);
+    if (navigation_thread_.joinable()) {
+        navigation_thread_.join();
+    }
+    navigation_thread_ = std::thread(&NavigationNode::execute_navigation, this, goal_handle);
 }
 
 void NavigationNode::execute_navigation(
     const std::shared_ptr<NavigateGoalHandle> goal_handle)
 {
     auto result = std::make_shared<NavigateToPose::Result>();
+    const auto finish_inactive = [this]() {
+        std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
+        active_nav2_goal_.reset();
+        navigation_goal_active_ = false;
+    };
 
     try {
         if (!nav2_client_->wait_for_action_server(nav2_server_timeout_)) {
             result->success = false;
             result->result_code = kResultNav2Unavailable;
             result->message = "Nav2 NavigateToPose action server unavailable";
-            goal_handle->abort(result);
-            std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
-            navigation_goal_active_ = false;
+            if (rclcpp::ok() && goal_handle->is_active()) {
+                goal_handle->abort(result);
+            }
+            finish_inactive();
+            return;
+        }
+        if (!rclcpp::ok() || navigation_stop_requested_.load()) {
+            result->success = false;
+            result->result_code = kResultCanceled;
+            result->message = "Navigation stopped because NavigationNode is shutting down";
+            if (rclcpp::ok() && goal_handle->is_active()) {
+                goal_handle->abort(result);
+            }
+            finish_inactive();
             return;
         }
 
@@ -285,9 +343,20 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultNav2Unavailable;
             result->message = "Nav2 NavigateToPose goal response timeout";
-            goal_handle->abort(result);
-            std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
-            navigation_goal_active_ = false;
+            if (rclcpp::ok() && goal_handle->is_active()) {
+                goal_handle->abort(result);
+            }
+            finish_inactive();
+            return;
+        }
+        if (!rclcpp::ok() || navigation_stop_requested_.load()) {
+            result->success = false;
+            result->result_code = kResultCanceled;
+            result->message = "Navigation stopped because NavigationNode is shutting down";
+            if (rclcpp::ok() && goal_handle->is_active()) {
+                goal_handle->abort(result);
+            }
+            finish_inactive();
             return;
         }
 
@@ -296,9 +365,10 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultRejected;
             result->message = "Nav2 NavigateToPose goal rejected";
-            goal_handle->abort(result);
-            std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
-            navigation_goal_active_ = false;
+            if (rclcpp::ok() && goal_handle->is_active()) {
+                goal_handle->abort(result);
+            }
+            finish_inactive();
             return;
         }
 
@@ -308,7 +378,7 @@ void NavigationNode::execute_navigation(
         }
 
         auto nav2_result_future = nav2_client_->async_get_result(nav2_goal_handle);
-        while (rclcpp::ok()) {
+        while (rclcpp::ok() && !navigation_stop_requested_.load()) {
             if (goal_handle->is_canceling()) {
                 nav2_client_->async_cancel_goal(nav2_goal_handle);
                 result->success = false;
@@ -325,6 +395,18 @@ void NavigationNode::execute_navigation(
             {
                 break;
             }
+        }
+
+        if (!rclcpp::ok() || navigation_stop_requested_.load()) {
+            nav2_client_->async_cancel_goal(nav2_goal_handle);
+            result->success = false;
+            result->result_code = kResultCanceled;
+            result->message = "Navigation stopped because NavigationNode is shutting down";
+            if (rclcpp::ok() && goal_handle->is_active()) {
+                goal_handle->abort(result);
+            }
+            finish_inactive();
+            return;
         }
 
         const auto wrapped_result = nav2_result_future.get();
@@ -360,9 +442,7 @@ void NavigationNode::execute_navigation(
         if (goal_handle->is_active()) {
             goal_handle->abort(result);
         }
-        std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
-        active_nav2_goal_.reset();
-        navigation_goal_active_ = false;
+        finish_inactive();
     }
 }
 
