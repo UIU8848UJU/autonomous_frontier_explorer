@@ -3,7 +3,9 @@
 #include <optional>
 #include <vector>
 
+#include "core/selector/frontier_candidate_scorer_interface.hpp"
 #include "core/selector/frontier_decision_types.hpp"
+#include "core/selector/frontier_scoring_weights.hpp"
 #include "core/selector/score_components/clearance_score.hpp"
 #include "core/selector/score_components/cluster_size_score.hpp"
 #include "core/selector/score_components/distance_score.hpp"
@@ -17,7 +19,7 @@ namespace frontier_explorer
 {
 
 /// @brief: 统一打分器，调用各 score component 并合成最终加权总分
-class FrontierScorer
+class FrontierScorer : public IFrontierCandidateScorer
 {
 public:
     /// @brief: 构造 FrontierScorer
@@ -37,11 +39,21 @@ public:
         const std::vector<FrontierCandidate> & candidates,
         const std::optional<GridCell> & last_goal) const;
 
+    double score(
+        const ApproachGoalCandidate & candidate,
+        const FrontierCluster & cluster,
+        const RobotContext & context) const override;
+
     /// @brief: 获取当前打分权重配置
     /// @return: 打分权重只读引用
     const FrontierScoringWeights & weights() const;
 
 private:
+    ScoredFrontierCandidate score_candidate(
+        const ApproachGoalCandidate & candidate,
+        const FrontierCluster & cluster,
+        const RobotContext & context) const;
+
     // 正向分项累加，惩罚分项扣减。
     double compute_total_score(const ScoredFrontierCandidate & scored) const;
 

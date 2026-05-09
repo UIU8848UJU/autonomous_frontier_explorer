@@ -14,6 +14,7 @@ FrontierSelector::FrontierSelector(
     int max_cluster_retry_count,
     int candidate_unknown_margin_cells,
     int candidate_goal_inset_cells,
+    double candidate_max_unknown_ratio,
     bool defer_small_clusters,
     std::size_t small_cluster_size_threshold,
     bool require_reachable_goal,
@@ -34,7 +35,7 @@ FrontierSelector::FrontierSelector(
       min_cluster_size_,
       candidate_unknown_margin_cells,
       candidate_goal_inset_cells,
-      scoring_weights.unknown_risk_threshold,
+      candidate_max_unknown_ratio,
       logger_),
   scorer_(scoring_weights, max_retry_count_, logger_)
 {

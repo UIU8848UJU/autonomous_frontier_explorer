@@ -57,39 +57,6 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<int>(
         "frontier_decision.small_cluster_size_threshold",
         static_cast<int>(params_.selection.small_cluster_size_threshold));
-    this->declare_parameter<double>(
-        "frontier_decision.weight_distance",
-        params_.scorer.weights.weight_distance);
-    this->declare_parameter<double>(
-        "frontier_decision.weight_cluster_size",
-        params_.scorer.weights.weight_cluster_size);
-    this->declare_parameter<double>(
-        "frontier_decision.weight_clearance",
-        params_.scorer.weights.weight_clearance);
-    this->declare_parameter<double>(
-        "frontier_decision.weight_revisit_penalty",
-        params_.scorer.weights.weight_revisit_penalty);
-    this->declare_parameter<double>(
-        "frontier_decision.weight_retry_penalty",
-        params_.scorer.weights.weight_retry_penalty);
-    this->declare_parameter<double>(
-        "frontier_decision.weight_unknown_risk_penalty",
-        params_.scorer.weights.weight_unknown_risk_penalty);
-    this->declare_parameter<double>(
-        "frontier_decision.weight_information_gain",
-        params_.scorer.weights.weight_information_gain);
-    this->declare_parameter<bool>(
-        "frontier_decision.enable_clearance_score",
-        params_.scorer.weights.enable_clearance_score);
-    this->declare_parameter<bool>(
-        "frontier_decision.enable_revisit_penalty",
-        params_.scorer.weights.enable_revisit_penalty);
-    this->declare_parameter<bool>(
-        "frontier_decision.enable_unknown_risk_penalty",
-        params_.scorer.weights.enable_unknown_risk_penalty);
-    this->declare_parameter<bool>(
-        "frontier_decision.enable_information_gain_score",
-        params_.scorer.weights.enable_information_gain_score);
     this->declare_parameter<int>(
         "frontier_decision.candidate_unknown_margin_cells",
         params_.pruner.candidate_unknown_margin_cells);
@@ -98,7 +65,7 @@ void FrontierExplorerNode::declare_params()
         params_.pruner.candidate_goal_inset_cells);
     this->declare_parameter<double>(
         "frontier_decision.candidate_max_unknown_ratio",
-        params_.scorer.weights.unknown_risk_threshold);
+        params_.pruner.candidate_max_unknown_ratio);
     this->declare_parameter<int>(
         "map_stale_timeout_ms", static_cast<int>(params_.runtime.map_stale_timeout.count()));
     this->declare_parameter<int>(
@@ -164,33 +131,11 @@ void FrontierExplorerNode::load_params()
         this->get_parameter("frontier_decision.defer_small_clusters").as_bool();
     params_.selection.small_cluster_size_threshold = static_cast<std::size_t>(
         this->get_parameter("frontier_decision.small_cluster_size_threshold").as_int());
-    params_.scorer.weights.weight_distance =
-        this->get_parameter("frontier_decision.weight_distance").as_double();
-    params_.scorer.weights.weight_cluster_size =
-        this->get_parameter("frontier_decision.weight_cluster_size").as_double();
-    params_.scorer.weights.weight_clearance =
-        this->get_parameter("frontier_decision.weight_clearance").as_double();
-    params_.scorer.weights.weight_revisit_penalty =
-        this->get_parameter("frontier_decision.weight_revisit_penalty").as_double();
-    params_.scorer.weights.weight_retry_penalty =
-        this->get_parameter("frontier_decision.weight_retry_penalty").as_double();
-    params_.scorer.weights.weight_unknown_risk_penalty =
-        this->get_parameter("frontier_decision.weight_unknown_risk_penalty").as_double();
-    params_.scorer.weights.weight_information_gain =
-        this->get_parameter("frontier_decision.weight_information_gain").as_double();
-    params_.scorer.weights.enable_clearance_score =
-        this->get_parameter("frontier_decision.enable_clearance_score").as_bool();
-    params_.scorer.weights.enable_revisit_penalty =
-        this->get_parameter("frontier_decision.enable_revisit_penalty").as_bool();
-    params_.scorer.weights.enable_unknown_risk_penalty =
-        this->get_parameter("frontier_decision.enable_unknown_risk_penalty").as_bool();
-    params_.scorer.weights.enable_information_gain_score =
-        this->get_parameter("frontier_decision.enable_information_gain_score").as_bool();
     params_.pruner.candidate_unknown_margin_cells =
         this->get_parameter("frontier_decision.candidate_unknown_margin_cells").as_int();
     params_.pruner.candidate_goal_inset_cells =
         this->get_parameter("frontier_decision.candidate_goal_inset_cells").as_int();
-    params_.scorer.weights.unknown_risk_threshold =
+    params_.pruner.candidate_max_unknown_ratio =
         this->get_parameter("frontier_decision.candidate_max_unknown_ratio").as_double();
     params_.runtime.map_stale_timeout =
         std::chrono::milliseconds(this->get_parameter("map_stale_timeout_ms").as_int());
@@ -283,8 +228,8 @@ void FrontierExplorerNode::apply_params()
         std::max(1, params_.selection.max_retry_count);
     params_.selection.max_cluster_retry_count =
         std::max(1, params_.selection.max_cluster_retry_count);
-    params_.scorer.weights.unknown_risk_threshold =
-        std::clamp(params_.scorer.weights.unknown_risk_threshold, 0.0, 1.0);
+    params_.pruner.candidate_max_unknown_ratio =
+        std::clamp(params_.pruner.candidate_max_unknown_ratio, 0.0, 1.0);
 
     params_.pruner.min_cluster_size =
         static_cast<std::size_t>(params_.runtime.min_frontier_cluster_size);

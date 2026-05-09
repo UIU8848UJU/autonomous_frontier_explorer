@@ -2,6 +2,12 @@
 frontier_explorer 包更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.0.8(2026-05-09)
+------------------
+* 修复 ``NavigationNode`` 使用 detached 线程执行导航导致的生命周期风险；导航执行线程现在由节点持有，节点析构时会请求停止、取消 active Nav2 goal 并 join 线程，避免 shutdown/restart 时线程继续访问已销毁的节点成员。
+* 抽离 ``IFrontierCandidateScorer`` 评分接口，新增 ``ApproachGoalCandidate``、``RobotContext`` 和 ``FrontierScoringWeights`` 独立头文件，为后续 ML scorer 接入预留边界。
+* 移除 frontier 评分权重/开关 ROS YAML 参数入口，评分权重改为 classic scorer 内部配置；保留 ``candidate_max_unknown_ratio`` 作为候选硬过滤参数。
+
 0.0.7 (2026-05-05)
 -------------------
 * 新增包级 ``README.md``，补充当前 BT-ready exploration 架构、关键接口、启动命令、状态 topic、marker topic 和已知现象。

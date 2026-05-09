@@ -47,6 +47,50 @@ double FrontierScorer::compute_total_score(const ScoredFrontierCandidate & score
     return total;
 }
 
+ScoredFrontierCandidate FrontierScorer::score_candidate(
+    const ApproachGoalCandidate & candidate,
+    const FrontierCluster & cluster,
+    const RobotContext & context) const
+{
+    FrontierCandidate normalized_candidate = candidate.to_frontier_candidate();
+    normalized_candidate.cluster_centroid = cluster.centroid;
+    if (!cluster.cells.empty()) {
+        normalized_candidate.cluster_size = cluster.cells.size();
+    }
+
+    ScoredFrontierCandidate scored;
+    scored.candidate = normalized_candidate;
+    scored.distance_score = distance_score_.score(
+        normalized_candidate,
+        context.min_candidate_distance_m,
+        context.max_candidate_distance_m);
+    scored.cluster_size_score = cluster_size_score_.score(
+        normalized_candidate,
+        context.min_candidate_cluster_size,
+        context.max_candidate_cluster_size);
+    scored.clearance_score = clearance_score_.score(
+        normalized_candidate,
+        context.max_candidate_clearance_m);
+    scored.revisit_penalty =
+        (context.last_goal.has_value() && normalized_candidate.goal == context.last_goal.value()) ?
+        1.0 :
+        0.0;
+    scored.retry_penalty = retry_penalty_score_.score(normalized_candidate);
+    scored.unknown_risk_penalty = unknown_risk_penalty_score_.score(normalized_candidate);
+    scored.information_gain_score = information_gain_score_.score(normalized_candidate);
+
+    scored.total_score = compute_total_score(scored);
+    return scored;
+}
+
+double FrontierScorer::score(
+    const ApproachGoalCandidate & candidate,
+    const FrontierCluster & cluster,
+    const RobotContext & context) const
+{
+    return score_candidate(candidate, cluster, context).total_score;
+}
+
 std::vector<ScoredFrontierCandidate> FrontierScorer::score_candidates(
     const std::vector<FrontierCandidate> & candidates,
     const std::optional<GridCell> & last_goal) const
@@ -86,22 +130,19 @@ std::vector<ScoredFrontierCandidate> FrontierScorer::score_candidates(
     const std::size_t min_cluster_size = cluster_size_range.first->cluster_size;
     const std::size_t max_cluster_size = cluster_size_range.second->cluster_size;
     const double max_clearance = clearance_range.second->clearance_m;
+    const RobotContext context{
+        last_goal,
+        min_distance,
+        max_distance,
+        min_cluster_size,
+        max_cluster_size,
+        max_clearance};
 
     for (const auto & candidate : candidates) {
-        ScoredFrontierCandidate scored;
-        scored.candidate = candidate;
-        scored.distance_score = distance_score_.score(candidate, min_distance, max_distance);
-        scored.cluster_size_score =
-            cluster_size_score_.score(candidate, min_cluster_size, max_cluster_size);
-        scored.clearance_score = clearance_score_.score(candidate, max_clearance);
-        scored.revisit_penalty =
-            (last_goal.has_value() && candidate.goal == last_goal.value()) ? 1.0 : 0.0;
-        scored.retry_penalty = retry_penalty_score_.score(candidate);
-        scored.unknown_risk_penalty = unknown_risk_penalty_score_.score(candidate);
-        scored.information_gain_score = information_gain_score_.score(candidate);
-
-        scored.total_score = compute_total_score(scored);
-        scored_candidates.push_back(scored);
+        FrontierCluster cluster;
+        cluster.centroid = candidate.cluster_centroid;
+        scored_candidates.push_back(
+            score_candidate(ApproachGoalCandidate(candidate), cluster, context));
     }
 
     return scored_candidates;

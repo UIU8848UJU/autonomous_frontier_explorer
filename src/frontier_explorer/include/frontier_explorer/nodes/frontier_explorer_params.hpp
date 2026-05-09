@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <string>
 
-#include "core/selector/frontier_decision_types.hpp"
+#include "core/selector/frontier_scoring_weights.hpp"
 
 namespace frontier_explorer
 {
@@ -63,6 +63,7 @@ struct FrontierPrunerConfig
     std::size_t min_cluster_size{1U};
     int candidate_unknown_margin_cells{2};
     int candidate_goal_inset_cells{2};
+    double candidate_max_unknown_ratio{0.4};
 };
 
 // scorer 参数：只描述打分权重和分项开关。

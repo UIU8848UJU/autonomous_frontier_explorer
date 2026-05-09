@@ -169,10 +169,10 @@ frontier_decision.candidate_unknown_margin_cells
 
 - 调用各个 score component；
 - 生成分项分数；
-- 根据 YAML 权重合成 `total_score`；
+- 根据当前 scorer 内部配置合成 `total_score`；
 - 输出 `ScoredFrontierCandidate`。
 
-当前总分结构为：
+classic scorer 当前总分结构为：
 
 ```text
 total_score =
@@ -278,15 +278,9 @@ full system 实际使用的是 bringup 包下的配置。
 | `frontier_decision.max_cluster_retry_count` | 3 | cluster 连续失败达到阈值后加入 cluster blacklist。 |
 | `frontier_decision.defer_small_clusters` | true | 是否把小 cluster 延后到兜底阶段选择。 |
 | `frontier_decision.small_cluster_size_threshold` | 5 | 小 cluster 阈值，低于该值时视为兜底候选。 |
-| `frontier_decision.weight_distance` | 1.4 | 距离分权重，越高越偏向近目标。 |
-| `frontier_decision.weight_cluster_size` | 0.35 | cluster size 分权重，越高越偏向大 frontier。 |
-| `frontier_decision.weight_clearance` | 0.25 | clearance 分权重，越高越偏向远离障碍或高 cost 区的目标。 |
-| `frontier_decision.enable_clearance_score` | true | 是否启用 clearance 软评分。 |
-| `frontier_decision.weight_unknown_risk_penalty` | 2.0 | unknown risk 扣分权重。 |
-| `frontier_decision.enable_unknown_risk_penalty` | true | 是否启用 unknown ratio 风险扣分。 |
 | `frontier_decision.candidate_unknown_margin_cells` | 2 | 局部 unknown ratio 统计窗口半径。 |
 | `frontier_decision.candidate_goal_inset_cells` | 3 | 将 frontier 候选目标沿目标到机器人方向向已知 free space 内缩的 cell 数，避免目标贴 unknown 边界。 |
-| `frontier_decision.candidate_max_unknown_ratio` | 0.25 | 候选点局部 unknown 比例硬约束，同时作为 unknown risk 参考阈值。 |
+| `frontier_decision.candidate_max_unknown_ratio` | 0.25 | 候选点局部 unknown 比例硬约束。 |
 | `map_stale_timeout_ms` | 5000 | 地图长时间不更新时进入 STUCK。 |
 | `max_frontier_failures` | 3 | 连续找不到目标后进入 STUCK。 |
 | `edge_tolerance_m` | 0.3 | 判断机器人是否靠近 map 边缘。 |
@@ -320,20 +314,12 @@ BT / NavigationNode 关键参数：
 更激进：
 
 ```yaml
-weight_cluster_size: 1.5
-weight_distance: 1.0
-weight_unknown_risk_penalty: 0.8
 candidate_max_unknown_ratio: 0.5
 ```
 
 更保守：
 
 ```yaml
-weight_cluster_size: 0.7
-weight_distance: 1.0
-weight_clearance: 0.4
-enable_clearance_score: true
-weight_unknown_risk_penalty: 2.0
 candidate_max_unknown_ratio: 0.25
 defer_small_clusters: true
 small_cluster_size_threshold: 3
@@ -398,8 +384,6 @@ ros2 param get /global_costmap/global_costmap track_unknown_space
 ```bash
 ros2 topic info /global_costmap/costmap -v
 ros2 param get /frontier_explorer_node use_global_costmap_for_safety
-ros2 param get /frontier_explorer_node frontier_decision.enable_clearance_score
-ros2 param get /frontier_explorer_node frontier_decision.weight_clearance
 ```
 
 检查 frontier marker：

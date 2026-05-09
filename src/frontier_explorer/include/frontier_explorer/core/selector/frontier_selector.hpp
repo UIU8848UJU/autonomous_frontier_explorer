@@ -10,6 +10,7 @@
 #include "core/selector/frontier_decision_types.hpp"
 #include "core/selector/frontier_pruner.hpp"
 #include "core/selector/frontier_scorer.hpp"
+#include "core/selector/frontier_scoring_weights.hpp"
 #include "core/selector/frontier_selection_state.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "core/types/frontier_types.hpp"
@@ -29,6 +30,7 @@ public:
     /// @param max_cluster_retry_count 单个 cluster 最大重试次数
     /// @param candidate_unknown_margin_cells 候选点 unknown ratio 统计半径
     /// @param candidate_goal_inset_cells 候选目标向机器人方向内缩的 cell 数
+    /// @param candidate_max_unknown_ratio 候选点局部 unknown 比例硬约束
     /// @param defer_small_clusters 是否延后选择小 cluster
     /// @param small_cluster_size_threshold 小 cluster 判定阈值
     /// @param require_reachable_goal 是否强制要求候选通过 planner 可达性检查
@@ -41,6 +43,7 @@ public:
         int max_cluster_retry_count = 3,
         int candidate_unknown_margin_cells = 2,
         int candidate_goal_inset_cells = 2,
+        double candidate_max_unknown_ratio = 0.4,
         bool defer_small_clusters = true,
         std::size_t small_cluster_size_threshold = 3U,
         bool require_reachable_goal = false,

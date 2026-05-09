@@ -10,17 +10,6 @@ frontier_explorer_node:
       max_cluster_retry_count: 3
       defer_small_clusters: true
       small_cluster_size_threshold: 5
-      weight_distance: 1.4
-      weight_cluster_size: 0.35
-      weight_clearance: 0.25
-      weight_retry_penalty: 1.0
-      weight_unknown_risk_penalty: 2.0
-      weight_information_gain: 0.0
-      weight_revisit_penalty: 0.0
-      enable_clearance_score: true
-      enable_unknown_risk_penalty: true
-      enable_information_gain_score: false
-      enable_revisit_penalty: false
       enable_reachability_filter: false
       require_reachable_goal: false
       max_reachability_checks: 6
