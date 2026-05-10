@@ -1,4 +1,4 @@
-#include "core/selector/frontier_pruner.hpp"
+#include "core/selector/filters/frontier_pruner.hpp"
 
 #include <algorithm>
 #include <array>
@@ -28,6 +28,7 @@ FrontierPruner::FrontierPruner(
     int unknown_margin_cells,
     int goal_inset_cells,
     double max_unknown_ratio,
+    const FootprintCollisionCheckerConfig & footprint_collision_config,
     const rclcpp::Logger & logger)
 : logger_(rclcpp::Logger(logger).get_child("pruner")),
   min_goal_distance_m_(min_goal_distance_m),
@@ -36,7 +37,8 @@ FrontierPruner::FrontierPruner(
   min_cluster_size_(min_cluster_size),
   unknown_margin_cells_(std::max(0, unknown_margin_cells)),
   goal_inset_cells_(std::max(0, goal_inset_cells)),
-  max_unknown_ratio_(std::clamp(max_unknown_ratio, 0.0, 1.0))
+  max_unknown_ratio_(std::clamp(max_unknown_ratio, 0.0, 1.0)),
+  footprint_collision_config_(footprint_collision_config)
 {
 }
 
@@ -194,7 +196,27 @@ bool FrontierPruner::pass_safety_candidate_constraints(
     if (cost == nav2_costmap_2d::NO_INFORMATION) {
         return false;
     }
-    return cost < nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE;
+    if (cost >= nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE) {
+        return false;
+    }
+
+    const auto footprint_result = FootprintCollisionChecker::checkWorldPoint(
+        *safety_costmap,
+        wx,
+        wy,
+        0.0,
+        footprint_collision_config_);
+    if (!footprint_result.valid) {
+        RCLCPP_DEBUG(
+            logger_,
+            "Candidate rejected by footprint hard filter: goal=(%d, %d), reason=%s, max_cost=%.1f",
+            cell.row,
+            cell.col,
+            footprint_result.reason.c_str(),
+            footprint_result.max_cost);
+        return false;
+    }
+    return true;
 }
 
 GridCell FrontierPruner::inset_goal_toward_robot(

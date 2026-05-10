@@ -66,6 +66,21 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<double>(
         "frontier_decision.candidate_max_unknown_ratio",
         params_.pruner.candidate_max_unknown_ratio);
+    this->declare_parameter<bool>(
+        "frontier_decision.enable_footprint_filter",
+        params_.pruner.enable_footprint_filter);
+    this->declare_parameter<bool>(
+        "frontier_decision.allow_unknown_footprint",
+        params_.pruner.allow_unknown_footprint);
+    this->declare_parameter<double>(
+        "frontier_decision.robot_radius",
+        params_.pruner.robot_radius);
+    this->declare_parameter<double>(
+        "frontier_decision.footprint_padding",
+        params_.pruner.footprint_padding);
+    this->declare_parameter<int>(
+        "frontier_decision.footprint_cost_threshold",
+        params_.pruner.footprint_cost_threshold);
     this->declare_parameter<int>(
         "map_stale_timeout_ms", static_cast<int>(params_.runtime.map_stale_timeout.count()));
     this->declare_parameter<int>(
@@ -137,6 +152,17 @@ void FrontierExplorerNode::load_params()
         this->get_parameter("frontier_decision.candidate_goal_inset_cells").as_int();
     params_.pruner.candidate_max_unknown_ratio =
         this->get_parameter("frontier_decision.candidate_max_unknown_ratio").as_double();
+    params_.pruner.enable_footprint_filter =
+        this->get_parameter("frontier_decision.enable_footprint_filter").as_bool();
+    params_.pruner.allow_unknown_footprint =
+        this->get_parameter("frontier_decision.allow_unknown_footprint").as_bool();
+    params_.pruner.robot_radius =
+        this->get_parameter("frontier_decision.robot_radius").as_double();
+    params_.pruner.footprint_padding =
+        this->get_parameter("frontier_decision.footprint_padding").as_double();
+    params_.pruner.footprint_cost_threshold =
+        static_cast<int>(this->get_parameter(
+            "frontier_decision.footprint_cost_threshold").as_int());
     params_.runtime.map_stale_timeout =
         std::chrono::milliseconds(this->get_parameter("map_stale_timeout_ms").as_int());
     params_.runtime.max_frontier_failures =
@@ -230,6 +256,12 @@ void FrontierExplorerNode::apply_params()
         std::max(1, params_.selection.max_cluster_retry_count);
     params_.pruner.candidate_max_unknown_ratio =
         std::clamp(params_.pruner.candidate_max_unknown_ratio, 0.0, 1.0);
+    params_.pruner.robot_radius =
+        std::max(0.01, params_.pruner.robot_radius);
+    params_.pruner.footprint_padding =
+        std::max(0.0, params_.pruner.footprint_padding);
+    params_.pruner.footprint_cost_threshold =
+        std::clamp(params_.pruner.footprint_cost_threshold, 1, 255);
 
     params_.pruner.min_cluster_size =
         static_cast<std::size_t>(params_.runtime.min_frontier_cluster_size);

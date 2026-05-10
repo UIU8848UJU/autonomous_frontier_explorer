@@ -3,15 +3,15 @@
 #include <optional>
 #include <vector>
 
-#include "core/selector/frontier_candidate_scorer_interface.hpp"
-#include "core/selector/frontier_decision_types.hpp"
-#include "core/selector/frontier_scoring_weights.hpp"
-#include "core/selector/score_components/clearance_score.hpp"
-#include "core/selector/score_components/cluster_size_score.hpp"
-#include "core/selector/score_components/distance_score.hpp"
-#include "core/selector/score_components/information_gain_score.hpp"
-#include "core/selector/score_components/retry_penalty_score.hpp"
-#include "core/selector/score_components/unknown_risk_penalty_score.hpp"
+#include "core/selector/scoring/frontier_candidate_scorer_interface.hpp"
+#include "core/selector/candidates/frontier_decision_types.hpp"
+#include "core/selector/scoring/frontier_scoring_weights.hpp"
+#include "core/selector/scoring/components/clearance_score.hpp"
+#include "core/selector/scoring/components/cluster_size_score.hpp"
+#include "core/selector/scoring/components/distance_score.hpp"
+#include "core/selector/scoring/components/information_gain_score.hpp"
+#include "core/selector/scoring/components/retry_penalty_score.hpp"
+#include "core/selector/scoring/components/unknown_risk_penalty_score.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "core/types/frontier_types.hpp"
 

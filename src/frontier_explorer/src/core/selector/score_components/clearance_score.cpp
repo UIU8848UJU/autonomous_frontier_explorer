@@ -1,4 +1,4 @@
-#include "core/selector/score_components/clearance_score.hpp"
+#include "core/selector/scoring/components/clearance_score.hpp"
 
 #include <algorithm>
 

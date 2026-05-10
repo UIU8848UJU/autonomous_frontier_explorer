@@ -1,4 +1,4 @@
-#include "core/selector/score_components/cluster_size_score.hpp"
+#include "core/selector/scoring/components/cluster_size_score.hpp"
 
 #include <algorithm>
 

@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "core/costmap/costmap_adapter.hpp"
-#include "core/selector/frontier_decision_types.hpp"
+#include "core/selector/candidates/frontier_decision_types.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "core/types/frontier_types.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"

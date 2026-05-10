@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <functional>
 #include <future>
-#include <limits>
 #include <thread>
 
 #include "nav2_costmap_2d/cost_values.hpp"
@@ -39,40 +38,12 @@ double path_length_m(const nav_msgs::msg::Path & path)
     return length;
 }
 
-double yaw_from_quaternion(const geometry_msgs::msg::Quaternion & q)
-{
-    const double siny_cosp = 2.0 * (q.w * q.z + q.x * q.y);
-    const double cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z);
-    return std::atan2(siny_cosp, cosy_cosp);
-}
-
-bool point_in_polygon(
-    double x,
-    double y,
-    const std::vector<geometry_msgs::msg::Point> & polygon)
-{
-    if (polygon.size() < 3U) {
-        return false;
-    }
-
-    bool inside = false;
-    for (std::size_t i = 0U, j = polygon.size() - 1U; i < polygon.size(); j = i++) {
-        const auto & pi = polygon[i];
-        const auto & pj = polygon[j];
-        const bool intersects =
-            ((pi.y > y) != (pj.y > y)) &&
-            (x < (pj.x - pi.x) * (y - pi.y) / ((pj.y - pi.y) + 1e-12) + pi.x);
-        if (intersects) {
-            inside = !inside;
-        }
-    }
-    return inside;
-}
 }
 
 NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
 : Node("navigation_node", options),
-  logger_(get_logger().get_child("navigation"))
+  logger_(get_logger().get_child("navigation")),
+  footprint_costmap_(logger_)
 {
     declare_parameter<std::string>("navigate_to_pose_action", "navigate_to_pose");
     declare_parameter<std::string>("compute_path_to_pose_action", "compute_path_to_pose");
@@ -132,10 +103,12 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
         this,
         compute_path_action_name_,
         navigation_callback_group_);
-    robot_footprint_ = nav2_costmap_2d::makeFootprintFromRadius(robot_radius_);
-    if (footprint_padding_ > 0.0) {
-        nav2_costmap_2d::padFootprint(robot_footprint_, footprint_padding_);
-    }
+    footprint_collision_config_.enabled = enable_footprint_collision_check_;
+    footprint_collision_config_.allow_unknown = allow_unknown_footprint_;
+    footprint_collision_config_.cost_threshold = footprint_cost_threshold_;
+    footprint_collision_config_.footprint = FootprintCollisionChecker::makeCircularFootprint(
+        robot_radius_,
+        footprint_padding_);
 
     action_server_ = rclcpp_action::create_server<NavigateToPose>(
         this,
@@ -622,39 +595,13 @@ void NavigationNode::handle_check_goal_feasibility(
 void NavigationNode::footprint_costmap_callback(
     const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
-    if (!msg || msg->info.width == 0U || msg->info.height == 0U || msg->info.resolution <= 0.0F) {
+    if (!msg) {
         RCLCPP_WARN(logger_, "Received invalid footprint costmap.");
         return;
     }
 
-    const auto expected_size =
-        static_cast<std::size_t>(msg->info.width) * static_cast<std::size_t>(msg->info.height);
-    if (msg->data.size() != expected_size) {
-        RCLCPP_WARN(
-            logger_,
-            "Footprint costmap size mismatch: expected=%zu actual=%zu",
-            expected_size,
-            msg->data.size());
-        return;
-    }
-
-    auto costmap = std::make_unique<nav2_costmap_2d::Costmap2D>(
-        msg->info.width,
-        msg->info.height,
-        static_cast<double>(msg->info.resolution),
-        msg->info.origin.position.x,
-        msg->info.origin.position.y,
-        nav2_costmap_2d::NO_INFORMATION);
-
-    for (unsigned int y = 0U; y < msg->info.height; ++y) {
-        for (unsigned int x = 0U; x < msg->info.width; ++x) {
-            const auto index = static_cast<std::size_t>(y) * msg->info.width + x;
-            costmap->setCost(x, y, interpret_occupancy_value(msg->data[index]));
-        }
-    }
-
     std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
-    footprint_costmap_ = std::move(costmap);
+    footprint_costmap_.updateFromOccupancyGrid(*msg);
 }
 
 bool NavigationNode::is_goal_footprint_valid(
@@ -669,77 +616,13 @@ bool NavigationNode::is_goal_footprint_valid(
     }
 
     std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
-    if (!footprint_costmap_) {
-        reason = "footprint_costmap_unavailable";
-        return false;
-    }
-
-    const double theta = yaw_from_quaternion(goal.pose.orientation);
-    const double cos_th = std::cos(theta);
-    const double sin_th = std::sin(theta);
-    std::vector<geometry_msgs::msg::Point> oriented;
-    oriented.reserve(robot_footprint_.size());
-    double min_x = std::numeric_limits<double>::infinity();
-    double min_y = std::numeric_limits<double>::infinity();
-    double max_x = -std::numeric_limits<double>::infinity();
-    double max_y = -std::numeric_limits<double>::infinity();
-
-    for (const auto & point : robot_footprint_) {
-        geometry_msgs::msg::Point transformed;
-        transformed.x = goal.pose.position.x + point.x * cos_th - point.y * sin_th;
-        transformed.y = goal.pose.position.y + point.x * sin_th + point.y * cos_th;
-        oriented.push_back(transformed);
-        min_x = std::min(min_x, transformed.x);
-        min_y = std::min(min_y, transformed.y);
-        max_x = std::max(max_x, transformed.x);
-        max_y = std::max(max_y, transformed.y);
-    }
-
-    unsigned int min_mx = 0U;
-    unsigned int min_my = 0U;
-    unsigned int max_mx = 0U;
-    unsigned int max_my = 0U;
-    if (!footprint_costmap_->worldToMap(min_x, min_y, min_mx, min_my) ||
-        !footprint_costmap_->worldToMap(max_x, max_y, max_mx, max_my))
-    {
-        reason = "footprint_out_of_costmap";
-        return false;
-    }
-
-    const auto start_x = std::min(min_mx, max_mx);
-    const auto end_x = std::max(min_mx, max_mx);
-    const auto start_y = std::min(min_my, max_my);
-    const auto end_y = std::max(min_my, max_my);
-    bool sampled = false;
-    for (unsigned int my = start_y; my <= end_y; ++my) {
-        for (unsigned int mx = start_x; mx <= end_x; ++mx) {
-            double wx = 0.0;
-            double wy = 0.0;
-            footprint_costmap_->mapToWorld(mx, my, wx, wy);
-            if (!point_in_polygon(wx, wy, oriented)) {
-                continue;
-            }
-            sampled = true;
-            const auto cost = footprint_costmap_->getCost(mx, my);
-            footprint_cost = std::max(footprint_cost, static_cast<double>(cost));
-            if (cost == nav2_costmap_2d::NO_INFORMATION && !allow_unknown_footprint_) {
-                reason = "footprint_over_unknown";
-                return false;
-            }
-            if (cost != nav2_costmap_2d::NO_INFORMATION && cost >= footprint_cost_threshold_) {
-                reason = "footprint_collision";
-                return false;
-            }
-        }
-    }
-
-    if (!sampled) {
-        reason = "footprint_not_sampled";
-        return false;
-    }
-
-    reason = "footprint_valid";
-    return true;
+    const auto footprint_result = FootprintCollisionChecker::checkPose(
+        footprint_costmap_,
+        goal.pose,
+        footprint_collision_config_);
+    footprint_cost = footprint_result.max_cost;
+    reason = footprint_result.reason;
+    return footprint_result.valid;
 }
 
 bool NavigationNode::is_path_costmap_safe(
@@ -758,7 +641,7 @@ bool NavigationNode::is_path_costmap_safe(
     }
 
     std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
-    if (!footprint_costmap_) {
+    if (!footprint_costmap_.isReady()) {
         reason = "path_costmap_unavailable";
         return false;
     }
@@ -766,7 +649,7 @@ bool NavigationNode::is_path_costmap_safe(
     for (const auto & pose : path.poses) {
         unsigned int mx = 0U;
         unsigned int my = 0U;
-        if (!footprint_costmap_->worldToMap(
+        if (!footprint_costmap_.worldToMap(
                 pose.pose.position.x,
                 pose.pose.position.y,
                 mx,
@@ -776,7 +659,7 @@ bool NavigationNode::is_path_costmap_safe(
             return false;
         }
 
-        const auto cost = footprint_costmap_->getCost(mx, my);
+        const auto cost = footprint_costmap_.getCost(mx, my);
         max_path_cost = std::max(max_path_cost, static_cast<double>(cost));
         if (cost == nav2_costmap_2d::NO_INFORMATION && !allow_unknown_path_) {
             reason = "path_crosses_unknown";
@@ -790,27 +673,6 @@ bool NavigationNode::is_path_costmap_safe(
 
     reason = "path_safe";
     return true;
-}
-
-unsigned char NavigationNode::interpret_occupancy_value(int8_t occupancy) const
-{
-    if (occupancy < 0) {
-        return nav2_costmap_2d::NO_INFORMATION;
-    }
-    if (occupancy == 0) {
-        return nav2_costmap_2d::FREE_SPACE;
-    }
-    if (occupancy > 50) {
-        return nav2_costmap_2d::LETHAL_OBSTACLE;
-    }
-    return static_cast<unsigned char>(
-        std::clamp(
-            static_cast<int>(
-                std::round(
-                    static_cast<double>(occupancy) / 50.0 *
-                    static_cast<double>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1))),
-            1,
-            static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1)));
 }
 
 }  // namespace frontier_explorer

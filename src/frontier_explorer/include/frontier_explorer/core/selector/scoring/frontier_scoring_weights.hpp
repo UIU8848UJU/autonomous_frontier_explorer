@@ -13,13 +13,13 @@ struct FrontierScoringWeights
     double weight_revisit_penalty{1.0};
     double weight_retry_penalty{1.0};
     double weight_unknown_risk_penalty{1.0};
-    double weight_information_gain{0.0};
+    double weight_information_gain{0.4};
     double unknown_risk_threshold{0.4};
 
     bool enable_clearance_score{false};
     bool enable_revisit_penalty{false};
     bool enable_unknown_risk_penalty{true};
-    bool enable_information_gain_score{false};
+    bool enable_information_gain_score{true};
 };
 
 }  // namespace frontier_explorer

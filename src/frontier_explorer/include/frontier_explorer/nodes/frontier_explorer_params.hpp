@@ -4,7 +4,8 @@
 #include <cstddef>
 #include <string>
 
-#include "core/selector/frontier_scoring_weights.hpp"
+#include "nav2_costmap_2d/cost_values.hpp"
+#include "core/selector/scoring/frontier_scoring_weights.hpp"
 
 namespace frontier_explorer
 {
@@ -64,6 +65,11 @@ struct FrontierPrunerConfig
     int candidate_unknown_margin_cells{2};
     int candidate_goal_inset_cells{2};
     double candidate_max_unknown_ratio{0.4};
+    bool enable_footprint_filter{true};
+    bool allow_unknown_footprint{false};
+    double robot_radius{0.1};
+    double footprint_padding{0.0};
+    int footprint_cost_threshold{static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)};
 };
 
 // scorer 参数：只描述打分权重和分项开关。

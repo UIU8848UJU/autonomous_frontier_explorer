@@ -7,10 +7,10 @@
 #include <thread>
 #include <vector>
 
+#include "core/costmap/costmap_adapter.hpp"
+#include "core/geometry/footprint_collision_checker.hpp"
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
-#include "nav2_costmap_2d/costmap_2d.hpp"
-#include "nav2_costmap_2d/footprint.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -110,13 +110,9 @@ private:
         std::string & reason,
         double & max_path_cost) const;
 
-    /// @brief: 将 OccupancyGrid 概率值转换为 Nav2 costmap cost
-    /// @param occupancy OccupancyGrid 原始值
-    /// @return: Nav2 costmap cost
-    unsigned char interpret_occupancy_value(int8_t occupancy) const;
-
 private:
     rclcpp::Logger logger_;
+    CostmapAdapter footprint_costmap_;
     std::string nav2_action_name_;
     std::string compute_path_action_name_;
     std::string default_planner_id_;
@@ -131,7 +127,7 @@ private:
     double footprint_padding_{0.0};
     unsigned char footprint_cost_threshold_{253U};
     unsigned char path_cost_threshold_{253U};
-    std::vector<geometry_msgs::msg::Point> robot_footprint_;
+    FootprintCollisionCheckerConfig footprint_collision_config_;
     std::mutex nav2_goal_mutex_;
     /// @brief: 标记当前是否已有一个外部探索导航 goal 正在执行或取消中
     bool navigation_goal_active_{false};
@@ -140,7 +136,6 @@ private:
     std::mutex navigation_thread_mutex_;
     std::thread navigation_thread_;
     mutable std::mutex footprint_costmap_mutex_;
-    std::unique_ptr<nav2_costmap_2d::Costmap2D> footprint_costmap_;
     rclcpp::CallbackGroup::SharedPtr navigation_callback_group_;
 
     rclcpp_action::Server<NavigateToPose>::SharedPtr action_server_;

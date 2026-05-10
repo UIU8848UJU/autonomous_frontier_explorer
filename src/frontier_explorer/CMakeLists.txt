@@ -95,6 +95,10 @@ add_executable(navigation_node
   src/nodes/navigation_node.cpp
 )
 
+target_link_libraries(navigation_node
+  frontier_explorer_core
+)
+
 configure_frontier_explorer_target(navigation_node)
 
 add_library(frontier_explorer_bt_nodes SHARED

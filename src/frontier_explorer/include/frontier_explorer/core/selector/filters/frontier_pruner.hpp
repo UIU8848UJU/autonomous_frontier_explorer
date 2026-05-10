@@ -7,7 +7,8 @@
 #include <vector>
 
 #include "core/costmap/costmap_adapter.hpp"
-#include "core/selector/frontier_decision_types.hpp"
+#include "core/selector/candidates/frontier_decision_types.hpp"
+#include "core/geometry/footprint_collision_checker.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "core/types/frontier_types.hpp"
 
@@ -41,6 +42,7 @@ public:
     /// @param unknown_margin_cells 统计 unknown ratio 的邻域半径
     /// @param goal_inset_cells 候选目标从 frontier 边界向机器人方向内缩的 cell 数
     /// @param max_unknown_ratio 候选点邻域允许的最大 unknown 比例
+    /// @param footprint_collision_config 目标落脚 footprint 硬过滤配置
     /// @param logger ROS2 日志器
     FrontierPruner(
         double min_goal_distance_m,
@@ -50,6 +52,8 @@ public:
         int unknown_margin_cells,
         int goal_inset_cells,
         double max_unknown_ratio,
+        const FootprintCollisionCheckerConfig & footprint_collision_config =
+            FootprintCollisionCheckerConfig{},
         const rclcpp::Logger & logger = rclcpp::get_logger("frontier_explorer"));
 
     /// @brief: 将原始 frontier clusters 转换成可打分候选
@@ -145,6 +149,7 @@ private:
     int unknown_margin_cells_{2};
     int goal_inset_cells_{2};
     double max_unknown_ratio_{0.4};
+    FootprintCollisionCheckerConfig footprint_collision_config_{};
 };
 
 }  // namespace frontier_explorer

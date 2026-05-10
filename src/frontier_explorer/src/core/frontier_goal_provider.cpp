@@ -18,6 +18,20 @@ constexpr uint16_t kReasonNoFrontier = 5U;
 constexpr uint16_t kReasonNoValidFrontier = 6U;
 constexpr uint16_t kReasonAllFrontiersBlacklisted = 7U;
 
+FootprintCollisionCheckerConfig make_footprint_collision_checker_config(
+    const FrontierPrunerConfig & config)
+{
+    FootprintCollisionCheckerConfig footprint_config;
+    footprint_config.enabled = config.enable_footprint_filter;
+    footprint_config.allow_unknown = config.allow_unknown_footprint;
+    footprint_config.cost_threshold = static_cast<unsigned char>(
+        std::clamp(config.footprint_cost_threshold, 1, 255));
+    footprint_config.footprint = FootprintCollisionChecker::makeCircularFootprint(
+        config.robot_radius,
+        config.footprint_padding);
+    return footprint_config;
+}
+
 geometry_msgs::msg::Quaternion quaternion_from_yaw(double yaw)
 {
     geometry_msgs::msg::Quaternion q;
@@ -87,6 +101,7 @@ FrontierGoalProvider::FrontierGoalProvider(const rclcpp::Logger & logger)
       params_.pruner.candidate_unknown_margin_cells,
       params_.pruner.candidate_goal_inset_cells,
       params_.pruner.candidate_max_unknown_ratio,
+      make_footprint_collision_checker_config(params_.pruner),
       params_.selection.defer_small_clusters,
       params_.selection.small_cluster_size_threshold,
       params_.runtime.require_reachable_goal,
@@ -107,6 +122,7 @@ void FrontierGoalProvider::configure(const FrontierExplorerParams & params)
         params_.pruner.candidate_unknown_margin_cells,
         params_.pruner.candidate_goal_inset_cells,
         params_.pruner.candidate_max_unknown_ratio,
+        make_footprint_collision_checker_config(params_.pruner),
         params_.selection.defer_small_clusters,
         params_.selection.small_cluster_size_threshold,
         params_.runtime.require_reachable_goal,

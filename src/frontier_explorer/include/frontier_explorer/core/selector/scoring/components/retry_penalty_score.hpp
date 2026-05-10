@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/selector/frontier_decision_types.hpp"
+#include "core/selector/candidates/frontier_decision_types.hpp"
 
 namespace frontier_explorer
 {

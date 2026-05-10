@@ -15,6 +15,7 @@ FrontierSelector::FrontierSelector(
     int candidate_unknown_margin_cells,
     int candidate_goal_inset_cells,
     double candidate_max_unknown_ratio,
+    const FootprintCollisionCheckerConfig & footprint_collision_config,
     bool defer_small_clusters,
     std::size_t small_cluster_size_threshold,
     bool require_reachable_goal,
@@ -36,6 +37,7 @@ FrontierSelector::FrontierSelector(
       candidate_unknown_margin_cells,
       candidate_goal_inset_cells,
       candidate_max_unknown_ratio,
+      footprint_collision_config,
       logger_),
   scorer_(scoring_weights, max_retry_count_, logger_)
 {

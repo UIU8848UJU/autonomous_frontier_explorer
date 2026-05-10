@@ -9,7 +9,7 @@
 #include "core/costmap/costmap_adapter.hpp"
 #include "core/detector/frontier_detector.hpp"
 #include "core/reachability/frontier_reachability_checker.hpp"
-#include "core/selector/frontier_decision_types.hpp"
+#include "core/selector/candidates/frontier_decision_types.hpp"
 #include "core/selector/frontier_selector.hpp"
 #include "core/types/frontier_types.hpp"
 #include "geometry_msgs/msg/point.hpp"

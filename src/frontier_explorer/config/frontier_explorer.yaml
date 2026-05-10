@@ -20,6 +20,11 @@ frontier_explorer_node:
       candidate_unknown_margin_cells: 2
       candidate_goal_inset_cells: 3
       candidate_max_unknown_ratio: 0.25
+      enable_footprint_filter: true
+      allow_unknown_footprint: false
+      robot_radius: 0.1
+      footprint_padding: 0.0
+      footprint_cost_threshold: 253
     map_stale_timeout_ms: 5000
     max_frontier_failures: 3
     edge_tolerance_m: 0.3

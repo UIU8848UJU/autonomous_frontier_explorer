@@ -1,4 +1,4 @@
-#include "core/selector/score_components/unknown_risk_penalty_score.hpp"
+#include "core/selector/scoring/components/unknown_risk_penalty_score.hpp"
 
 #include <algorithm>
 

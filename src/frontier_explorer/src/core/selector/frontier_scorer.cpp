@@ -1,4 +1,4 @@
-#include "core/selector/frontier_scorer.hpp"
+#include "core/selector/scoring/frontier_scorer.hpp"
 
 #include <algorithm>
 

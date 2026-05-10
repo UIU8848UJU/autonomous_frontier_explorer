@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/selector/approach_goal_candidate.hpp"
-#include "core/selector/robot_context.hpp"
+#include "core/selector/candidates/approach_goal_candidate.hpp"
+#include "core/selector/candidates/robot_context.hpp"
 #include "core/types/frontier_types.hpp"
 
 namespace frontier_explorer

@@ -1,4 +1,4 @@
-#include "core/selector/score_components/distance_score.hpp"
+#include "core/selector/scoring/components/distance_score.hpp"
 
 #include <algorithm>
 

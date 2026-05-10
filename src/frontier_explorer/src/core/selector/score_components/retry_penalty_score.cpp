@@ -1,4 +1,4 @@
-#include "core/selector/score_components/retry_penalty_score.hpp"
+#include "core/selector/scoring/components/retry_penalty_score.hpp"
 
 #include <algorithm>
 
