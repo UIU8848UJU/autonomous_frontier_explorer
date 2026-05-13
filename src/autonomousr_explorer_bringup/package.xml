@@ -12,7 +12,7 @@
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>task_manager</exec_depend>
-  <exec_depend>frontier_explorer</exec_depend>
+  <exec_depend>frontier_explorer_nodes</exec_depend>
   <exec_depend>map_manager</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
   <exec_depend>turtlebot3_gazebo</exec_depend>

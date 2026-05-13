@@ -28,7 +28,7 @@ def generate_launch_description():
 
     frontier_params = os.path.join(bringup_pkg, "config", "frontier_explorer.yaml")
     frontier_node = Node(
-        package="frontier_explorer",
+        package="frontier_explorer_nodes",
         executable="frontier_explorer_node",
         name="frontier_explorer_node",
         output="screen",
@@ -36,7 +36,7 @@ def generate_launch_description():
     )
 
     exploration_bt_orchestrator_node = Node(
-        package="frontier_explorer",
+        package="frontier_explorer_nodes",
         executable="exploration_bt_orchestrator_node",
         name="exploration_bt_orchestrator_node",
         output="screen",
@@ -44,7 +44,7 @@ def generate_launch_description():
     )
 
     navigation_node = Node(
-        package="frontier_explorer",
+        package="frontier_explorer_nodes",
         executable="navigation_node",
         name="navigation_node",
         output="screen",

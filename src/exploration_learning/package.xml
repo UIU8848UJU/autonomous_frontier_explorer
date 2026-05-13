@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>exploration_learning</name>
+  <version>0.0.1</version>
+  <description>Learning data collection, reward calculation, and dataset writing scaffolding for exploration.</description>
+
+  <maintainer email="819119802@qq.com">xxx</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>rclcpp</depend>
+  <depend>robot_interfaces</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
