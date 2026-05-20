@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <functional>
 #include <future>
+#include <iomanip>
+#include <sstream>
 #include <thread>
 
 #include "nav2_costmap_2d/cost_values.hpp"
@@ -146,6 +148,9 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
             std::placeholders::_2),
         rmw_qos_profile_services_default,
         navigation_callback_group_);
+    navigation_debug_pub_ = create_publisher<std_msgs::msg::String>(
+        "/navigation/navigation_result_debug_json",
+        rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
     if ((enable_footprint_collision_check_ || enable_path_safety_check_) &&
         !footprint_costmap_topic_.empty())
     {
@@ -261,6 +266,7 @@ void NavigationNode::execute_navigation(
     const std::shared_ptr<NavigateGoalHandle> goal_handle)
 {
     auto result = std::make_shared<NavigateToPose::Result>();
+    const auto requested_goal = goal_handle->get_goal()->pose;
     const auto finish_inactive = [this]() {
         std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
         active_nav2_goal_.reset();
@@ -272,6 +278,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultNav2Unavailable;
             result->message = "Nav2 NavigateToPose action server unavailable";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             if (rclcpp::ok() && goal_handle->is_active()) {
                 goal_handle->abort(result);
             }
@@ -282,6 +296,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultCanceled;
             result->message = "Navigation stopped because NavigationNode is shutting down";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             if (rclcpp::ok() && goal_handle->is_active()) {
                 goal_handle->abort(result);
             }
@@ -316,6 +338,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultNav2Unavailable;
             result->message = "Nav2 NavigateToPose goal response timeout";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             if (rclcpp::ok() && goal_handle->is_active()) {
                 goal_handle->abort(result);
             }
@@ -326,6 +356,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultCanceled;
             result->message = "Navigation stopped because NavigationNode is shutting down";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             if (rclcpp::ok() && goal_handle->is_active()) {
                 goal_handle->abort(result);
             }
@@ -338,6 +376,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultRejected;
             result->message = "Nav2 NavigateToPose goal rejected";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             if (rclcpp::ok() && goal_handle->is_active()) {
                 goal_handle->abort(result);
             }
@@ -357,6 +403,14 @@ void NavigationNode::execute_navigation(
                 result->success = false;
                 result->result_code = kResultCanceled;
                 result->message = "Navigation canceled";
+                publish_navigation_debug(
+                    "navigation_result",
+                    result->success,
+                    false,
+                    result->result_code,
+                    result->message,
+                    requested_goal,
+                    0.0);
                 goal_handle->canceled(result);
                 std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
                 active_nav2_goal_.reset();
@@ -375,6 +429,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultCanceled;
             result->message = "Navigation stopped because NavigationNode is shutting down";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             if (rclcpp::ok() && goal_handle->is_active()) {
                 goal_handle->abort(result);
             }
@@ -393,6 +455,14 @@ void NavigationNode::execute_navigation(
             result->success = true;
             result->result_code = kResultSucceeded;
             result->message = "Navigation succeeded";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                true,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             goal_handle->succeed(result);
             return;
         }
@@ -400,6 +470,14 @@ void NavigationNode::execute_navigation(
             result->success = false;
             result->result_code = kResultCanceled;
             result->message = "Navigation canceled by Nav2";
+            publish_navigation_debug(
+                "navigation_result",
+                result->success,
+                false,
+                result->result_code,
+                result->message,
+                requested_goal,
+                0.0);
             goal_handle->canceled(result);
             return;
         }
@@ -407,11 +485,27 @@ void NavigationNode::execute_navigation(
         result->success = false;
         result->result_code = kResultAborted;
         result->message = "Navigation aborted by Nav2";
+        publish_navigation_debug(
+            "navigation_result",
+            result->success,
+            false,
+            result->result_code,
+            result->message,
+            requested_goal,
+            0.0);
         goal_handle->abort(result);
     } catch (const std::exception & ex) {
         result->success = false;
         result->result_code = kResultException;
         result->message = ex.what();
+        publish_navigation_debug(
+            "navigation_result",
+            result->success,
+            false,
+            result->result_code,
+            result->message,
+            requested_goal,
+            0.0);
         if (goal_handle->is_active()) {
             goal_handle->abort(result);
         }
@@ -543,6 +637,14 @@ void NavigationNode::handle_check_goal_feasibility(
         response->result_code = response->recoverable ?
             kResultNav2Unavailable : kResultFootprintCollision;
         response->message = footprint_reason;
+        publish_navigation_debug(
+            "feasibility_check",
+            response->success,
+            response->feasible,
+            response->result_code,
+            response->message,
+            request->goal,
+            response->path_length_m);
         return;
     }
 
@@ -578,6 +680,14 @@ void NavigationNode::handle_check_goal_feasibility(
             response->result_code = response->recoverable ?
                 kResultNav2Unavailable : kResultPathUnsafe;
             response->message = path_reason;
+            publish_navigation_debug(
+                "feasibility_check",
+                response->success,
+                response->feasible,
+                response->result_code,
+                response->message,
+                request->goal,
+                response->path_length_m);
             RCLCPP_WARN(
                 logger_,
                 "Rejected feasible goal because planned path is unsafe: reason=%s max_cost=%.1f poses=%u",
@@ -590,6 +700,14 @@ void NavigationNode::handle_check_goal_feasibility(
     if (response->feasible) {
         response->message = "feasible";
     }
+    publish_navigation_debug(
+        "feasibility_check",
+        response->success,
+        response->feasible,
+        response->result_code,
+        response->message,
+        request->goal,
+        response->path_length_m);
 }
 
 void NavigationNode::footprint_costmap_callback(
@@ -673,6 +791,68 @@ bool NavigationNode::is_path_costmap_safe(
 
     reason = "path_safe";
     return true;
+}
+
+std::string NavigationNode::escape_json_string(const std::string & value) const
+{
+    std::ostringstream escaped;
+    for (const char ch : value) {
+        switch (ch) {
+            case '\\': escaped << "\\\\"; break;
+            case '"': escaped << "\\\""; break;
+            case '\b': escaped << "\\b"; break;
+            case '\f': escaped << "\\f"; break;
+            case '\n': escaped << "\\n"; break;
+            case '\r': escaped << "\\r"; break;
+            case '\t': escaped << "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(ch) < 0x20U) {
+                    escaped << "\\u"
+                            << std::hex << std::setw(4) << std::setfill('0')
+                            << static_cast<int>(static_cast<unsigned char>(ch))
+                            << std::dec << std::setfill(' ');
+                } else {
+                    escaped << ch;
+                }
+                break;
+        }
+    }
+    return escaped.str();
+}
+
+void NavigationNode::publish_navigation_debug(
+    const std::string & event,
+    bool success,
+    bool accepted_or_feasible,
+    uint16_t result_code,
+    const std::string & message,
+    const geometry_msgs::msg::PoseStamped & goal,
+    double path_length_m) const
+{
+    if (!navigation_debug_pub_) {
+        return;
+    }
+
+    std::ostringstream json;
+    json << std::fixed << std::setprecision(6)
+         << "{"
+         << "\"event\":\"" << escape_json_string(event) << "\","
+         << "\"success\":" << (success ? "true" : "false") << ","
+         << "\"accepted_or_feasible\":" << (accepted_or_feasible ? "true" : "false") << ","
+         << "\"result_code\":" << result_code << ","
+         << "\"message\":\"" << escape_json_string(message) << "\","
+         << "\"goal\":{"
+         << "\"frame_id\":\"" << escape_json_string(goal.header.frame_id) << "\","
+         << "\"x\":" << goal.pose.position.x << ","
+         << "\"y\":" << goal.pose.position.y << ","
+         << "\"z\":" << goal.pose.position.z
+         << "},"
+         << "\"path_length_m\":" << path_length_m
+         << "}";
+
+    std_msgs::msg::String msg;
+    msg.data = json.str();
+    navigation_debug_pub_->publish(msg);
 }
 
 }  // namespace frontier_explorer

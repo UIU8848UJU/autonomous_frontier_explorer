@@ -18,6 +18,7 @@
 #include "robot_interfaces/action/navigate_to_pose.hpp"
 #include "robot_interfaces/srv/check_goal_feasibility.hpp"
 #include "robot_interfaces/srv/check_pose_reachability.hpp"
+#include "std_msgs/msg/string.hpp"
 
 namespace frontier_explorer
 {
@@ -110,6 +111,28 @@ private:
         std::string & reason,
         double & max_path_cost) const;
 
+    /// @brief: 发布导航结果调试 JSON，供 exploration_learning 采集
+    /// @param event 事件类型，例如 feasibility_check 或 navigation_result
+    /// @param success 请求是否成功
+    /// @param accepted_or_feasible goal 是否被接受或可执行
+    /// @param result_code 结果码
+    /// @param message 结果描述
+    /// @param goal 目标位姿
+    /// @param path_length_m 路径长度，未知时可为 0
+    void publish_navigation_debug(
+        const std::string & event,
+        bool success,
+        bool accepted_or_feasible,
+        uint16_t result_code,
+        const std::string & message,
+        const geometry_msgs::msg::PoseStamped & goal,
+        double path_length_m) const;
+
+    /// @brief: 转义 JSON 字符串内容
+    /// @param value 待转义字符串
+    /// @return 不包含外层引号的 JSON 安全字符串
+    std::string escape_json_string(const std::string & value) const;
+
 private:
     rclcpp::Logger logger_;
     CostmapAdapter footprint_costmap_;
@@ -144,6 +167,7 @@ private:
     rclcpp::Service<robot_interfaces::srv::CheckPoseReachability>::SharedPtr reachability_srv_;
     rclcpp::Service<robot_interfaces::srv::CheckGoalFeasibility>::SharedPtr feasibility_srv_;
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr footprint_costmap_sub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr navigation_debug_pub_;
 };
 
 }  // namespace frontier_explorer

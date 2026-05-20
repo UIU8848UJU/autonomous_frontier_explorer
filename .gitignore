@@ -4,3 +4,4 @@ install/
 rmlog.sh
 TODO
 .cache/
+datasets/

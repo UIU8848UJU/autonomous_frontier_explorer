@@ -18,6 +18,7 @@ find_package(nav2_msgs REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -36,6 +37,7 @@ set(frontier_explorer_nodes_DEPS
   nav2_costmap_2d
   geometry_msgs
   visualization_msgs
+  std_msgs
   std_srvs
   robot_interfaces
   tf2_geometry_msgs

@@ -16,6 +16,7 @@
 #include "robot_interfaces/srv/get_frontier_candidates.hpp"
 #include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
@@ -64,6 +65,19 @@ private:
     /// @brief: 发布 frontier 可视化 marker
     /// @param visualization provider 返回的可视化快照
     void publish_markers(const FrontierGoalVisualization & visualization);
+
+    /// @brief: 发布 frontier 目标决策调试 JSON，供 exploration_learning 采集
+    /// @param result 单目标决策结果
+    void publish_decision_debug(const FrontierGoalResult & result);
+
+    /// @brief: 发布 frontier 候选列表决策调试 JSON，供 exploration_learning 采集
+    /// @param result 候选列表决策结果
+    void publish_decision_debug(const FrontierCandidatesResult & result);
+
+    /// @brief: 转义 JSON 字符串内容
+    /// @param value 待转义字符串
+    /// @return 不包含外层引号的 JSON 安全字符串
+    std::string escape_json_string(const std::string & value) const;
 
     /// @brief: 发布能力节点状态
     void publish_state();
@@ -163,6 +177,7 @@ private:
     rclcpp::Service<robot_interfaces::srv::GetExplorationState>::SharedPtr get_exploration_state_srv_;
     rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr state_pub_;
     rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr legacy_state_pub_;
+    rclcpp::Publisher<std_msgs::msg::String>::SharedPtr decision_debug_pub_;
 };
 
 }  // namespace frontier_explorer

@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <iomanip>
+#include <sstream>
 
 #include "frontier_explorer_nodes/nodes/nav2_planner_reachability_checker.hpp"
 #include "tf2/exceptions.h"
@@ -279,6 +281,9 @@ void FrontierExplorerNode::create_interfaces()
         "/frontier_explorer/state", state_qos);
     legacy_state_pub_ = this->create_publisher<robot_interfaces::msg::ExplorationState>(
         "/exploration_state", state_qos);
+    decision_debug_pub_ = this->create_publisher<std_msgs::msg::String>(
+        "/frontier_explorer/decision_debug_json",
+        rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
 
     start_srv_ = this->create_service<std_srvs::srv::Trigger>("/start_exploration",
         std::bind(&FrontierExplorerNode::handle_start, this,
@@ -489,6 +494,113 @@ void FrontierExplorerNode::publish_markers(const FrontierGoalVisualization & vis
     marker_publisher_->publishBlacklist(visualization.blacklisted_goals, costmap);
 }
 
+std::string FrontierExplorerNode::escape_json_string(const std::string & value) const
+{
+    std::ostringstream escaped;
+    for (const char ch : value) {
+        switch (ch) {
+            case '\\': escaped << "\\\\"; break;
+            case '"': escaped << "\\\""; break;
+            case '\b': escaped << "\\b"; break;
+            case '\f': escaped << "\\f"; break;
+            case '\n': escaped << "\\n"; break;
+            case '\r': escaped << "\\r"; break;
+            case '\t': escaped << "\\t"; break;
+            default:
+                if (static_cast<unsigned char>(ch) < 0x20U) {
+                    escaped << "\\u"
+                            << std::hex << std::setw(4) << std::setfill('0')
+                            << static_cast<int>(static_cast<unsigned char>(ch))
+                            << std::dec << std::setfill(' ');
+                } else {
+                    escaped << ch;
+                }
+                break;
+        }
+    }
+    return escaped.str();
+}
+
+void FrontierExplorerNode::publish_decision_debug(const FrontierGoalResult & result)
+{
+    if (!decision_debug_pub_) {
+        return;
+    }
+
+    std::ostringstream json;
+    json << std::fixed << std::setprecision(6)
+         << "{"
+         << "\"event\":\"next_frontier_goal\","
+         << "\"success\":" << (result.success ? "true" : "false") << ","
+         << "\"reason_code\":" << result.reason_code << ","
+         << "\"reason_text\":\"" << escape_json_string(result.reason_text) << "\","
+         << "\"raw_frontier_count\":" << result.raw_frontier_count << ","
+         << "\"candidate_count\":" << result.candidate_count << ","
+         << "\"blacklist_count\":" << result.blacklist_count << ","
+         << "\"exploration_complete\":" << (result.exploration_complete ? "true" : "false")
+         << ",\"selected\":";
+    if (result.success) {
+        json << "{"
+             << "\"x\":" << result.goal.pose.position.x << ","
+             << "\"y\":" << result.goal.pose.position.y << ","
+             << "\"score\":" << result.score << ","
+             << "\"distance_m\":" << result.distance_m << ","
+             << "\"clearance_m\":" << result.clearance_m
+             << "}";
+    } else {
+        json << "null";
+    }
+    json << "}";
+
+    std_msgs::msg::String msg;
+    msg.data = json.str();
+    decision_debug_pub_->publish(msg);
+}
+
+void FrontierExplorerNode::publish_decision_debug(const FrontierCandidatesResult & result)
+{
+    if (!decision_debug_pub_) {
+        return;
+    }
+
+    std::ostringstream json;
+    json << std::fixed << std::setprecision(6)
+         << "{"
+         << "\"event\":\"frontier_candidates\","
+         << "\"success\":" << (result.success ? "true" : "false") << ","
+         << "\"reason_code\":" << result.reason_code << ","
+         << "\"reason_text\":\"" << escape_json_string(result.reason_text) << "\","
+         << "\"raw_frontier_count\":" << result.raw_frontier_count << ","
+         << "\"candidate_count\":" << result.candidate_count << ","
+         << "\"blacklist_count\":" << result.blacklist_count << ","
+         << "\"exploration_complete\":" << (result.exploration_complete ? "true" : "false")
+         << ",\"candidates\":[";
+    for (std::size_t index = 0; index < result.candidates.size(); ++index) {
+        const auto & candidate = result.candidates[index];
+        if (index > 0U) {
+            json << ",";
+        }
+        json << "{"
+             << "\"candidate_id\":" << index << ","
+             << "\"x\":" << candidate.goal.pose.position.x << ","
+             << "\"y\":" << candidate.goal.pose.position.y << ","
+             << "\"score\":" << candidate.score << ","
+             << "\"distance_m\":" << candidate.distance_m << ","
+             << "\"clearance_m\":" << candidate.clearance_m << ","
+             << "\"unknown_ratio\":" << candidate.unknown_ratio << ","
+             << "\"cluster_size\":" << candidate.cluster_size << ","
+             << "\"retry_count\":" << candidate.retry_count << ","
+             << "\"reachable\":" << (candidate.reachable ? "true" : "false") << ","
+             << "\"path_length_m\":" << candidate.path_length_m
+             << "}";
+    }
+    json << "]}";
+
+    std_msgs::msg::String msg;
+    msg.data = json.str();
+    decision_debug_pub_->publish(msg);
+}
+
 void FrontierExplorerNode::set_state(ExplorationState new_state, const std::string & detail)
 {
     state_.store(new_state);
@@ -592,6 +704,7 @@ void FrontierExplorerNode::handle_get_next_frontier_goal(
 {
     update_robot_pose_from_tf();
     const auto result = goal_provider_.compute_next_frontier_goal(this->now());
+    publish_decision_debug(result);
     response->success = result.success;
     response->goal = result.goal;
     response->reason_code = result.reason_code;
@@ -624,6 +737,7 @@ void FrontierExplorerNode::handle_get_frontier_candidates(
     const auto max_candidates = request ?
         static_cast<std::size_t>(request->max_candidates) : 0U;
     const auto result = goal_provider_.compute_frontier_candidates(this->now(), max_candidates);
+    publish_decision_debug(result);
 
     response->success = result.success;
     response->reason_code = result.reason_code;

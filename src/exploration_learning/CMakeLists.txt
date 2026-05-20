@@ -11,17 +11,25 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(robot_interfaces REQUIRED)
 
 set(exploration_learning_DEPS
   rclcpp
+  std_msgs
+  nav_msgs
+  geometry_msgs
+  tf2_ros
   robot_interfaces
 )
 
 add_library(${PROJECT_NAME}
-  src/episode_recorder.cpp
-  src/reward_calculator.cpp
-  src/dataset_writer.cpp
+  src/data_collection/episode_recorder.cpp
+  src/reward/reward_calculator.cpp
+  src/dataset/dataset_writer.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -34,8 +42,8 @@ ament_target_dependencies(${PROJECT_NAME}
 )
 
 add_executable(rl_data_collector_node
-  src/rl_data_collector_main.cpp
-  src/rl_data_collector_node.cpp
+  src/data_collection/rl_data_collector_main.cpp
+  src/data_collection/rl_data_collector_node.cpp
 )
 
 target_link_libraries(rl_data_collector_node
@@ -46,6 +54,19 @@ ament_target_dependencies(rl_data_collector_node
   ${exploration_learning_DEPS}
 )
 
+add_executable(dataset_recorder_node
+  src/data_collection/dataset_recorder_node.cpp
+)
+
+target_include_directories(dataset_recorder_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(dataset_recorder_node
+  ${exploration_learning_DEPS}
+)
+
 install(TARGETS ${PROJECT_NAME}
   EXPORT export_${PROJECT_NAME}
   ARCHIVE DESTINATION lib
@@ -53,7 +74,9 @@ install(TARGETS ${PROJECT_NAME}
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS rl_data_collector_node
+install(TARGETS
+  rl_data_collector_node
+  dataset_recorder_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -61,7 +84,7 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-install(DIRECTORY config launch
+install(DIRECTORY config launch doc
   DESTINATION share/${PROJECT_NAME}
 )
 
