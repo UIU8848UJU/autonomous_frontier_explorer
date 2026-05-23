@@ -30,9 +30,9 @@ set(exploration_learning_DEPS
 add_library(${PROJECT_NAME}
   src/data_collection/episode_recorder.cpp
   src/reward/reward_calculator.cpp
-  src/dataset/dataset_writer.cpp
   src/collector/json_utils.cpp
   src/collector/event_buffer.cpp
+  src/collector/data_record_plugin_factory.cpp
   src/collector/dataset_writer.cpp
   src/plugins/frontier_decision_plugin.cpp
 )
@@ -43,19 +43,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 ament_target_dependencies(${PROJECT_NAME}
-  ${exploration_learning_DEPS}
-)
-
-add_executable(rl_data_collector_node
-  src/data_collection/rl_data_collector_main.cpp
-  src/data_collection/rl_data_collector_node.cpp
-)
-
-target_link_libraries(rl_data_collector_node
-  ${PROJECT_NAME}
-)
-
-ament_target_dependencies(rl_data_collector_node
   ${exploration_learning_DEPS}
 )
 
@@ -80,7 +67,6 @@ install(TARGETS ${PROJECT_NAME}
 )
 
 install(TARGETS
-  rl_data_collector_node
   dataset_recorder_node
   DESTINATION lib/${PROJECT_NAME}
 )

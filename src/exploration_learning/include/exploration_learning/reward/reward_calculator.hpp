@@ -6,7 +6,7 @@ namespace exploration_learning
 /// @brief 单个探索 transition 的最小 reward 特征集合。
 ///
 /// 该结构体刻意不依赖 ROS 消息，便于 reward 逻辑单元测试和离线数据工具复用。
-/// ROS 消息到 reward 特征的转换应放在 RlDataCollectorNode 或专门的 adapter 中。
+/// ROS 消息到 reward 特征的转换应放在专门的 adapter 中，避免 reward 逻辑依赖采集节点。
 struct RewardInput
 {
   /// @brief 相对上一个 transition 新增的已探索地图面积，单位平方米。

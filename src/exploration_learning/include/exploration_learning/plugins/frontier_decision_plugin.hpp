@@ -35,6 +35,10 @@ struct FrontierDecisionPluginConfig
 class FrontierDecisionPlugin : public collector::IDataRecordPlugin
 {
 public:
+  /// @brief 返回插件注册名。
+  /// @return 插件注册名。
+  static std::string plugin_name();
+
   /// @brief 构造 frontier decision 插件。
   /// @param config 插件运行配置。
   explicit FrontierDecisionPlugin(const FrontierDecisionPluginConfig & config);

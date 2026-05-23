@@ -9,8 +9,8 @@ namespace exploration_learning
 /// @brief 记录单次探索学习 episode 的生命周期和统计计数。
 ///
 /// EpisodeRecorder 在当前骨架中只保留最小职责：维护 episode 标识和生命周期状态。
-/// 后续接入真实采集后，它应该成为逐步 transition 的聚合点，再将数据交给
-/// DatasetWriter 写入数据集。
+/// 后续接入真实采集后，它可以作为 transition 计数和 episode 生命周期辅助工具；
+/// 数据落盘统一由 collector::DatasetWriter 承担。
 class EpisodeRecorder
 {
 public:

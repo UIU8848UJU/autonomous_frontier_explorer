@@ -2,134 +2,143 @@
 
 ## 1. 模块定位
 
-`exploration_learning` 是探索学习数据管线的预留包，当前版本先完成可编译架构骨架。它不直接参与 `frontier_explorer_nodes` 的在线决策，而是作为后续强化学习、模仿学习或离线评估的数据采集入口。
+`exploration_learning` 是探索学习数据管线包。当前只保留一条正式采集链路：
 
-模块目标：
+```text
+DatasetRecorderNode
+  -> EventBuffer
+  -> DataRecordPluginFactory
+  -> FrontierDecisionPlugin
+  -> DatasetWriter
+```
 
-- 从探索流程中收集状态、动作、导航结果和地图变化。
-- 将一次探索过程切分为 episode 和 transition。
-- 根据探索收益、路径代价和失败事件计算 reward。
-- 将样本写入稳定的数据集目录，供离线训练或分析使用。
+该包不负责训练模型、不负责 Gazebo/Nav2 多进程编排，也不修改在线 frontier 决策逻辑。
 
 ## 2. 当前目录结构
 
 ```text
 exploration_learning/
 ├── include/exploration_learning/
-│   ├── data_collection/
-│   │   ├── episode_recorder.hpp
-│   │   └── rl_data_collector_node.hpp
-│   ├── dataset/
-│   │   └── dataset_writer.hpp
-│   └── reward/
-│       └── reward_calculator.hpp
+│   ├── collector/                 # 采集底座、事件缓存、JSONL writer、plugin factory
+│   ├── plugins/                   # record plugin 实现
+│   ├── schema/                    # 训练 record schema 说明
+│   ├── data_collection/           # episode 轻量生命周期工具
+│   └── reward/                    # reward 计算工具
 ├── src/
-│   ├── dataset_writer.cpp
-│   ├── episode_recorder.cpp
-│   ├── reward_calculator.cpp
-│   ├── rl_data_collector_main.cpp
-│   └── rl_data_collector_node.cpp
+│   ├── collector/
+│   ├── plugins/
+│   ├── data_collection/
+│   ├── reward/
+│   └── dataset_recorder_main.cpp
 ├── config/
-│   └── rl_data_collector.yaml
-└── launch/
-    └── rl_data_collection.launch.py
+│   └── dataset_recorder.yaml
+├── launch/
+│   ├── dataset_recorder.launch.py
+│   └── rl_data_collection.launch.py   # 兼容入口，启动同一个 DatasetRecorderNode
+└── test/
 ```
 
 ## 3. 组件职责
 
-### RlDataCollectorNode
+### DatasetRecorderNode
 
-`RlDataCollectorNode` 是 ROS 2 节点入口，当前负责声明和读取参数，并初始化内部组件。
+负责：
 
-后续建议接入的输入：
+- 从 YAML 加载采集参数。
+- 订阅 `/map`、frontier decision debug JSON、navigation result debug JSON 和 exploration state。
+- 将 ROS 消息转换为统一 `TopicEvent`。
+- 调用 `EventBuffer` 缓存上下文。
+- 调用 `IDataRecordPlugin` 生成训练 record。
+- 通过 `DatasetWriter` 写入 JSONL 和 episode metadata。
 
-- `/frontier_explorer/state`：frontier 能力节点状态。
-- `/exploration_orchestrator/state`：BT 编排状态。
-- `/map`：用于计算 explored area delta。
-- frontier candidate / selected goal 服务结果：用于记录决策输入和动作。
-- navigation result：用于记录 reachability、feasibility、goal reached、failure reason。
+不负责：
 
-### EpisodeRecorder
+- 训练模型。
+- 批量启动仿真。
+- reward 归因。
+- 修改 frontier 在线策略。
 
-`EpisodeRecorder` 负责 episode 生命周期和 transition 计数。当前字段包括：
+### EventBuffer
 
-- `active_`：是否正在记录 episode。
-- `episode_id_`：当前 episode 标识。
-- `transition_count_`：当前 episode 已记录 transition 数量。
+按时间窗口缓存最近 topic 事件。插件可以用它查询最近 map summary、navigation result 和 exploration state。
 
-后续可扩展为：
+### DataRecordPluginFactory
 
-- 记录 episode 起止时间。
-- 记录初始地图、最终地图和总探索面积。
-- 缓存 transition，批量交给 `DatasetWriter`。
+集中负责 plugin 实例化。节点不再用硬编码字符串 `if/else` 创建插件。当前已注册：
 
-### RewardCalculator
+- `frontier_decision`
 
-`RewardCalculator` 将 `RewardInput` 转换为标量 reward。当前 reward 形式为：
+### FrontierDecisionPlugin
 
-```text
-reward = explored_area_delta - 0.05 * path_length_delta
-```
+当前 MVP 在 frontier decision 事件到达时生成一条 `frontier_decision` record，并携带最近上下文：
 
-并额外处理：
+- `frontier_context`
+- `map_context`
+- `outcome_context`
+- `exploration_state_context`
 
-- `reached_goal == true` 时增加 goal bonus。
-- `collision == true` 时施加较大惩罚。
-
-该类保持无状态，便于单元测试和离线复用。
+上游仍是 debug JSON 字符串，因此第一版保留 raw JSON。后续可在该插件内部替换为正式 Candidate msg 或强 schema 解析。
 
 ### DatasetWriter
 
-`DatasetWriter` 当前只保存 dataset 输出路径。后续应负责：
+唯一保留的 writer 是 `exploration_learning::collector::DatasetWriter`。它只负责：
 
 - 创建 episode 目录。
-- 写入 transition 行数据。
-- 写入 metadata，例如地图名、参数版本、机器人类型、采集时间。
-- 支持 JSONL、CSV、Parquet 或 rosbag2 派生格式。
+- 写 `episode_metadata.json`。
+- append 写 `decision_records.jsonl`。
 
-## 4. 推荐数据流
+旧的占位 `exploration_learning::DatasetWriter` 已移除，避免同名不同职责。
+
+## 4. 输出格式
+
+输出路径：
 
 ```text
-ROS topics/services/actions
-        |
-        v
-RlDataCollectorNode
-        |
-        +--> EpisodeRecorder: 管理 episode 与 transition 边界
-        |
-        +--> RewardCalculator: 根据地图增量和导航结果计算 reward
-        |
-        +--> DatasetWriter: 写入样本与元数据
+output_dir / episode_id / episode_metadata.json
+output_dir / episode_id / decision_records.jsonl
 ```
 
-一次 transition 推荐包含：
+`decision_records.jsonl` 每一行是独立 JSON object，当前字段包括：
 
-- observation：机器人位姿、局部地图统计、frontier candidate 特征、黑名单状态。
-- action：选中的 frontier goal 或候选编号。
-- reward：由 `RewardCalculator` 输出。
-- next_observation：动作执行后的新状态。
-- done：episode 是否结束。
-- info：失败原因、BT 状态、Nav2 result code、参数快照。
+- `record_type`
+- `schema_version`
+- `episode_id`
+- `decision_id`
+- `timestamp_sec`
+- `selected_candidate_id`
+- `candidates`
+- `frontier_context`
+- `map_context`
+- `outcome_context`
+- `exploration_state_context`
+- `extra`
 
 ## 5. 参数
 
-当前参数文件为 `config/rl_data_collector.yaml`：
+参数文件：
 
-```yaml
-rl_data_collector_node:
-  ros__parameters:
-    dataset_path: exploration_dataset
+```text
+config/dataset_recorder.yaml
 ```
 
-`dataset_path` 表示未来样本输出目录或数据集名称。后续可增加：
+关键参数：
 
-- `episode_timeout_sec`
-- `record_map_snapshots`
-- `record_frontier_candidates`
-- `dataset_format`
-- `flush_every_n_transitions`
+- `output_dir`
+- `episode_id`
+- `episode_prefix`
+- `writer_flush_every_n`
+- `event_buffer_duration_sec`
+- `plugin_name`
+- `map_topic`
+- `decision_topic`
+- `navigation_result_topic`
+- `exploration_state_topic`
+- `record_map`
+- `record_decision`
+- `record_navigation_result`
+- `record_exploration_state`
 
-## 6. 构建与运行
+## 6. 构建、运行和测试
 
 构建：
 
@@ -140,13 +149,26 @@ colcon build --symlink-install --packages-select exploration_learning
 运行：
 
 ```bash
+source install/setup.bash
+ros2 launch exploration_learning dataset_recorder.launch.py
+```
+
+兼容入口：
+
+```bash
 ros2 launch exploration_learning rl_data_collection.launch.py
+```
+
+测试：
+
+```bash
+colcon test --packages-select exploration_learning --event-handlers console_direct+
+colcon test-result --verbose
 ```
 
 ## 7. 后续开发建议
 
-- 先定义 transition schema，再实现 `DatasetWriter`，避免采集格式频繁变化。
-- 将 ROS message 到学习特征的转换放在 node 或 adapter 中，保持 `RewardCalculator` 可测试。
-- 将 reward 权重参数化，不要把训练实验参数硬编码在算法类中。
-- 为 `RewardCalculator` 和 dataset schema 增加单元测试。
-- 在 full system launch 中以可选开关启动 `rl_data_collector_node`，避免默认运行影响探索链路。
+- 接入正式 Candidate / NavigationResult msg，替换 debug JSON。
+- 在 `FrontierDecisionPlugin` 内解析候选列表，填充顶层 `candidates`。
+- 加入 map gain / reward 归因，但保持与 recorder 解耦。
+- 需要新增 record 类型时，只新增 plugin 并在 factory 注册，不扩展节点分支逻辑。

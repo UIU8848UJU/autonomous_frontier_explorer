@@ -13,9 +13,14 @@ FrontierDecisionPlugin::FrontierDecisionPlugin(const FrontierDecisionPluginConfi
 {
 }
 
-std::string FrontierDecisionPlugin::name() const
+std::string FrontierDecisionPlugin::plugin_name()
 {
   return "frontier_decision";
+}
+
+std::string FrontierDecisionPlugin::name() const
+{
+  return plugin_name();
 }
 
 std::vector<std::string> FrontierDecisionPlugin::handle_event(

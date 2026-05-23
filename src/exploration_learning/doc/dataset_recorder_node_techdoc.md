@@ -13,6 +13,7 @@
 ```text
 DatasetRecorderNode
   -> EventBuffer
+  -> DataRecordPluginFactory
   -> IDataRecordPlugin
   -> FrontierDecisionPlugin
   -> DatasetWriter
@@ -22,6 +23,7 @@ DatasetRecorderNode
 
 - `DatasetRecorderNode`：加载参数、订阅 topic、构建 TopicEvent、调度插件。
 - `EventBuffer`：按时间窗口缓存最近事件，给插件提供 map / navigation / state 上下文。
+- `DataRecordPluginFactory`：按注册表创建插件，节点不直接用字符串分支实例化插件。
 - `FrontierDecisionPlugin`：在 frontier decision 事件到达时生成 decision record。
 - `DatasetWriter`：创建 episode 目录、写入 `episode_metadata.json` 和 append-only JSONL。
 

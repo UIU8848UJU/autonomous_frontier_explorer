@@ -5,8 +5,8 @@
 #include <memory>
 #include <sstream>
 
+#include "exploration_learning/collector/data_record_plugin_factory.hpp"
 #include "exploration_learning/collector/json_utils.hpp"
-#include "exploration_learning/plugins/frontier_decision_plugin.hpp"
 
 namespace exploration_learning::collector
 {
@@ -41,7 +41,7 @@ void DatasetRecorderNode::declare_params()
   declare_parameter<std::string>("episode_prefix", "frontier_episode");
   declare_parameter<int>("writer_flush_every_n", 1);
   declare_parameter<double>("event_buffer_duration_sec", 10.0);
-  declare_parameter<std::string>("plugin_name", "frontier_decision");
+  declare_parameter<std::string>("plugin_name", plugins::FrontierDecisionPlugin::plugin_name());
 
   declare_parameter<std::string>("map_topic", "/map");
   declare_parameter<std::string>(
@@ -116,19 +116,27 @@ void DatasetRecorderNode::initialize_pipeline()
            << "}";
   writer_.write_metadata(metadata.str());
 
-  if (plugin_name_ == "frontier_decision") {
-    plugins::FrontierDecisionPluginConfig config;
-    config.episode_id = episode_id_;
-    config.decision_topic = decision_topic_;
-    config.navigation_result_topic = navigation_result_topic_;
-    config.map_summary_topic = kMapSummaryTopic;
-    config.exploration_state_topic = exploration_state_topic_;
-    plugin_ = std::make_unique<plugins::FrontierDecisionPlugin>(config);
-  } else {
+  const DataRecordPluginFactoryConfig plugin_config{
+    episode_id_,
+    decision_topic_,
+    navigation_result_topic_,
+    kMapSummaryTopic,
+    exploration_state_topic_};
+  plugin_ = create_data_record_plugin(plugin_name_, plugin_config);
+  if (!plugin_) {
+    const auto supported_plugins = registered_data_record_plugins();
+    std::ostringstream supported_stream;
+    for (std::size_t index = 0; index < supported_plugins.size(); ++index) {
+      if (index > 0U) {
+        supported_stream << ",";
+      }
+      supported_stream << supported_plugins[index];
+    }
     RCLCPP_WARN(
       logger_,
-      "Unknown dataset recorder plugin '%s'; no records will be emitted.",
-      plugin_name_.c_str());
+      "Unknown dataset recorder plugin '%s'; supported=[%s]. No records will be emitted.",
+      plugin_name_.c_str(),
+      supported_stream.str().c_str());
   }
 
   RCLCPP_INFO(
