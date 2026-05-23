@@ -68,4 +68,18 @@ ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 ament_export_dependencies(${frontier_explorer_core_DEPS})
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_frontier_algorithms
+    test/test_frontier_algorithms.cpp
+  )
+  target_link_libraries(test_frontier_algorithms
+    ${PROJECT_NAME}
+  )
+  ament_target_dependencies(test_frontier_algorithms
+    ${frontier_explorer_core_DEPS}
+  )
+endif()
+
 ament_package()

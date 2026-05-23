@@ -8,6 +8,23 @@
 
 第一版目标是建立稳定的数据采集入口，不引入 ML 模型、不实现训练逻辑，也不修改 frontier 决策链路。
 
+当前实现采用通用采集底座 + record plugin：
+
+```text
+DatasetRecorderNode
+  -> EventBuffer
+  -> IDataRecordPlugin
+  -> FrontierDecisionPlugin
+  -> DatasetWriter
+```
+
+各模块职责：
+
+- `DatasetRecorderNode`：加载参数、订阅 topic、构建 TopicEvent、调度插件。
+- `EventBuffer`：按时间窗口缓存最近事件，给插件提供 map / navigation / state 上下文。
+- `FrontierDecisionPlugin`：在 frontier decision 事件到达时生成 decision record。
+- `DatasetWriter`：创建 episode 目录、写入 `episode_metadata.json` 和 append-only JSONL。
+
 ## 2. 数据流
 
 当前数据流如下：
@@ -35,15 +52,31 @@
 输出路径：
 
 ```text
-dataset_output_dir / episode_id / records.jsonl
+output_dir / episode_id / decision_records.jsonl
+output_dir / episode_id / episode_metadata.json
 ```
 
-每一行是一个独立 JSON object，基础字段包括：
+`decision_records.jsonl` 每一行是一个独立 JSON object，基础字段包括：
 
 - `timestamp`：记录时间戳，单位秒。
 - `episode_id`：当前 episode 标识。
 - `record_type`：记录类型。
 - `payload`：不同类型记录的载荷。
+
+当前 `FrontierDecisionPlugin` 输出的 record 字段包括：
+
+- `record_type`
+- `schema_version`
+- `episode_id`
+- `decision_id`
+- `timestamp_sec`
+- `selected_candidate_id`
+- `candidates`
+- `frontier_context`
+- `map_context`
+- `outcome_context`
+- `exploration_state_context`
+- `extra`
 
 `map_summary` 的 payload 包括：
 

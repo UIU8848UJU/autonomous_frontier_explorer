@@ -1,0 +1,18 @@
+dataset_recorder_node:
+  ros__parameters:
+    output_dir: "./datasets"
+    episode_id: ""
+    episode_prefix: "frontier_episode"
+    writer_flush_every_n: 1
+    event_buffer_duration_sec: 10.0
+    plugin_name: "frontier_decision"
+
+    map_topic: "/map"
+    decision_topic: "/frontier_explorer/decision_debug_json"
+    navigation_result_topic: "/navigation/navigation_result_debug_json"
+    exploration_state_topic: "/frontier_explorer/state"
+
+    record_map: true
+    record_decision: true
+    record_navigation_result: true
+    record_exploration_state: true

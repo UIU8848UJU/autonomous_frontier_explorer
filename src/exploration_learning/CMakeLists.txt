@@ -4,6 +4,7 @@ project(exploration_learning)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
@@ -30,6 +31,10 @@ add_library(${PROJECT_NAME}
   src/data_collection/episode_recorder.cpp
   src/reward/reward_calculator.cpp
   src/dataset/dataset_writer.cpp
+  src/collector/json_utils.cpp
+  src/collector/event_buffer.cpp
+  src/collector/dataset_writer.cpp
+  src/plugins/frontier_decision_plugin.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -55,12 +60,12 @@ ament_target_dependencies(rl_data_collector_node
 )
 
 add_executable(dataset_recorder_node
-  src/data_collection/dataset_recorder_node.cpp
+  src/dataset_recorder_main.cpp
+  src/collector/dataset_recorder_node.cpp
 )
 
-target_include_directories(dataset_recorder_node PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
+target_link_libraries(dataset_recorder_node
+  ${PROJECT_NAME}
 )
 
 ament_target_dependencies(dataset_recorder_node
@@ -91,5 +96,29 @@ install(DIRECTORY config launch doc
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
 ament_export_dependencies(${exploration_learning_DEPS})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_event_buffer
+    test/test_event_buffer.cpp
+  )
+  target_link_libraries(test_event_buffer
+    ${PROJECT_NAME}
+  )
+  ament_target_dependencies(test_event_buffer
+    ${exploration_learning_DEPS}
+  )
+
+  ament_add_gtest(test_dataset_writer
+    test/test_dataset_writer.cpp
+  )
+  target_link_libraries(test_dataset_writer
+    ${PROJECT_NAME}
+  )
+  ament_target_dependencies(test_dataset_writer
+    ${exploration_learning_DEPS}
+  )
+endif()
 
 ament_package()
