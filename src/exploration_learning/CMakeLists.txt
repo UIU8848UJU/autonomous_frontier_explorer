@@ -105,6 +105,16 @@ if(BUILD_TESTING)
   ament_target_dependencies(test_dataset_writer
     ${exploration_learning_DEPS}
   )
+
+  ament_add_gtest(test_frontier_decision_plugin
+    test/test_frontier_decision_plugin.cpp
+  )
+  target_link_libraries(test_frontier_decision_plugin
+    ${PROJECT_NAME}
+  )
+  ament_target_dependencies(test_frontier_decision_plugin
+    ${exploration_learning_DEPS}
+  )
 endif()
 
 ament_package()

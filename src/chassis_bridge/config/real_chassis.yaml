@@ -1,0 +1,6 @@
+chassis_bridge_node:
+  ros__parameters:
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    cmd_vel_topic: "/cmd_vel"
+    odom_topic: "/odom"

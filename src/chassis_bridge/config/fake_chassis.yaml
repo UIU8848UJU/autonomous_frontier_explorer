@@ -1,0 +1,10 @@
+fake_chassis_node:
+  ros__parameters:
+    base_frame_id: "base_link"
+    odom_frame_id: "odom"
+    cmd_vel_topic: "/cmd_vel"
+    odom_topic: "/odom"
+    control_frequency_hz: 50.0
+    max_linear_velocity_mps: 0.40
+    max_angular_velocity_radps: 1.50
+    publish_tf: true
