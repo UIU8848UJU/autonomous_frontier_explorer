@@ -39,7 +39,6 @@ NavigationNode
 - `nav_msgs/msg/OccupancyGrid`
 - TF2，查询 `map <- base_link` 机器人位姿
 - `visualization_msgs/msg/MarkerArray`
-- `robot_interfaces/msg/ExplorationState`
 
 ### 接口
 
@@ -48,7 +47,6 @@ NavigationNode
 | `/map` | `nav_msgs/msg/OccupancyGrid` | 订阅 | frontier 检测、unknown 语义和候选基础合法性判断。 |
 | `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | safety costmap 来源，用于 clearance 评分、fallback 候选落脚硬约束和 NavigationNode footprint/path safety 检查。 |
 | `map <- base_link` | TF | 查询 | 获取 map frame 下的机器人位姿，用于转换为地图栅格坐标。 |
-| `/exploration_state` | `robot_interfaces/msg/ExplorationState` | 发布 | 发布 IDLE/RUNNING/STOPPED/COMPLETED/STUCK 等状态。 |
 | `/frontier/raw_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 原始 frontier cluster 点云。 |
 | `/frontier/candidate_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | pruner/scorer 后仍参与评分的候选点。 |
 | `/frontier/scored_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | Top 5 评分候选的简短文本。 |
@@ -259,13 +257,11 @@ Nav2 goal 成功、失败、取消的流程状态由 BT orchestrator 维护；
 参数文件：
 
 - `src/frontier_explorer_nodes/config/frontier_explorer.yaml`
-- `src/autonomousr_explorer_bringup/config/frontier_explorer.yaml`
 
-full system 实际使用的是 bringup 包下的配置。
+full system 通过 launch 加载本包 config 目录下的配置。
 
 | 参数 | 当前默认 | 说明 |
 | --- | --- | --- |
-| `explore_period_sec` | 3.0 | 探索定时器周期。 |
 | `obstacle_search_radius_cells` | 1 | frontier cell 周围障碍检查半径。 |
 | `min_frontier_cluster_size` | 2 | pruner 的最小 cluster size；过小会引入噪声，过大会漏掉末期小边界。 |
 | `min_goal_distance_m` | 0.45 | 目标点离机器人过近时跳过，避免 Nav2 立即判定成功。 |

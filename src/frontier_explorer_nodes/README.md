@@ -20,7 +20,7 @@ TaskManagerNode
 
 核心边界：
 
-- `FrontierExplorerNode`：只提供 frontier 候选/目标生成、失败标记、blacklist 清理、marker 和 state。
+- `FrontierExplorerNode`：只提供 frontier 候选/目标生成、失败标记、blacklist 清理、marker；探索状态由 BT orchestrator 统一发布。
 - `ExplorationBtOrchestratorNode`：唯一探索编排入口，负责按 BT 请求候选、选择可执行目标、导航、失败重选、完成判断。
 - `NavigationNode`：导航能力中间层，负责 footprint 落脚检查、path safety 检查和 Nav2 `NavigateToPose` 桥接。
 - `FrontierGoalProvider`：纯 C++ 能力类，复用 detector / pruner / scorer / selector，不直接发送导航 goal。
@@ -70,7 +70,6 @@ BT 编排节点：
 状态和可视化：
 
 ```text
-/exploration_orchestrator/state
 /exploration_state
 /frontier/raw_markers
 /frontier/candidate_markers

@@ -14,7 +14,6 @@ namespace frontier_explorer
 {
 namespace
 {
-constexpr size_t kStatePublisherDepth = 10;
 }  // namespace
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
@@ -33,19 +32,13 @@ FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
     create_interfaces();
     marker_publisher_ = std::make_unique<FrontierMarkerPublisher>(this, this->get_logger(), "map");
 
-    state_timer_ = this->create_wall_timer(
-        std::chrono::duration<double>(params_.runtime.explore_period_sec),
-        std::bind(&FrontierExplorerNode::state_timer_callback, this));
-
     set_state(ExplorationState::IDLE);
-    publish_state();
 
     RCLCPP_INFO(this->get_logger(), "FrontierExplorerNode capability wrapper started.");
 }
 
 void FrontierExplorerNode::declare_params()
 {
-    this->declare_parameter<double>("explore_period_sec", 3.0);
     this->declare_parameter<int>("obstacle_search_radius_cells", 1);
     this->declare_parameter<int>("min_frontier_cluster_size", 1);
     this->declare_parameter<double>("min_goal_distance_m", 0.45);
@@ -131,8 +124,6 @@ void FrontierExplorerNode::declare_params()
 
 void FrontierExplorerNode::load_params()
 {
-    params_.runtime.explore_period_sec =
-        this->get_parameter("explore_period_sec").as_double();
     params_.runtime.obstacle_search_radius_cells =
         this->get_parameter("obstacle_search_radius_cells").as_int();
     params_.runtime.min_frontier_cluster_size =
@@ -208,8 +199,6 @@ void FrontierExplorerNode::load_params()
 
 void FrontierExplorerNode::apply_params()
 {
-    params_.runtime.explore_period_sec =
-        std::max(0.1, params_.runtime.explore_period_sec);
     params_.runtime.obstacle_search_radius_cells =
         std::max(0, params_.runtime.obstacle_search_radius_cells);
     params_.runtime.min_frontier_cluster_size =
@@ -270,9 +259,6 @@ void FrontierExplorerNode::apply_params()
 
 void FrontierExplorerNode::create_interfaces()
 {
-    const auto state_qos = rclcpp::QoS(rclcpp::KeepLast(kStatePublisherDepth)).reliable();
-    state_pub_ = this->create_publisher<robot_interfaces::msg::ExplorationState>(
-        "/exploration_state", state_qos);
     decision_debug_pub_ = this->create_publisher<std_msgs::msg::String>(
         "/frontier_explorer/decision_debug_json",
         rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
@@ -380,18 +366,6 @@ void FrontierExplorerNode::global_costmap_callback(
             3000,
             "Failed to update global costmap adapter.");
     }
-}
-
-void FrontierExplorerNode::state_timer_callback()
-{
-    const auto current_state = get_state();
-    if (marker_publisher_ &&
-        (current_state == ExplorationState::COMPLETED ||
-        current_state == ExplorationState::STOPPED))
-    {
-        marker_publisher_->clearAll();
-    }
-    publish_state();
 }
 
 bool FrontierExplorerNode::update_robot_pose_from_tf()
@@ -628,30 +602,6 @@ std::string FrontierExplorerNode::state_to_string(ExplorationState state) const
     }
 }
 
-void FrontierExplorerNode::publish_state()
-{
-    if (!state_pub_) {
-        RCLCPP_WARN(this->get_logger(), "state_pub_ is null");
-        return;
-    }
-
-    robot_interfaces::msg::ExplorationState msg;
-    msg.stamp = this->now();
-    const auto current_state = get_state();
-    switch (current_state) {
-        case ExplorationState::IDLE: msg.state = msg.IDLE; break;
-        case ExplorationState::RUNNING: msg.state = msg.RUNNING; break;
-        case ExplorationState::STOPPED: msg.state = msg.STOPPED; break;
-        case ExplorationState::COMPLETED: msg.state = msg.COMPLETED; break;
-        case ExplorationState::STUCK: msg.state = msg.STUCK; break;
-        default: msg.state = msg.IDLE; break;
-    }
-    const auto detail = state_detail();
-    msg.detail = detail.empty() ? state_to_string(current_state) : detail;
-    state_pub_->publish(msg);
-}
-
-
 void FrontierExplorerNode::handle_get_next_frontier_goal(
     const std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Request>,
     std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Response> response)
@@ -680,7 +630,6 @@ void FrontierExplorerNode::handle_get_next_frontier_goal(
         publish_markers(result.visualization);
     }
     set_state(result.state, result.state_detail);
-    publish_state();
 }
 
 void FrontierExplorerNode::handle_get_frontier_candidates(
@@ -738,7 +687,6 @@ void FrontierExplorerNode::handle_get_frontier_candidates(
         publish_markers(result.visualization);
     }
     set_state(result.state, result.state_detail);
-    publish_state();
 }
 
 void FrontierExplorerNode::handle_mark_frontier_failed(
@@ -773,7 +721,6 @@ void FrontierExplorerNode::handle_mark_frontier_failed(
         response->message.c_str());
 
     set_state(result.state, result.state_detail);
-    publish_state();
 }
 
 void FrontierExplorerNode::handle_clear_frontier_blacklist(
@@ -791,7 +738,6 @@ void FrontierExplorerNode::handle_clear_frontier_blacklist(
             goal_provider_.map_costmap());
     }
     set_state(ExplorationState::RUNNING, "BLACKLIST_CLEARED");
-    publish_state();
 }
 
 void FrontierExplorerNode::handle_get_exploration_state(

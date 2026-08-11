@@ -13,8 +13,6 @@ namespace frontier_explorer
 // 节点运行时参数：控制定时器、探测器基础参数和异常判定阈值。
 struct ExplorerRuntimeConfig
 {
-    /// @brief: 探索主循环周期，单位秒
-    double explore_period_sec{3.0};
     /// @brief: frontier cell 与障碍物的最小安全搜索半径，单位 cell
     int obstacle_search_radius_cells{1};
     /// @brief: 最小 frontier cluster 尺寸

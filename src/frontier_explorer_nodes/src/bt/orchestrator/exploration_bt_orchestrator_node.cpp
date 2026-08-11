@@ -107,7 +107,7 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
     load_bt_plugins();
 
     state_pub_ = create_publisher<robot_interfaces::msg::ExplorationState>(
-        "/exploration_orchestrator/state",
+        "/exploration_state",
         rclcpp::QoS(rclcpp::KeepLast(kStatePublisherDepth)).reliable());
 
     start_srv_ = create_service<std_srvs::srv::Trigger>(
@@ -290,6 +290,8 @@ void ExplorationBtOrchestratorNode::publish_state(const std::string & detail)
             msg.state = msg.COMPLETED;
             break;
         case ExplorationBtOrchestratorState::FAILED:
+            msg.state = msg.STUCK;
+            break;
         case ExplorationBtOrchestratorState::CANCELLED:
             msg.state = msg.STOPPED;
             break;

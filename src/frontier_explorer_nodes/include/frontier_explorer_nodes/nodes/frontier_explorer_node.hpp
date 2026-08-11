@@ -54,9 +54,6 @@ private:
     /// @param msg OccupancyGrid costmap 消息
     void global_costmap_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg);
 
-    /// @brief: 周期发布能力节点状态
-    void state_timer_callback();
-
     /// @brief: 通过 TF 查询 map frame 下的机器人位姿并更新 provider
     /// @return: true 表示机器人位姿已成功更新
     bool update_robot_pose_from_tf();
@@ -77,9 +74,6 @@ private:
     /// @param value 待转义字符串
     /// @return 不包含外层引号的 JSON 安全字符串
     std::string escape_json_string(const std::string & value) const;
-
-    /// @brief: 发布能力节点状态
-    void publish_state();
 
     /// @brief: 获取当前状态字符串
     /// @return: 当前状态字符串
@@ -141,7 +135,6 @@ private:
 private:
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr map_sub_;
     rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr global_costmap_sub_;
-    rclcpp::TimerBase::SharedPtr state_timer_;
     std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
@@ -158,7 +151,6 @@ private:
     rclcpp::Service<robot_interfaces::srv::MarkFrontierFailed>::SharedPtr mark_frontier_failed_srv_;
     rclcpp::Service<robot_interfaces::srv::ClearFrontierBlacklist>::SharedPtr clear_frontier_blacklist_srv_;
     rclcpp::Service<robot_interfaces::srv::GetExplorationState>::SharedPtr get_exploration_state_srv_;
-    rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr state_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr decision_debug_pub_;
 };
 

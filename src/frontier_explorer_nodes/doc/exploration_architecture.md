@@ -80,7 +80,6 @@ TaskManagerNode
 - 托管 `FrontierGoalProvider`。
 - 提供 frontier 能力服务。
 - 发布 frontier marker。
-- 统一发布 `/exploration_state`。
 
 `FrontierExplorerNode` 不再包含内部导航循环，不主动发送 Nav2 goal；导航由 BT orchestrator 编排。
 默认 `show_all_candidate_markers: false`，RViz 中只显示最终选中候选球；需要调试完整候选集合时可改为 `true`。
@@ -111,7 +110,7 @@ TaskManagerNode
 - 通过 NavigationNode action 触发导航。
 - 导航失败时调用 `mark_frontier_failed`，但不直接操作 retry / blacklist。
 - 根据 BT 结果决定继续请求 frontier、完成探索或进入失败状态。
-- 发布 `/exploration_orchestrator/state`。
+- 统一发布 `/exploration_state`，是探索状态的唯一来源。
 
 普通 C++ 状态机版 orchestrator 已删除，避免多套编排逻辑并存。
 
@@ -160,8 +159,7 @@ ExplorationBtOrchestratorNode：
 
 ## 状态 topic
 
-- `/exploration_orchestrator/state`: BT 编排流程状态。
-- `/exploration_state`: TaskManager / MapManager / dataset_recorder 消费的探索状态 topic。
+- `/exploration_state`: 由 `exploration_bt_orchestrator_node` 唯一发布的探索状态 topic，TaskManager / MapManager / dataset_recorder 消费。
 
 ## 参数约定
 
