@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <deque>
 #include <memory>
 #include <string>
 
@@ -27,12 +26,6 @@ struct MapManagerConfig
     std::string final_map_topic{"/map_manager/final_map"};
     /// @brief: 是否启用探索完成后的自动保存
     bool enable_auto_save{true};
-    /// @brief: 连续无有效 frontier 的检查次数阈值
-    int completion_no_frontier_rounds{2};
-    /// @brief: unknown ratio 在窗口内允许的最大变化量
-    double completion_unknown_delta_threshold{0.003};
-    /// @brief: unknown ratio 稳定性检查窗口，单位秒
-    double completion_check_window_sec{8.0};
     /// @brief: 完成判定定时器周期，单位秒
     double completion_check_period_sec{1.0};
 };
@@ -97,24 +90,6 @@ private:
     /// @return: unknown cell 占比
     double calculate_unknown_ratio(const nav_msgs::msg::OccupancyGrid & map) const;
 
-    /// @brief: 记录 unknown ratio 采样，用于稳定性判定
-    /// @param stamp 当前节点时间
-    /// @param unknown_ratio 当前 unknown 比例
-    void update_unknown_history(const rclcpp::Time & stamp, double unknown_ratio);
-
-    /// @brief: 判断 unknown ratio 是否在配置窗口内足够稳定
-    /// @return: true 表示地图 unknown 比例已经稳定
-    bool is_unknown_ratio_stable() const;
-
-    /// @brief: 判断探索状态是否表示没有可用 frontier
-    /// @param msg ExplorationState 状态消息
-    /// @return: true 表示当前状态可计为一次无 frontier
-    bool is_no_frontier_state(const ExplorationStateMsg & msg) const;
-
-    /// @brief: 判断是否满足探索完成条件
-    /// @return: true 表示可以认为探索完成
-    bool should_mark_completed() const;
-
     /// @brief: 触发地图保存请求
     void trigger_save();
 
@@ -145,8 +120,6 @@ private:
 
     nav_msgs::msg::OccupancyGrid::SharedPtr latest_map_;
     MapStatistics map_stats_;
-    std::deque<std::pair<rclcpp::Time, double>> unknown_history_;
-    int no_frontier_rounds_{0};
     std::uint8_t last_exploration_state_{ExplorationStateMsg::IDLE};
     std::string last_exploration_detail_;
     std::string saved_map_url_;

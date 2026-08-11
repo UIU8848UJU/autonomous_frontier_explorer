@@ -1,8 +1,6 @@
 #include "map_manager_node.hpp"
 
 #include <algorithm>
-#include <cmath>
-#include <limits>
 
 namespace map_manager
 {
@@ -40,15 +38,6 @@ void MapManagerNode::declare_params()
         "final_map_topic",
         config_.final_map_topic);
     this->declare_parameter<bool>("enable_auto_save", config_.enable_auto_save);
-    this->declare_parameter<int>(
-        "completion_no_frontier_rounds",
-        config_.completion_no_frontier_rounds);
-    this->declare_parameter<double>(
-        "completion_unknown_delta_threshold",
-        config_.completion_unknown_delta_threshold);
-    this->declare_parameter<double>(
-        "completion_check_window_sec",
-        config_.completion_check_window_sec);
     this->declare_parameter<double>(
         "completion_check_period_sec",
         config_.completion_check_period_sec);
@@ -85,12 +74,6 @@ void MapManagerNode::load_params()
     config_.final_map_topic =
         this->get_parameter("final_map_topic").as_string();
     config_.enable_auto_save = this->get_parameter("enable_auto_save").as_bool();
-    config_.completion_no_frontier_rounds =
-        static_cast<int>(this->get_parameter("completion_no_frontier_rounds").as_int());
-    config_.completion_unknown_delta_threshold =
-        this->get_parameter("completion_unknown_delta_threshold").as_double();
-    config_.completion_check_window_sec =
-        this->get_parameter("completion_check_window_sec").as_double();
     config_.completion_check_period_sec =
         this->get_parameter("completion_check_period_sec").as_double();
 
@@ -109,12 +92,6 @@ void MapManagerNode::load_params()
 
 void MapManagerNode::apply_params()
 {
-    config_.completion_no_frontier_rounds =
-        std::max(1, config_.completion_no_frontier_rounds);
-    config_.completion_unknown_delta_threshold =
-        std::clamp(config_.completion_unknown_delta_threshold, 0.0, 1.0);
-    config_.completion_check_window_sec =
-        std::max(1.0, config_.completion_check_window_sec);
     config_.completion_check_period_sec =
         std::max(0.5, config_.completion_check_period_sec);
 
@@ -126,16 +103,12 @@ void MapManagerNode::apply_params()
     RCLCPP_INFO(
         logger_,
         "Map manager params: map_topic=%s, state_topic=%s, auto_save=%s, "
-        "manager_state_topic=%s, final_map_topic=%s, no_frontier_rounds=%d, "
-        "unknown_delta=%.6f, window=%.1fs",
+        "manager_state_topic=%s, final_map_topic=%s",
         config_.map_topic.c_str(),
         config_.exploration_state_topic.c_str(),
         config_.enable_auto_save ? "true" : "false",
         config_.map_manager_state_topic.c_str(),
-        config_.final_map_topic.c_str(),
-        config_.completion_no_frontier_rounds,
-        config_.completion_unknown_delta_threshold,
-        config_.completion_check_window_sec);
+        config_.final_map_topic.c_str());
     RCLCPP_INFO(
         logger_,
         "Map save params: directory=%s, prefix=%s, service=%s",
@@ -203,14 +176,12 @@ void MapManagerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr 
     }
 
     latest_map_ = msg;
-    const auto previous_unknown_ratio = map_stats_.unknown_ratio;
     map_stats_.width = msg->info.width;
     map_stats_.height = msg->info.height;
     map_stats_.resolution = msg->info.resolution;
     map_stats_.unknown_ratio = calculate_unknown_ratio(*msg);
     map_stats_.valid = msg->info.width > 0U && msg->info.height > 0U && !msg->data.empty();
 
-    update_unknown_history(this->now(), map_stats_.unknown_ratio);
     if (!save_succeeded_) {
         publish_state(MapManagerStateMsg::MAP_RECEIVED, "map_updated");
     }
@@ -224,16 +195,6 @@ void MapManagerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr 
         map_stats_.height,
         map_stats_.resolution,
         map_stats_.unknown_ratio);
-
-    if (std::abs(previous_unknown_ratio - map_stats_.unknown_ratio) >
-        config_.completion_unknown_delta_threshold)
-    {
-        RCLCPP_INFO(
-            logger_,
-            "Unknown ratio updated: old=%.6f, new=%.6f",
-            previous_unknown_ratio,
-            map_stats_.unknown_ratio);
-    }
 }
 
 void MapManagerNode::exploration_state_callback(const ExplorationStateMsg::SharedPtr msg)
@@ -245,24 +206,11 @@ void MapManagerNode::exploration_state_callback(const ExplorationStateMsg::Share
 
     last_exploration_state_ = msg->state;
     last_exploration_detail_ = msg->detail;
-
-    if (is_no_frontier_state(*msg)) {
-        ++no_frontier_rounds_;
-        RCLCPP_WARN(
-            logger_,
-            "No valid frontier state observed: rounds=%d/%d, detail=%s",
-            no_frontier_rounds_,
-            config_.completion_no_frontier_rounds,
-            msg->detail.c_str());
-    } else if (msg->state == msg->RUNNING || msg->state == msg->IDLE) {
-        if (no_frontier_rounds_ > 0) {
-            RCLCPP_INFO(
-                logger_,
-                "Reset no-frontier rounds because exploration state is %s.",
-                exploration_state_to_string(msg->state).c_str());
-        }
-        no_frontier_rounds_ = 0;
-    }
+    RCLCPP_DEBUG(
+        logger_,
+        "Exploration state updated: state=%s, detail=%s",
+        exploration_state_to_string(last_exploration_state_).c_str(),
+        last_exploration_detail_.c_str());
 }
 
 void MapManagerNode::completion_timer_callback()
@@ -271,27 +219,24 @@ void MapManagerNode::completion_timer_callback()
         return;
     }
 
-    if (!should_mark_completed()) {
-        RCLCPP_DEBUG(
-            logger_,
-            "Completion check not satisfied: has_map=%s, no_frontier=%d/%d, "
-            "unknown_stable=%s, state=%s",
-            map_stats_.valid ? "true" : "false",
-            no_frontier_rounds_,
-            config_.completion_no_frontier_rounds,
-            is_unknown_ratio_stable() ? "true" : "false",
-            exploration_state_to_string(last_exploration_state_).c_str());
+    if (!map_stats_.valid) {
+        RCLCPP_DEBUG(logger_, "Cannot save map: no valid map received yet.");
         return;
     }
 
-    RCLCPP_WARN(
+    if (last_exploration_state_ != ExplorationStateMsg::COMPLETED) {
+        RCLCPP_DEBUG(
+            logger_,
+            "Exploration not completed: state=%s, detail=%s",
+            exploration_state_to_string(last_exploration_state_).c_str(),
+            last_exploration_detail_.c_str());
+        return;
+    }
+
+    RCLCPP_INFO(
         logger_,
-        "Exploration completed by engineering rule: no_frontier_rounds=%d, "
-        "unknown_ratio=%.6f, state=%s, detail=%s",
-        no_frontier_rounds_,
-        map_stats_.unknown_ratio,
-        exploration_state_to_string(last_exploration_state_).c_str(),
-        last_exploration_detail_.c_str());
+        "Exploration completed, saving map: unknown_ratio=%.6f",
+        map_stats_.unknown_ratio);
     publish_state(MapManagerStateMsg::COMPLETION_DETECTED, "completion_detected");
     publish_final_map("completion_detected");
     trigger_save();
@@ -305,74 +250,6 @@ double MapManagerNode::calculate_unknown_ratio(const nav_msgs::msg::OccupancyGri
 
     const auto unknown_count = std::count(map.data.begin(), map.data.end(), -1);
     return static_cast<double>(unknown_count) / static_cast<double>(map.data.size());
-}
-
-void MapManagerNode::update_unknown_history(
-    const rclcpp::Time & stamp,
-    double unknown_ratio)
-{
-    unknown_history_.emplace_back(stamp, unknown_ratio);
-    const auto window = rclcpp::Duration::from_seconds(config_.completion_check_window_sec);
-    while (!unknown_history_.empty() && stamp - unknown_history_.front().first > window) {
-        unknown_history_.pop_front();
-    }
-}
-
-bool MapManagerNode::is_unknown_ratio_stable() const
-{
-    if (unknown_history_.size() < 2U) {
-        return false;
-    }
-
-    const auto window = rclcpp::Duration::from_seconds(config_.completion_check_window_sec);
-    if (unknown_history_.back().first - unknown_history_.front().first < window) {
-        return false;
-    }
-
-    auto minmax = std::minmax_element(
-        unknown_history_.begin(),
-        unknown_history_.end(),
-        [](const auto & lhs, const auto & rhs) {
-            return lhs.second < rhs.second;
-        });
-
-    const double delta = minmax.second->second - minmax.first->second;
-    return delta <= config_.completion_unknown_delta_threshold;
-}
-
-bool MapManagerNode::is_no_frontier_state(const ExplorationStateMsg & msg) const
-{
-    if (msg.state == msg.COMPLETED) {
-        return true;
-    }
-
-    if (msg.state != msg.STUCK) {
-        return false;
-    }
-
-    return msg.detail.find("no_valid_frontier") != std::string::npos ||
-        msg.detail.find("no_frontier") != std::string::npos;
-}
-
-bool MapManagerNode::should_mark_completed() const
-{
-    if (!map_stats_.valid) {
-        return false;
-    }
-
-    if (last_exploration_state_ == ExplorationStateMsg::RUNNING) {
-        return false;
-    }
-
-    if (no_frontier_rounds_ < config_.completion_no_frontier_rounds) {
-        return false;
-    }
-
-    if (last_exploration_state_ == ExplorationStateMsg::COMPLETED) {
-        return true;
-    }
-
-    return is_unknown_ratio_stable();
 }
 
 void MapManagerNode::trigger_save()

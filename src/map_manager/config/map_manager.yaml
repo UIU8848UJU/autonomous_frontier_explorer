@@ -9,9 +9,6 @@ map_manager_node:
     save_directory: /home/xxx/mk_nav2/maps
     saved_map_prefix: explore_map
     map_saver_service_name: /map_saver/save_map
-    completion_no_frontier_rounds: 2
-    completion_unknown_delta_threshold: 0.003
-    completion_check_window_sec: 8.0
     completion_check_period_sec: 1.0
     image_format: pgm
     map_mode: trinary
