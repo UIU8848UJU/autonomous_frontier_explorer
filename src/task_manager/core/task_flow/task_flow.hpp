@@ -21,9 +21,7 @@ public:
     void set_state(TaskManagerState new_state);
 
     bool start_mapping_flow();
-    bool mark_mapping_done();
     bool mark_map_saved();
-    bool start_navigation_flow();
     bool stop_all();
 
     void update_exploration_state(const robot_interfaces::msg::ExplorationState & state_msg);

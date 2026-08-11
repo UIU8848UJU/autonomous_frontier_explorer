@@ -32,7 +32,6 @@ bool TaskFlow::start_mapping_flow()
     }
 
     context_.exploration_running = true;
-    context_.navigation_running = false;
     context_.map_ready = false;
     context_.last_error.clear();
 
@@ -41,60 +40,23 @@ bool TaskFlow::start_mapping_flow()
     return true;
 }
 
-bool TaskFlow::mark_mapping_done()
-{
-    if (!context_.exploration_running &&
-        context_.state != TaskManagerState::EXPLORING)
-    {
-        return false;
-    }
-
-    context_.exploration_running = false;
-    context_.map_ready = true;
-    set_state(TaskManagerState::MAPPING_DONE);
-    return true;
-}
-
 bool TaskFlow::mark_map_saved()
 {
     context_.exploration_running = false;
-    context_.navigation_running = false;
     context_.map_ready = true;
     context_.last_error.clear();
     set_state(TaskManagerState::MAPPING_DONE);
-    return true;
-}
-
-bool TaskFlow::start_navigation_flow()
-{
-    if (!context_.map_ready) {
-        return false;
-    }
-
-    if (context_.state == TaskManagerState::NAVIGATING ||
-        context_.state == TaskManagerState::STARTING_NAVIGATION)
-    {
-        return false;
-    }
-
-    context_.navigation_running = true;
-    context_.exploration_running = false;
-    context_.last_error.clear();
-
-    set_state(TaskManagerState::STARTING_NAVIGATION);
-    set_state(TaskManagerState::NAVIGATING);
     return true;
 }
 
 bool TaskFlow::stop_all()
 {
     const bool was_active =
-        context_.exploration_running || context_.navigation_running ||
+        context_.exploration_running ||
         context_.state == TaskManagerState::NAVIGATING ||
         context_.state == TaskManagerState::EXPLORING;
 
     context_.exploration_running = false;
-    context_.navigation_running = false;
     set_state(TaskManagerState::IDLE);
     return was_active;
 }
@@ -125,7 +87,6 @@ void TaskFlow::update_exploration_state(const robot_interfaces::msg::Exploration
     switch (state_msg.state) {
         case robot_interfaces::msg::ExplorationState::RUNNING:
             context_.exploration_running = true;
-            context_.navigation_running = false;
             context_.last_error.clear();
             set_state(TaskManagerState::EXPLORING);
             break;

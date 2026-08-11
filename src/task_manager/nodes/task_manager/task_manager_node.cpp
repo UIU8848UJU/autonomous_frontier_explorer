@@ -41,8 +41,6 @@ void TaskManagerNode::declare_parameters()
         "task_manager_state_topic", interface_config_.task_manager_state_topic);
     interface_config_.start_mapping_service_name = this->declare_parameter<std::string>(
         "start_mapping_service_name", interface_config_.start_mapping_service_name);
-    interface_config_.start_navigation_service_name = this->declare_parameter<std::string>(
-        "start_navigation_service_name", interface_config_.start_navigation_service_name);
     interface_config_.stop_all_service_name = this->declare_parameter<std::string>(
         "stop_all_service_name", interface_config_.stop_all_service_name);
     interface_config_.start_exploration_service_name = this->declare_parameter<std::string>(
@@ -57,13 +55,12 @@ void TaskManagerNode::declare_parameters()
 
     RCLCPP_INFO_WITH_CONTEXT(
         this->get_logger(),
-        "Parameters loaded: heartbeat=%ld ms, topics=[%s,%s,%s], services=[%s,%s,%s]",
+        "Parameters loaded: heartbeat=%ld ms, topics=[%s,%s,%s], services=[%s,%s]",
         heartbeat_period_.count(),
         interface_config_.exploration_state_topic.c_str(),
         interface_config_.map_manager_state_topic.c_str(),
         interface_config_.task_manager_state_topic.c_str(),
         interface_config_.start_mapping_service_name.c_str(),
-        interface_config_.start_navigation_service_name.c_str(),
         interface_config_.stop_all_service_name.c_str());
 }
 
@@ -90,10 +87,6 @@ void TaskManagerNode::create_interfaces()
     start_mapping_srv_ = this->create_service<Trigger>(
         interface_config_.start_mapping_service_name,
         std::bind(&TaskManagerNode::handle_start_mapping, this, _1, _2));
-
-    start_navigation_srv_ = this->create_service<Trigger>(
-        interface_config_.start_navigation_service_name,
-        std::bind(&TaskManagerNode::handle_start_navigation, this, _1, _2));
 
     stop_all_srv_ = this->create_service<Trigger>(
         interface_config_.stop_all_service_name,
@@ -136,7 +129,7 @@ TaskManagerStateMsg TaskManagerNode::compose_state_message() const
     msg.state_text = to_string(context.state);
     msg.map_ready = context.map_ready;
     msg.exploration_running = context.exploration_running;
-    msg.navigation_running = context.navigation_running;
+    msg.navigation_running = false;
     msg.last_error = context.last_error;
     msg.last_exploration_state = context.last_exploration_state;
 
@@ -218,23 +211,6 @@ void TaskManagerNode::handle_start_mapping(
         this->get_logger(),
         "Start mapping service invoked, success=%s",
         started ? "true" : "false");
-    publish_state();
-}
-
-void TaskManagerNode::handle_start_navigation(
-  const std::shared_ptr<Trigger::Request>,
-  std::shared_ptr<Trigger::Response> response)
-{
-    const bool started = task_flow_.start_navigation_flow();
-    response->success = started;
-    response->message = started ?
-         "Navigation flow started." : "Navigation cannot start.";
-
-    if (started) {
-        RCLCPP_INFO_WITH_CONTEXT(this->get_logger(), "Navigation flow started.");
-    } else {
-        RCLCPP_WARN_WITH_CONTEXT(this->get_logger(), "Navigation flow rejected.");
-    }
     publish_state();
 }
 

@@ -14,7 +14,6 @@ struct TaskContext
     TaskManagerState state{TaskManagerState::IDLE};
     bool map_ready{false};
     bool exploration_running{false};
-    bool navigation_running{false};
     std::chrono::steady_clock::time_point last_state_update;
     std::string last_exploration_state;
     std::string last_error;

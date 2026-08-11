@@ -36,7 +36,6 @@ private:
         std::string map_manager_state_topic{"/map_manager_state"};
         std::string task_manager_state_topic{"/task_manager_state"};
         std::string start_mapping_service_name{"/start_mapping"};
-        std::string start_navigation_service_name{"/start_navigation"};
         std::string stop_all_service_name{"/stop_all"};
         std::string start_exploration_service_name{"/start_exploration"};
         std::string stop_exploration_service_name{"/stop_exploration"};
@@ -63,10 +62,6 @@ private:
         const std::shared_ptr<Trigger::Request>,
         std::shared_ptr<Trigger::Response> response);
 
-    void handle_start_navigation(
-        const std::shared_ptr<Trigger::Request>,
-        std::shared_ptr<Trigger::Response> response);
-
     void handle_stop_all(
         const std::shared_ptr<Trigger::Request>,
         std::shared_ptr<Trigger::Response> response);
@@ -81,7 +76,6 @@ private:
     rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 
     rclcpp::Service<Trigger>::SharedPtr start_mapping_srv_;
-    rclcpp::Service<Trigger>::SharedPtr start_navigation_srv_;
     rclcpp::Service<Trigger>::SharedPtr stop_all_srv_;
     rclcpp::Client<Trigger>::SharedPtr start_exploration_client_;
     rclcpp::Client<Trigger>::SharedPtr stop_exploration_client_;
