@@ -70,7 +70,6 @@ BT 编排节点：
 状态和可视化：
 
 ```text
-/frontier_explorer/state
 /exploration_orchestrator/state
 /exploration_state
 /frontier/raw_markers

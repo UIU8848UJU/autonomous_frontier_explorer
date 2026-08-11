@@ -28,8 +28,6 @@ set(exploration_learning_DEPS
 )
 
 add_library(${PROJECT_NAME}
-  src/data_collection/episode_recorder.cpp
-  src/reward/reward_calculator.cpp
   src/collector/json_utils.cpp
   src/collector/event_buffer.cpp
   src/collector/data_record_plugin_factory.cpp

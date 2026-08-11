@@ -17,7 +17,6 @@
 #include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 #include "std_msgs/msg/string.hpp"
-#include "std_srvs/srv/trigger.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 #include "frontier_explorer_nodes/nodes/frontier_marker_publisher.hpp"
@@ -85,20 +84,6 @@ private:
     /// @brief: 获取当前状态字符串
     /// @return: 当前状态字符串
     std::string state_to_string() const;
-
-    /// @brief: 处理旧控制面 start 请求，仅用于兼容旧调用方
-    /// @param request 服务请求
-    /// @param response 服务响应
-    void handle_start(
-            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
-
-    /// @brief: 处理旧控制面 stop 请求，仅用于兼容旧调用方
-    /// @param request 服务请求
-    /// @param response 服务响应
-    void handle_stop(
-            const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
     /// @brief: 处理外部请求下一个 frontier 目标
     /// @param request 服务请求
@@ -168,15 +153,12 @@ private:
     mutable std::mutex state_mutex_;
     std::string state_detail_;
 
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_srv_;
-    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_srv_;
     rclcpp::Service<robot_interfaces::srv::GetFrontierCandidates>::SharedPtr get_frontier_candidates_srv_;
     rclcpp::Service<robot_interfaces::srv::GetNextFrontierGoal>::SharedPtr get_next_frontier_goal_srv_;
     rclcpp::Service<robot_interfaces::srv::MarkFrontierFailed>::SharedPtr mark_frontier_failed_srv_;
     rclcpp::Service<robot_interfaces::srv::ClearFrontierBlacklist>::SharedPtr clear_frontier_blacklist_srv_;
     rclcpp::Service<robot_interfaces::srv::GetExplorationState>::SharedPtr get_exploration_state_srv_;
     rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr state_pub_;
-    rclcpp::Publisher<robot_interfaces::msg::ExplorationState>::SharedPtr legacy_state_pub_;
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr decision_debug_pub_;
 };
 

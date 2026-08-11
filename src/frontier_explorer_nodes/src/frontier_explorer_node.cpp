@@ -127,7 +127,6 @@ void FrontierExplorerNode::declare_params()
     this->declare_parameter<std::string>(
         "frontier_decision.reachability_planner_id",
         params_.runtime.reachability_planner_id);
-    this->declare_parameter<bool>("enable_internal_navigation_loop", false);
 }
 
 void FrontierExplorerNode::load_params()
@@ -205,11 +204,6 @@ void FrontierExplorerNode::load_params()
     params_.runtime.reachability_planner_id =
         this->get_parameter("frontier_decision.reachability_planner_id").as_string();
 
-    if (this->get_parameter("enable_internal_navigation_loop").as_bool()) {
-        RCLCPP_WARN(
-            this->get_logger(),
-            "enable_internal_navigation_loop is deprecated and ignored. Use exploration BT orchestrator.");
-    }
 }
 
 void FrontierExplorerNode::apply_params()
@@ -278,20 +272,10 @@ void FrontierExplorerNode::create_interfaces()
 {
     const auto state_qos = rclcpp::QoS(rclcpp::KeepLast(kStatePublisherDepth)).reliable();
     state_pub_ = this->create_publisher<robot_interfaces::msg::ExplorationState>(
-        "/frontier_explorer/state", state_qos);
-    legacy_state_pub_ = this->create_publisher<robot_interfaces::msg::ExplorationState>(
         "/exploration_state", state_qos);
     decision_debug_pub_ = this->create_publisher<std_msgs::msg::String>(
         "/frontier_explorer/decision_debug_json",
         rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
-
-    start_srv_ = this->create_service<std_srvs::srv::Trigger>("/start_exploration",
-        std::bind(&FrontierExplorerNode::handle_start, this,
-            std::placeholders::_1, std::placeholders::_2));
-
-    stop_srv_ = this->create_service<std_srvs::srv::Trigger>("/stop_exploration",
-        std::bind(&FrontierExplorerNode::handle_stop, this,
-            std::placeholders::_1, std::placeholders::_2));
 
     get_next_frontier_goal_srv_ =
         this->create_service<robot_interfaces::srv::GetNextFrontierGoal>(
@@ -665,38 +649,8 @@ void FrontierExplorerNode::publish_state()
     const auto detail = state_detail();
     msg.detail = detail.empty() ? state_to_string(current_state) : detail;
     state_pub_->publish(msg);
-    if (legacy_state_pub_) {
-        legacy_state_pub_->publish(msg);
-    }
 }
 
-void FrontierExplorerNode::handle_start(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
-{
-    if (marker_publisher_) {
-        marker_publisher_->clearAll();
-    }
-    set_state(ExplorationState::RUNNING);
-    publish_state();
-
-    response->success = true;
-    response->message = "Frontier capability node marked running. Use exploration BT orchestrator for navigation.";
-}
-
-void FrontierExplorerNode::handle_stop(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
-    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
-{
-    set_state(ExplorationState::STOPPED);
-    if (marker_publisher_) {
-        marker_publisher_->clearAll();
-    }
-    publish_state();
-
-    response->success = true;
-    response->message = "Frontier capability node stopped.";
-}
 
 void FrontierExplorerNode::handle_get_next_frontier_goal(
     const std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Request>,

@@ -14,7 +14,7 @@ TEST(FrontierDecisionPluginTest, ExpandsCandidatesAndMatchesSelectedGoal)
   config.decision_topic = "/frontier_explorer/decision_debug_json";
   config.navigation_result_topic = "/navigation/navigation_result_debug_json";
   config.map_summary_topic = "__map_summary";
-  config.exploration_state_topic = "/frontier_explorer/state";
+  config.exploration_state_topic = "/exploration_state";
 
   FrontierDecisionPlugin plugin(config);
   collector::EventBuffer buffer(10.0);

@@ -1,20 +1,11 @@
 task_manager_node:
   ros__parameters:
     use_sim_time: true
-    auto_advance: true
 
     heartbeat_period_ms: 1000
 
-    waypoint_names: ["start_a", "start_b", "start_c"]
-
-    waypoint_values:
-      [
-        0.5,  0.0, 1.0,
-        1.2,  0.3, 1.0,
-        1.8, -0.2, 1.0
-      ]
-
     exploration_state_topic: "/exploration_state"
+    map_manager_state_topic: "/map_manager_state"
     task_manager_state_topic: "/task_manager_state"
     start_mapping_service_name: "/start_mapping"
     start_navigation_service_name: "/start_navigation"

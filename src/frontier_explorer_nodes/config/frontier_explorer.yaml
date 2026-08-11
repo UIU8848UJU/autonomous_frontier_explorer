@@ -36,7 +36,6 @@ frontier_explorer_node:
     robot_base_frame: base_link
     robot_pose_timeout_ms: 200
     show_all_candidate_markers: true
-    enable_internal_navigation_loop: false
 
 exploration_bt_orchestrator_node:
   ros__parameters:

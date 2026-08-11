@@ -51,7 +51,7 @@ def generate_launch_description():
         parameters=[frontier_params],
     )
 
-    task_params = os.path.join(bringup_pkg, "config", "task_manager.yaml")
+    task_params = os.path.join(task_pkg, "config", "task_manager.yaml")
     task_node = Node(
         package="task_manager",
         executable="task_manager_node",

@@ -6,3 +6,7 @@ TODO
 .cache/
 datasets/
 .skills/
+*.bak
+compile_commands.json
+__pycache__/
+*.pyc

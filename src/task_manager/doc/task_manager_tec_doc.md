@@ -36,7 +36,7 @@
 ## 当前实现进度
 - 第一版 `TaskFlow`+`TaskManagerNode` 完整接线：topic、service、timer 均按需求工作，状态心跳和服务回调统一走 `TaskFlow`。
 - 关键参数已通过 YAML 配置（包含心跳周期以及所有 topic/service 名称），方便仿真/真机切换。
-- 新的 `robot_interfaces` 包提供 Exploration/TaskManager 状态、StartExploration 服务及 Explore action 协议，`frontier_explorer` 已切换到新的状态消息。
+- 新的 `robot_interfaces` 包提供 Exploration/TaskManager 状态、frontier 能力服务及 NavigateToPose action 协议，各节点已切换到新的状态消息。
 - 文档化与示例配置齐备，launch 文件仍可复用原流程。
 
 ## 尚未覆盖的内容

@@ -25,7 +25,6 @@ target_include_directories(map_manager_node
   PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/nodes/map_manager
     ${CMAKE_CURRENT_SOURCE_DIR}/core/map_storage
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/map_merger
 )
 
 ament_target_dependencies(map_manager_node

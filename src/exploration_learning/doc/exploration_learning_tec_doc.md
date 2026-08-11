@@ -34,7 +34,7 @@ exploration_learning/
 │   └── dataset_recorder.yaml
 ├── launch/
 │   ├── dataset_recorder.launch.py
-│   └── rl_data_collection.launch.py   # 兼容入口，启动同一个 DatasetRecorderNode
+│   └── dataset_recorder.launch.py   # 启动 DatasetRecorderNode
 └── test/
 ```
 
@@ -156,7 +156,7 @@ ros2 launch exploration_learning dataset_recorder.launch.py
 兼容入口：
 
 ```bash
-ros2 launch exploration_learning rl_data_collection.launch.py
+ros2 launch exploration_learning dataset_recorder.launch.py
 ```
 
 测试：

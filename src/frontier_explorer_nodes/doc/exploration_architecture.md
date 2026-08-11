@@ -80,10 +80,9 @@ TaskManagerNode
 - 托管 `FrontierGoalProvider`。
 - 提供 frontier 能力服务。
 - 发布 frontier marker。
-- 发布 `/frontier_explorer/state`。
-- 兼容发布旧 `/exploration_state`。
+- 统一发布 `/exploration_state`。
 
-`enable_internal_navigation_loop` 已废弃并被忽略。节点不会主动发送 Nav2 goal。
+`FrontierExplorerNode` 不再包含内部导航循环，不主动发送 Nav2 goal；导航由 BT orchestrator 编排。
 默认 `show_all_candidate_markers: false`，RViz 中只显示最终选中候选球；需要调试完整候选集合时可改为 `true`。
 
 ## FrontierGoalProvider 职责
@@ -157,14 +156,12 @@ ExplorationBtOrchestratorNode：
 - `/exploration_bt_orchestrator_node/pause_exploration`
 - `/exploration_bt_orchestrator_node/resume_exploration`
 
-旧的 `/start_exploration` 和 `/stop_exploration` 仍由 `FrontierExplorerNode` 保留，仅用于兼容旧控制面。
 新系统入口应使用 `exploration_bt_orchestrator_node`。
 
 ## 状态 topic
 
-- `/frontier_explorer/state`: frontier 能力节点状态。
 - `/exploration_orchestrator/state`: BT 编排流程状态。
-- `/exploration_state`: 兼容旧 TaskManager / MapManager 的状态 topic。
+- `/exploration_state`: TaskManager / MapManager / dataset_recorder 消费的探索状态 topic。
 
 ## 参数约定
 

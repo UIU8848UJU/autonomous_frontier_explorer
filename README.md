@@ -31,10 +31,10 @@
   <a href="CHANGELOG.rst">
     <img alt="Status" src="https://img.shields.io/badge/status-active%20development-yellow">
   </a>
-  <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
+  <a href="src/frontier_explorer_nodes/doc/frontier_explorer_node_doc.md">
     <img alt="Frontier Explorer Docs" src="https://img.shields.io/badge/docs-frontier_explorer-0ea5e9">
   </a>
-  <a href="src/frontier_explorer/doc/exploration_architecture.md">
+  <a href="src/frontier_explorer_nodes/doc/exploration_architecture.md">
     <img alt="Exploration Architecture" src="https://img.shields.io/badge/architecture-BT--ready%20exploration-blue">
   </a>
 </p>
@@ -87,13 +87,13 @@ https://github.com/user-attachments/assets/9e4f8a30-9b6f-4366-87e5-293d407cfe1d
 探索节点这里只做概览。详细设计、状态机、参数和调试说明见：
 
 <p>
-  <a href="src/frontier_explorer/README.md">
+  <a href="src/frontier_explorer_nodes/README.md">
     <img alt="Open Frontier Explorer README" src="https://img.shields.io/badge/open-frontier_explorer_README-blue">
   </a>
-  <a href="src/frontier_explorer/doc/frontier_explorer_node_doc.md">
+  <a href="src/frontier_explorer_nodes/doc/frontier_explorer_node_doc.md">
     <img alt="Open Frontier Explorer Docs" src="https://img.shields.io/badge/open-frontier_explorer_doc-0ea5e9">
   </a>
-  <a href="src/frontier_explorer/doc/exploration_architecture.md">
+  <a href="src/frontier_explorer_nodes/doc/exploration_architecture.md">
     <img alt="Open Exploration Architecture" src="https://img.shields.io/badge/open-exploration_architecture-2563eb">
   </a>
 </p>
@@ -108,7 +108,8 @@ mk_nav2/
 ├── maps/                               # 静态地图输入/输出目录
 ├── src/
 │   ├── autonomousr_explorer_bringup/    # 统一 launch/config/rviz
-│   ├── frontier_explorer/               # frontier 探索节点与决策模块
+│   ├── frontier_explorer_core/           # frontier 算法与共享类型
+│   ├── frontier_explorer_nodes/          # frontier 节点与 BT 插件
 │   ├── task_manager/                    # 高层任务编排
 │   ├── robot_interfaces/                # 自定义消息/服务
 │   └── util_package/                    # 日志等公共工具
@@ -317,8 +318,8 @@ ros2 topic echo /cmd_vel
 
 ## 参考文档
 
-- [Frontier Explorer 详细设计](src/frontier_explorer/doc/frontier_explorer_node_doc.md)
-- [Frontier Explorer README](src/frontier_explorer/README.md)
-- [Exploration 架构说明](src/frontier_explorer/doc/exploration_architecture.md)
-- [Exploration BT 设计](src/frontier_explorer/doc/exploration_bt_design.md)
+- [Frontier Explorer 详细设计](src/frontier_explorer_nodes/doc/frontier_explorer_node_doc.md)
+- [Frontier Explorer README](src/frontier_explorer_nodes/README.md)
+- [Exploration 架构说明](src/frontier_explorer_nodes/doc/exploration_architecture.md)
+- [Exploration BT 设计](src/frontier_explorer_nodes/doc/exploration_bt_design.md)
 - [顶层变更记录](CHANGELOG.rst)

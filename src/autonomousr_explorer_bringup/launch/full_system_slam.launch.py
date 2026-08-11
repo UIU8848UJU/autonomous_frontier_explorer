@@ -8,6 +8,7 @@ import os
 
 def generate_launch_description():
     bringup_pkg = get_package_share_directory("autonomousr_explorer_bringup")
+    task_pkg = get_package_share_directory("task_manager")
     map_manager_pkg = get_package_share_directory("map_manager")
 
     nav2_launch = IncludeLaunchDescription(
@@ -51,7 +52,7 @@ def generate_launch_description():
         parameters=[frontier_params],
     )
 
-    task_params = os.path.join(bringup_pkg, "config", "task_manager.yaml")
+    task_params = os.path.join(task_pkg, "config", "task_manager.yaml")
     task_node = Node(
         package="task_manager",
         executable="task_manager_node",

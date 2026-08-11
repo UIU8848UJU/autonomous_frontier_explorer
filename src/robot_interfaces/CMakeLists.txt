@@ -14,7 +14,6 @@ set(MSG_FILES
 )
 
 set(SRV_FILES
-  "srv/StartExploration.srv"
   "srv/GetFrontierCandidates.srv"
   "srv/GetNextFrontierGoal.srv"
   "srv/MarkFrontierFailed.srv"
@@ -25,7 +24,6 @@ set(SRV_FILES
 )
 
 set(ACTION_FILES
-  "action/Explore.action"
   "action/NavigateToPose.action"
 )
 

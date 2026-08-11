@@ -50,7 +50,7 @@ void DatasetRecorderNode::declare_params()
   declare_parameter<std::string>(
     "navigation_result_topic",
     "/navigation/navigation_result_debug_json");
-  declare_parameter<std::string>("exploration_state_topic", "/frontier_explorer/state");
+  declare_parameter<std::string>("exploration_state_topic", "/exploration_state");
 
   declare_parameter<bool>("record_map", true);
   declare_parameter<bool>("record_decision", true);

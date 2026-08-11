@@ -28,9 +28,7 @@ NavigationNode
   -> Nav2 ComputePathToPose / NavigateToPose
 ```
 
-`FrontierExplorerNode` 输出 `/frontier_explorer/state` 和兼容旧系统的
-`/exploration_state`，并提供 frontier 能力服务。旧的 `/start_exploration`、
-`/stop_exploration` 仅保留为兼容控制面，不会触发内部导航循环。
+`FrontierExplorerNode` 统一发布 `/exploration_state` 状态，并提供 frontier 能力服务。
 
 ## 2. 依赖与接口
 
@@ -51,7 +49,6 @@ NavigationNode
 | `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | safety costmap 来源，用于 clearance 评分、fallback 候选落脚硬约束和 NavigationNode footprint/path safety 检查。 |
 | `map <- base_link` | TF | 查询 | 获取 map frame 下的机器人位姿，用于转换为地图栅格坐标。 |
 | `/exploration_state` | `robot_interfaces/msg/ExplorationState` | 发布 | 发布 IDLE/RUNNING/STOPPED/COMPLETED/STUCK 等状态。 |
-| `/frontier_explorer/state` | `robot_interfaces/msg/ExplorationState` | 发布 | frontier 能力节点状态。 |
 | `/frontier/raw_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 原始 frontier cluster 点云。 |
 | `/frontier/candidate_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | pruner/scorer 后仍参与评分的候选点。 |
 | `/frontier/scored_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | Top 5 评分候选的简短文本。 |
@@ -62,8 +59,6 @@ NavigationNode
 | `/frontier_explorer_node/mark_frontier_failed` | `robot_interfaces/srv/MarkFrontierFailed` | 服务 | 外部导航失败后通知能力层更新 retry / blacklist。 |
 | `/frontier_explorer_node/clear_frontier_blacklist` | `robot_interfaces/srv/ClearFrontierBlacklist` | 服务 | 清空 frontier blacklist。 |
 | `/frontier_explorer_node/get_exploration_state` | `robot_interfaces/srv/GetExplorationState` | 服务 | 查询 frontier 能力节点状态。 |
-| `/start_exploration` | `std_srvs/srv/Trigger` | 服务 | 兼容旧控制面，只更新状态和清理 marker。 |
-| `/stop_exploration` | `std_srvs/srv/Trigger` | 服务 | 兼容旧控制面，只更新状态和清理 marker。 |
 
 ## 3. 核心流程
 
@@ -241,7 +236,7 @@ RViz 只保留 Top 5 的简短分数标签，避免文字盖住地图。
 | `/frontier/rejected_markers` | `rejected_candidates` / `rejected_frontiers` | `SPHERE` / `POINTS` | 红色 | 本轮 detector 发现但 selector 未能选出有效目标的 frontier 或候选。 |
 
 每次发布前都会发送 `DELETEALL`，避免 RViz 残留旧 marker。
-`/start_exploration` 和 `/stop_exploration` 作为兼容服务会调用 `clearAll()` 清理所有 frontier marker。
+探索完成（`get_next_frontier_goal` 返回 `exploration_complete`）时会调用 `clearAll()` 清理所有 frontier marker。
 
 注意：RViz 中看到的一串红色球如果来自 `/slam_toolbox/graph_visualization`，
 那是 SLAM Toolbox pose graph，不是 `/frontier/blacklist_markers`。
@@ -251,9 +246,9 @@ RViz 只保留 Top 5 的简短分数标签，避免文字盖住地图。
 | 状态 | 触发条件 | 说明 |
 | --- | --- | --- |
 | IDLE | 节点启动默认状态 | 只维护订阅和能力接口。 |
-| RUNNING | 兼容 start 服务、成功选点、失败事件记录或 blacklist 清理 | 表示能力节点可继续响应请求。 |
+| RUNNING | 成功选点、失败事件记录或 blacklist 清理 | 表示能力节点可继续响应请求。 |
 | COMPLETED | `get_next_frontier_goal` 判断无 frontier | 表示 frontier 能力层认为探索完成。 |
-| STOPPED | 兼容 `/stop_exploration` | 停止状态由外部编排层解释。 |
+| STOPPED | 状态模型保留 | 停止状态由外部编排层解释。 |
 | STUCK | map 超时、连续无可用 frontier 或失败目标越界 | detail 会记录具体原因。 |
 
 Nav2 goal 成功、失败、取消的流程状态由 BT orchestrator 维护；

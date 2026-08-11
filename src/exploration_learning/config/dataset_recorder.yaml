@@ -10,7 +10,7 @@ dataset_recorder_node:
     map_topic: "/map"
     decision_topic: "/frontier_explorer/decision_debug_json"
     navigation_result_topic: "/navigation/navigation_result_debug_json"
-    exploration_state_topic: "/frontier_explorer/state"
+    exploration_state_topic: "/exploration_state"
 
     record_map: true
     record_decision: true
