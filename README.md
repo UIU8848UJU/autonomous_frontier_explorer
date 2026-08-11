@@ -124,15 +124,16 @@ mk_nav2/
 
 集中管理系统启动入口和运行参数：
 
-- `full_system.launch.py`：根据地图文件是否存在，自动选择 SLAM 探索或静态地图模式。
+- `full_system.launch.py`：默认按地图文件是否存在自动选择 SLAM/静态模式，可用 `mode:=slam|static|auto` 显式指定。
 - `full_system_slam.launch.py`：在线 SLAM + Nav2 + RViz + FrontierExplorer + TaskManager。
 - `full_system_static.launch.py`：静态地图定位 + Nav2 + RViz + FrontierExplorer + TaskManager。
 - `config/nav2_exploration.yaml`：探索模式 Nav2 参数，当前 FollowPath 使用 RPP。
-- `config/frontier_explorer.yaml`：frontier 决策权重与候选过滤参数。
 
-### frontier_explorer
+### frontier_explorer_nodes
 
 负责从 `/map` 中寻找 frontier，提供候选生成、失败标记、blacklist、marker 和 state。当前探索链路是：
+
+探索参数统一放在 `config/frontier_explorer.yaml`（决策权重与候选过滤），由 bringup launch 引用。
 
 ```text
 TaskManagerNode

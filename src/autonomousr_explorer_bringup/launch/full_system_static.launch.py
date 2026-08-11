@@ -8,6 +8,7 @@ import os
 
 def generate_launch_description():
     bringup_pkg = get_package_share_directory("autonomousr_explorer_bringup")
+    frontier_pkg = get_package_share_directory("frontier_explorer_nodes")
     task_pkg = get_package_share_directory("task_manager")
     map_manager_pkg = get_package_share_directory("map_manager")
 
@@ -26,7 +27,7 @@ def generate_launch_description():
         arguments=["-d", rviz_config],
     )
 
-    frontier_params = os.path.join(bringup_pkg, "config", "frontier_explorer.yaml")
+    frontier_params = os.path.join(frontier_pkg, "config", "frontier_explorer.yaml")
     frontier_node = Node(
         package="frontier_explorer_nodes",
         executable="frontier_explorer_node",
