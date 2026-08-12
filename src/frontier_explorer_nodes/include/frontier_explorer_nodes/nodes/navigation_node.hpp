@@ -8,7 +8,9 @@
 #include <vector>
 
 #include "frontier_explorer_core/costmap/costmap_adapter.hpp"
-#include "frontier_explorer_core/geometry/footprint_collision_checker.hpp"
+#include "navigation_core/footprint_goal_validator.hpp"
+#include "navigation_core/path_safety_checker.hpp"
+#include "navigation_core/single_goal_gate.hpp"
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
@@ -136,24 +138,16 @@ private:
 private:
     rclcpp::Logger logger_;
     CostmapAdapter footprint_costmap_;
+    navigation_core::FootprintGoalValidator footprint_validator_;
+    navigation_core::PathSafetyChecker path_safety_checker_;
     std::string nav2_action_name_;
     std::string compute_path_action_name_;
     std::string default_planner_id_;
     std::string footprint_costmap_topic_;
     std::chrono::milliseconds nav2_server_timeout_{500};
     std::chrono::milliseconds reachability_timeout_{500};
-    bool enable_footprint_collision_check_{true};
-    bool allow_unknown_footprint_{false};
-    bool enable_path_safety_check_{true};
-    bool allow_unknown_path_{false};
-    double robot_radius_{0.1};
-    double footprint_padding_{0.0};
-    unsigned char footprint_cost_threshold_{253U};
-    unsigned char path_cost_threshold_{253U};
-    FootprintCollisionCheckerConfig footprint_collision_config_;
     std::mutex nav2_goal_mutex_;
-    /// @brief: 标记当前是否已有一个外部探索导航 goal 正在执行或取消中
-    bool navigation_goal_active_{false};
+    navigation_core::SingleGoalGate goal_gate_;
     Nav2GoalHandle::SharedPtr active_nav2_goal_;
     std::atomic_bool navigation_stop_requested_{false};
     std::mutex navigation_thread_mutex_;

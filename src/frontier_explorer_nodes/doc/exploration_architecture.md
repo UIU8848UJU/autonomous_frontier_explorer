@@ -137,7 +137,6 @@ TaskManagerNode
 FrontierExplorerNode：
 
 - `/frontier_explorer_node/get_frontier_candidates`
-- `/frontier_explorer_node/get_next_frontier_goal`
 - `/frontier_explorer_node/mark_frontier_failed`
 - `/frontier_explorer_node/clear_frontier_blacklist`
 - `/frontier_explorer_node/get_exploration_state`
@@ -174,10 +173,8 @@ include/frontier_explorer_nodes/nodes/exploration_bt_defaults.hpp
 ```yaml
 exploration_bt_orchestrator_node:
   ros__parameters:
-    frontier_goal_service: /frontier_explorer_node/get_next_frontier_goal
     frontier_candidates_service: /frontier_explorer_node/get_frontier_candidates
     mark_failed_service: /frontier_explorer_node/mark_frontier_failed
-    reachability_service: /navigation_node/check_pose_reachability
     goal_feasibility_service: /navigation_node/check_goal_feasibility
     navigation_action: /navigation_node/navigate_to_pose
     max_frontier_candidates: 8
@@ -243,12 +240,10 @@ include/frontier_explorer_nodes/nodes/
   navigation_node.hpp
   bt/
     action/
-      compute_next_frontier_goal_action.hpp
       compute_frontier_candidates_action.hpp
       mark_frontier_failed_action.hpp
       navigate_to_frontier_action.hpp
       select_feasible_frontier_action.hpp
-      select_reachable_frontier_action.hpp
     is_exploration_complete_condition.hpp
 
 src/nodes/
@@ -262,12 +257,10 @@ src/nodes/
       exploration_bt_orchestrator_main.cpp
       exploration_bt_orchestrator_node.cpp
     action/
-      compute_next_frontier_goal_action.cpp
       compute_frontier_candidates_action.cpp
       mark_frontier_failed_action.cpp
       navigate_to_frontier_action.cpp
       select_feasible_frontier_action.cpp
-      select_reachable_frontier_action.cpp
     is_exploration_complete_condition.cpp
 
 include/frontier_explorer_core/
@@ -275,6 +268,12 @@ include/frontier_explorer_core/
 
 src/core/
   frontier_goal_provider.cpp
+
+include/navigation_core/
+  footprint_goal_validator.hpp
+  path_safety_checker.hpp
+  path_utils.hpp
+  single_goal_gate.hpp
 ```
 
 ## 后续扩展

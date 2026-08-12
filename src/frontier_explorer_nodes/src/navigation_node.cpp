@@ -10,6 +10,8 @@
 #include <thread>
 
 #include "nav2_costmap_2d/cost_values.hpp"
+#include "frontier_explorer_core/geometry/footprint_collision_checker.hpp"
+#include "navigation_core/path_utils.hpp"
 #include "nav_msgs/msg/path.hpp"
 
 namespace frontier_explorer
@@ -25,27 +27,15 @@ constexpr uint16_t kResultException = 5U;
 constexpr uint16_t kResultFootprintCollision = 6U;
 constexpr uint16_t kResultPathUnsafe = 7U;
 
-double path_length_m(const nav_msgs::msg::Path & path)
-{
-    if (path.poses.size() < 2U) {
-        return 0.0;
-    }
-
-    double length = 0.0;
-    for (std::size_t index = 1U; index < path.poses.size(); ++index) {
-        const auto & previous = path.poses[index - 1U].pose.position;
-        const auto & current = path.poses[index].pose.position;
-        length += std::hypot(current.x - previous.x, current.y - previous.y);
-    }
-    return length;
-}
 
 }
 
 NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
 : Node("navigation_node", options),
   logger_(get_logger().get_child("navigation")),
-  footprint_costmap_(logger_)
+  footprint_costmap_(logger_),
+  footprint_validator_(footprint_costmap_),
+  path_safety_checker_(footprint_costmap_)
 {
     declare_parameter<std::string>("navigate_to_pose_action", "navigate_to_pose");
     declare_parameter<std::string>("compute_path_to_pose_action", "compute_path_to_pose");
@@ -73,20 +63,20 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
     compute_path_action_name_ = get_parameter("compute_path_to_pose_action").as_string();
     default_planner_id_ = get_parameter("reachability_planner_id").as_string();
     footprint_costmap_topic_ = get_parameter("footprint_costmap_topic").as_string();
-    enable_footprint_collision_check_ =
+    const bool enable_footprint_collision_check =
         get_parameter("enable_footprint_collision_check").as_bool();
-    allow_unknown_footprint_ = get_parameter("allow_unknown_footprint").as_bool();
-    enable_path_safety_check_ =
+    const bool allow_unknown_footprint = get_parameter("allow_unknown_footprint").as_bool();
+    const bool enable_path_safety_check =
         get_parameter("enable_path_safety_check").as_bool();
-    allow_unknown_path_ = get_parameter("allow_unknown_path").as_bool();
-    robot_radius_ = std::max(0.01, get_parameter("robot_radius").as_double());
-    footprint_padding_ = std::max(0.0, get_parameter("footprint_padding").as_double());
-    footprint_cost_threshold_ = static_cast<unsigned char>(
+    const bool allow_unknown_path = get_parameter("allow_unknown_path").as_bool();
+    const double robot_radius = std::max(0.01, get_parameter("robot_radius").as_double());
+    const double footprint_padding = std::max(0.0, get_parameter("footprint_padding").as_double());
+    const unsigned char footprint_cost_threshold = static_cast<unsigned char>(
         std::clamp(
             static_cast<int>(get_parameter("footprint_cost_threshold").as_int()),
             1,
             255));
-    path_cost_threshold_ = static_cast<unsigned char>(
+    const unsigned char path_cost_threshold = static_cast<unsigned char>(
         std::clamp(
             static_cast<int>(get_parameter("path_cost_threshold").as_int()),
             1,
@@ -105,12 +95,19 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
         this,
         compute_path_action_name_,
         navigation_callback_group_);
-    footprint_collision_config_.enabled = enable_footprint_collision_check_;
-    footprint_collision_config_.allow_unknown = allow_unknown_footprint_;
-    footprint_collision_config_.cost_threshold = footprint_cost_threshold_;
-    footprint_collision_config_.footprint = FootprintCollisionChecker::makeCircularFootprint(
-        robot_radius_,
-        footprint_padding_);
+    FootprintCollisionCheckerConfig footprint_config;
+    footprint_config.enabled = enable_footprint_collision_check;
+    footprint_config.allow_unknown = allow_unknown_footprint;
+    footprint_config.cost_threshold = footprint_cost_threshold;
+    footprint_config.footprint = FootprintCollisionChecker::makeCircularFootprint(
+        robot_radius,
+        footprint_padding);
+    footprint_validator_.configure(footprint_config);
+    navigation_core::PathSafetyCheckerConfig path_config;
+    path_config.enabled = enable_path_safety_check;
+    path_config.allow_unknown = allow_unknown_path;
+    path_config.cost_threshold = path_cost_threshold;
+    path_safety_checker_.configure(path_config);
 
     action_server_ = rclcpp_action::create_server<NavigateToPose>(
         this,
@@ -151,7 +148,7 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
     navigation_debug_pub_ = create_publisher<std_msgs::msg::String>(
         "/navigation/navigation_result_debug_json",
         rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
-    if ((enable_footprint_collision_check_ || enable_path_safety_check_) &&
+    if ((enable_footprint_collision_check || enable_path_safety_check) &&
         !footprint_costmap_topic_.empty())
     {
         rclcpp::SubscriptionOptions subscription_options;
@@ -174,8 +171,8 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
         get_parameter("check_pose_reachability_service").as_string().c_str(),
         get_parameter("check_goal_feasibility_service").as_string().c_str(),
         compute_path_action_name_.c_str(),
-        enable_footprint_collision_check_ ? "true" : "false",
-        enable_path_safety_check_ ? "true" : "false");
+        enable_footprint_collision_check ? "true" : "false",
+        enable_path_safety_check ? "true" : "false");
 }
 
 NavigationNode::~NavigationNode()
@@ -229,15 +226,11 @@ rclcpp_action::GoalResponse NavigationNode::handle_goal(
         RCLCPP_WARN(logger_, "Rejecting navigation goal while NavigationNode is shutting down.");
         return rclcpp_action::GoalResponse::REJECT;
     }
-    {
-        std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
-        if (navigation_goal_active_) {
-            RCLCPP_WARN(
-                logger_,
-                "Rejecting navigation goal while another exploration goal is active.");
-            return rclcpp_action::GoalResponse::REJECT;
-        }
-        navigation_goal_active_ = true;
+    if (!goal_gate_.tryAcquire()) {
+        RCLCPP_WARN(
+            logger_,
+            "Rejecting navigation goal while another exploration goal is active.");
+        return rclcpp_action::GoalResponse::REJECT;
     }
     return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
@@ -270,7 +263,7 @@ void NavigationNode::execute_navigation(
     const auto finish_inactive = [this]() {
         std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
         active_nav2_goal_.reset();
-        navigation_goal_active_ = false;
+        goal_gate_.release();
     };
 
     try {
@@ -414,7 +407,7 @@ void NavigationNode::execute_navigation(
                 goal_handle->canceled(result);
                 std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
                 active_nav2_goal_.reset();
-                navigation_goal_active_ = false;
+                goal_gate_.release();
                 return;
             }
             if (nav2_result_future.wait_for(std::chrono::milliseconds(100)) ==
@@ -448,7 +441,7 @@ void NavigationNode::execute_navigation(
         {
             std::lock_guard<std::mutex> lock(nav2_goal_mutex_);
             active_nav2_goal_.reset();
-            navigation_goal_active_ = false;
+            goal_gate_.release();
         }
 
         if (wrapped_result.code == rclcpp_action::ResultCode::SUCCEEDED) {
@@ -600,7 +593,7 @@ void NavigationNode::compute_path_reachability(
     response.message = response.reachable ? "reachable" : "no path";
     if (wrapped_result.result) {
         response.pose_count = static_cast<uint32_t>(wrapped_result.result->path.poses.size());
-        response.path_length_m = static_cast<float>(path_length_m(wrapped_result.result->path));
+        response.path_length_m = static_cast<float>(navigation_core::pathLengthM(wrapped_result.result->path));
         if (path != nullptr) {
             *path = wrapped_result.result->path;
         }
@@ -727,20 +720,8 @@ bool NavigationNode::is_goal_footprint_valid(
     std::string & reason,
     double & footprint_cost) const
 {
-    footprint_cost = 0.0;
-    if (!enable_footprint_collision_check_) {
-        reason = "footprint_check_disabled";
-        return true;
-    }
-
     std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
-    const auto footprint_result = FootprintCollisionChecker::checkPose(
-        footprint_costmap_,
-        goal.pose,
-        footprint_collision_config_);
-    footprint_cost = footprint_result.max_cost;
-    reason = footprint_result.reason;
-    return footprint_result.valid;
+    return footprint_validator_.isGoalValid(goal, reason, footprint_cost);
 }
 
 bool NavigationNode::is_path_costmap_safe(
@@ -748,49 +729,8 @@ bool NavigationNode::is_path_costmap_safe(
     std::string & reason,
     double & max_path_cost) const
 {
-    max_path_cost = 0.0;
-    if (!enable_path_safety_check_) {
-        reason = "path_check_disabled";
-        return true;
-    }
-    if (path.poses.empty()) {
-        reason = "path_empty";
-        return false;
-    }
-
     std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
-    if (!footprint_costmap_.isReady()) {
-        reason = "path_costmap_unavailable";
-        return false;
-    }
-
-    for (const auto & pose : path.poses) {
-        unsigned int mx = 0U;
-        unsigned int my = 0U;
-        if (!footprint_costmap_.worldToMap(
-                pose.pose.position.x,
-                pose.pose.position.y,
-                mx,
-                my))
-        {
-            reason = "path_out_of_costmap";
-            return false;
-        }
-
-        const auto cost = footprint_costmap_.getCost(mx, my);
-        max_path_cost = std::max(max_path_cost, static_cast<double>(cost));
-        if (cost == nav2_costmap_2d::NO_INFORMATION && !allow_unknown_path_) {
-            reason = "path_crosses_unknown";
-            return false;
-        }
-        if (cost != nav2_costmap_2d::NO_INFORMATION && cost >= path_cost_threshold_) {
-            reason = "path_crosses_high_cost";
-            return false;
-        }
-    }
-
-    reason = "path_safe";
-    return true;
+    return path_safety_checker_.isSafe(path, reason, max_path_cost);
 }
 
 std::string NavigationNode::escape_json_string(const std::string & value) const

@@ -28,6 +28,7 @@ find_package(util_package REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(behaviortree_cpp_v3 REQUIRED)
 find_package(frontier_explorer_core REQUIRED)
+find_package(navigation_core REQUIRED)
 
 set(frontier_explorer_nodes_DEPS
   rclcpp
@@ -47,6 +48,7 @@ set(frontier_explorer_nodes_DEPS
   ament_index_cpp
   behaviortree_cpp_v3
   frontier_explorer_core
+  navigation_core
 )
 
 function(configure_frontier_explorer_nodes_target target_name)
