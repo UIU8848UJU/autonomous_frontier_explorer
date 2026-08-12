@@ -44,7 +44,6 @@ Frontier 能力节点：
 
 ```text
 /frontier_explorer_node/get_frontier_candidates
-/frontier_explorer_node/get_next_frontier_goal
 /frontier_explorer_node/mark_frontier_failed
 /frontier_explorer_node/clear_frontier_blacklist
 /frontier_explorer_node/get_exploration_state

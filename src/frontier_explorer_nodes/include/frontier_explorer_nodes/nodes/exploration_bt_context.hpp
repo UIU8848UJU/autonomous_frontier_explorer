@@ -12,9 +12,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "robot_interfaces/action/navigate_to_pose.hpp"
 #include "robot_interfaces/srv/check_goal_feasibility.hpp"
-#include "robot_interfaces/srv/check_pose_reachability.hpp"
 #include "robot_interfaces/srv/get_frontier_candidates.hpp"
-#include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 
 namespace frontier_explorer
@@ -50,10 +48,8 @@ struct ExplorationBtContext
 
     rclcpp::Node * node{nullptr};
     rclcpp::Logger logger{rclcpp::get_logger("frontier_explorer.bt")};
-    rclcpp::Client<robot_interfaces::srv::GetNextFrontierGoal>::SharedPtr get_next_client;
     rclcpp::Client<robot_interfaces::srv::GetFrontierCandidates>::SharedPtr get_candidates_client;
     rclcpp::Client<robot_interfaces::srv::MarkFrontierFailed>::SharedPtr mark_failed_client;
-    rclcpp::Client<robot_interfaces::srv::CheckPoseReachability>::SharedPtr reachability_client;
     rclcpp::Client<robot_interfaces::srv::CheckGoalFeasibility>::SharedPtr feasibility_client;
     rclcpp_action::Client<NavigateToPose>::SharedPtr nav_client;
 

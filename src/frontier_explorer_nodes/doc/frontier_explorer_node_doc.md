@@ -53,7 +53,6 @@ NavigationNode
 | `/frontier/selected_marker` | `visualization_msgs/msg/MarkerArray` | 发布 | 本轮最终选中的目标箭头。 |
 | `/frontier/blacklist_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 已进入 goal blacklist 的目标点。 |
 | `/frontier/rejected_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 本轮 detector 发现但 selector 未能选出有效目标的 frontier。 |
-| `/frontier_explorer_node/get_next_frontier_goal` | `robot_interfaces/srv/GetNextFrontierGoal` | 服务 | 请求下一个 frontier goal。 |
 | `/frontier_explorer_node/mark_frontier_failed` | `robot_interfaces/srv/MarkFrontierFailed` | 服务 | 外部导航失败后通知能力层更新 retry / blacklist。 |
 | `/frontier_explorer_node/clear_frontier_blacklist` | `robot_interfaces/srv/ClearFrontierBlacklist` | 服务 | 清空 frontier blacklist。 |
 | `/frontier_explorer_node/get_exploration_state` | `robot_interfaces/srv/GetExplorationState` | 服务 | 查询 frontier 能力节点状态。 |
@@ -61,15 +60,15 @@ NavigationNode
 ## 3. 核心流程
 
 `FrontierExplorerNode` 不再有探索导航主循环。核心能力入口是
-`FrontierGoalProvider::compute_next_frontier_goal()`：
+`FrontierGoalProvider::compute_frontier_candidates()`：
 
 1. 检查 `/map`、costmap adapter 和 `map <- base_link` TF 是否可用。
 2. 检查 `/map` 是否超时；超时则进入 STUCK，detail 为 `map_stale`。
 3. 根据 TF 得到的 map frame 机器人位姿和 `/map` 原点/分辨率计算当前 `GridCell`。
 4. `FrontierDetector` 从 `/map` 中检测 frontier cell 并聚类。
 5. `FrontierSelector` 调用 pruner/scorer，使用 `/map` 生成候选，使用 global costmap 计算 clearance 软评分。
-6. 返回候选点、Top 5 评分文本、blacklist 和 selected goal 所需的可视化快照。
-7. 将 goal grid 转换为 `PoseStamped` 并填充服务响应。
+6. 返回候选列表、Top 5 评分文本、blacklist 和 selected goal 所需的可视化快照。
+7. 将每个候选 grid 转换为 `PoseStamped` 并填充服务响应。
 
 BT 默认使用 `get_frontier_candidates` 获取候选列表，再由 `SelectFeasibleFrontier`
 通过 NavigationNode 检查 footprint 和 path safety 后选择最终导航目标。
@@ -234,7 +233,7 @@ RViz 只保留 Top 5 的简短分数标签，避免文字盖住地图。
 | `/frontier/rejected_markers` | `rejected_candidates` / `rejected_frontiers` | `SPHERE` / `POINTS` | 红色 | 本轮 detector 发现但 selector 未能选出有效目标的 frontier 或候选。 |
 
 每次发布前都会发送 `DELETEALL`，避免 RViz 残留旧 marker。
-探索完成（`get_next_frontier_goal` 返回 `exploration_complete`）时会调用 `clearAll()` 清理所有 frontier marker。
+探索完成（`get_frontier_candidates` 返回 `exploration_complete`）时会调用 `clearAll()` 清理所有 frontier marker。
 
 注意：RViz 中看到的一串红色球如果来自 `/slam_toolbox/graph_visualization`，
 那是 SLAM Toolbox pose graph，不是 `/frontier/blacklist_markers`。
@@ -245,7 +244,7 @@ RViz 只保留 Top 5 的简短分数标签，避免文字盖住地图。
 | --- | --- | --- |
 | IDLE | 节点启动默认状态 | 只维护订阅和能力接口。 |
 | RUNNING | 成功选点、失败事件记录或 blacklist 清理 | 表示能力节点可继续响应请求。 |
-| COMPLETED | `get_next_frontier_goal` 判断无 frontier | 表示 frontier 能力层认为探索完成。 |
+| COMPLETED | `get_frontier_candidates` 判断无 frontier | 表示 frontier 能力层认为探索完成。 |
 | STOPPED | 状态模型保留 | 停止状态由外部编排层解释。 |
 | STUCK | map 超时、连续无可用 frontier 或失败目标越界 | detail 会记录具体原因。 |
 

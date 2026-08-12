@@ -93,11 +93,9 @@ add_library(frontier_explorer_bt_nodes SHARED
   src/bt/exploration_bt_context.cpp
   src/bt/is_exploration_complete_condition.cpp
   src/bt/action/compute_frontier_candidates_action.cpp
-  src/bt/action/compute_next_frontier_goal_action.cpp
   src/bt/action/mark_frontier_failed_action.cpp
   src/bt/action/navigate_to_frontier_action.cpp
   src/bt/action/select_feasible_frontier_action.cpp
-  src/bt/action/select_reachable_frontier_action.cpp
   src/bt/plugins/exploration_bt_plugins.cpp
 )
 

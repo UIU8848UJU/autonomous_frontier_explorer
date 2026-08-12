@@ -34,27 +34,6 @@ struct FrontierGoalVisualization
     bool clear_candidate_markers{false};
 };
 
-/// @brief: 计算下一个 frontier 目标的结果结构
-struct FrontierGoalResult
-{
-    bool success{false};
-    geometry_msgs::msg::PoseStamped goal;
-    uint16_t reason_code{0};
-    std::string reason_text;
-    float score{0.0F};
-    float distance_m{0.0F};
-    float clearance_m{0.0F};
-    uint32_t raw_frontier_count{0U};
-    uint32_t candidate_count{0U};
-    uint32_t blacklist_count{0U};
-    bool exploration_complete{false};
-    bool recoverable{false};
-    std::optional<GridCell> goal_cell;
-    ExplorationState state{ExplorationState::RUNNING};
-    std::string state_detail;
-    FrontierGoalVisualization visualization;
-};
-
 /// @brief: 单个 frontier 候选目标的服务输出数据
 struct FrontierCandidateResult
 {
@@ -136,11 +115,6 @@ public:
     /// @param checker 可达性检查器，可为空
     void set_reachability_checker(
         const std::shared_ptr<FrontierReachabilityChecker> & checker);
-
-    /// @brief: 计算下一个 frontier goal，不触发导航
-    /// @param now 当前 ROS 时间
-    /// @return: frontier 目标计算结果
-    FrontierGoalResult compute_next_frontier_goal(const rclcpp::Time & now);
 
     /// @brief: 计算 frontier 候选目标列表，不触发导航、不更新 last goal
     /// @param now 当前 ROS 时间

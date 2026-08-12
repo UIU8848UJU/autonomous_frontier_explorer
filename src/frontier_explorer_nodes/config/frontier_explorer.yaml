@@ -39,10 +39,8 @@ frontier_explorer_node:
 exploration_bt_orchestrator_node:
   ros__parameters:
     use_sim_time: true
-    frontier_goal_service: /frontier_explorer_node/get_next_frontier_goal
     frontier_candidates_service: /frontier_explorer_node/get_frontier_candidates
     mark_failed_service: /frontier_explorer_node/mark_frontier_failed
-    reachability_service: /navigation_node/check_pose_reachability
     goal_feasibility_service: /navigation_node/check_goal_feasibility
     navigation_action: /navigation_node/navigate_to_pose
     max_frontier_candidates: 16

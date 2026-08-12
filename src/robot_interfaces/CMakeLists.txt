@@ -15,7 +15,6 @@ set(MSG_FILES
 
 set(SRV_FILES
   "srv/GetFrontierCandidates.srv"
-  "srv/GetNextFrontierGoal.srv"
   "srv/MarkFrontierFailed.srv"
   "srv/ClearFrontierBlacklist.srv"
   "srv/GetExplorationState.srv"

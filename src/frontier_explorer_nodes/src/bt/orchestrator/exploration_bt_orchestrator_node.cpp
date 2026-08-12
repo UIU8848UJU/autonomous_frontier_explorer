@@ -9,7 +9,6 @@
 #include "ament_index_cpp/get_package_prefix.hpp"
 #include "frontier_explorer_nodes/nodes/exploration_bt_defaults.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
-#include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 
 namespace frontier_explorer
@@ -33,17 +32,11 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
         "bt_plugin_libraries",
         std::vector<std::string>{default_bt_plugin});
     declare_parameter<std::string>(
-        "frontier_goal_service",
-        exploration_bt_defaults::kFrontierGoalService);
-    declare_parameter<std::string>(
         "frontier_candidates_service",
         exploration_bt_defaults::kFrontierCandidatesService);
     declare_parameter<std::string>(
         "mark_failed_service",
         exploration_bt_defaults::kMarkFailedService);
-    declare_parameter<std::string>(
-        "reachability_service",
-        exploration_bt_defaults::kReachabilityService);
     declare_parameter<std::string>(
         "goal_feasibility_service",
         exploration_bt_defaults::kGoalFeasibilityService);
@@ -84,18 +77,12 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
             static_cast<int>(get_parameter("max_feasibility_recoverable_retries").as_int())));
     context_->feasible_path_length_weight =
         std::max(0.0, get_parameter("feasible_path_length_weight").as_double());
-    context_->get_next_client =
-        create_client<robot_interfaces::srv::GetNextFrontierGoal>(
-            get_parameter("frontier_goal_service").as_string());
     context_->get_candidates_client =
         create_client<robot_interfaces::srv::GetFrontierCandidates>(
             get_parameter("frontier_candidates_service").as_string());
     context_->mark_failed_client =
         create_client<robot_interfaces::srv::MarkFrontierFailed>(
             get_parameter("mark_failed_service").as_string());
-    context_->reachability_client =
-        create_client<robot_interfaces::srv::CheckPoseReachability>(
-            get_parameter("reachability_service").as_string());
     context_->feasibility_client =
         create_client<robot_interfaces::srv::CheckGoalFeasibility>(
             get_parameter("goal_feasibility_service").as_string());

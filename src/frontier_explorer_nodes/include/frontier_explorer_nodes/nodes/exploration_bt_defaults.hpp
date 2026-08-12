@@ -5,10 +5,6 @@ namespace frontier_explorer
 namespace exploration_bt_defaults
 {
 
-/// @brief: 默认 frontier goal 计算服务名，生产部署时优先通过 YAML 参数覆盖
-inline constexpr char kFrontierGoalService[] =
-    "/frontier_explorer_node/get_next_frontier_goal";
-
 /// @brief: 默认 frontier 候选列表服务名，生产部署时优先通过 YAML 参数覆盖
 inline constexpr char kFrontierCandidatesService[] =
     "/frontier_explorer_node/get_frontier_candidates";
@@ -16,10 +12,6 @@ inline constexpr char kFrontierCandidatesService[] =
 /// @brief: 默认 frontier 失败标记服务名，生产部署时优先通过 YAML 参数覆盖
 inline constexpr char kMarkFailedService[] =
     "/frontier_explorer_node/mark_frontier_failed";
-
-/// @brief: 默认位姿可达性检查服务名
-inline constexpr char kReachabilityService[] =
-    "/navigation_node/check_pose_reachability";
 
 /// @brief: 默认目标导航可执行性检查服务名
 inline constexpr char kGoalFeasibilityService[] =

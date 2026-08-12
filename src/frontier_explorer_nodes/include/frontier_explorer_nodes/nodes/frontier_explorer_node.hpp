@@ -14,7 +14,6 @@
 #include "robot_interfaces/srv/clear_frontier_blacklist.hpp"
 #include "robot_interfaces/srv/get_exploration_state.hpp"
 #include "robot_interfaces/srv/get_frontier_candidates.hpp"
-#include "robot_interfaces/srv/get_next_frontier_goal.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "tf2_ros/buffer.h"
@@ -62,10 +61,6 @@ private:
     /// @param visualization provider 返回的可视化快照
     void publish_markers(const FrontierGoalVisualization & visualization);
 
-    /// @brief: 发布 frontier 目标决策调试 JSON，供 exploration_learning 采集
-    /// @param result 单目标决策结果
-    void publish_decision_debug(const FrontierGoalResult & result);
-
     /// @brief: 发布 frontier 候选列表决策调试 JSON，供 exploration_learning 采集
     /// @param result 候选列表决策结果
     void publish_decision_debug(const FrontierCandidatesResult & result);
@@ -78,13 +73,6 @@ private:
     /// @brief: 获取当前状态字符串
     /// @return: 当前状态字符串
     std::string state_to_string() const;
-
-    /// @brief: 处理外部请求下一个 frontier 目标
-    /// @param request 服务请求
-    /// @param response 服务响应
-    void handle_get_next_frontier_goal(
-            const std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Request> request,
-            std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Response> response);
 
     /// @brief: 处理外部请求 frontier 候选目标列表
     /// @param request 服务请求
@@ -147,7 +135,6 @@ private:
     std::string state_detail_;
 
     rclcpp::Service<robot_interfaces::srv::GetFrontierCandidates>::SharedPtr get_frontier_candidates_srv_;
-    rclcpp::Service<robot_interfaces::srv::GetNextFrontierGoal>::SharedPtr get_next_frontier_goal_srv_;
     rclcpp::Service<robot_interfaces::srv::MarkFrontierFailed>::SharedPtr mark_frontier_failed_srv_;
     rclcpp::Service<robot_interfaces::srv::ClearFrontierBlacklist>::SharedPtr clear_frontier_blacklist_srv_;
     rclcpp::Service<robot_interfaces::srv::GetExplorationState>::SharedPtr get_exploration_state_srv_;

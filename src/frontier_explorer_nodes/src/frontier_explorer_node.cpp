@@ -263,15 +263,6 @@ void FrontierExplorerNode::create_interfaces()
         "/frontier_explorer/decision_debug_json",
         rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
 
-    get_next_frontier_goal_srv_ =
-        this->create_service<robot_interfaces::srv::GetNextFrontierGoal>(
-            "~/get_next_frontier_goal",
-            std::bind(
-                &FrontierExplorerNode::handle_get_next_frontier_goal,
-                this,
-                std::placeholders::_1,
-                std::placeholders::_2));
-
     get_frontier_candidates_srv_ =
         this->create_service<robot_interfaces::srv::GetFrontierCandidates>(
             "~/get_frontier_candidates",
@@ -479,42 +470,6 @@ std::string FrontierExplorerNode::escape_json_string(const std::string & value) 
     return escaped.str();
 }
 
-void FrontierExplorerNode::publish_decision_debug(const FrontierGoalResult & result)
-{
-    if (!decision_debug_pub_) {
-        return;
-    }
-
-    std::ostringstream json;
-    json << std::fixed << std::setprecision(6)
-         << "{"
-         << "\"event\":\"next_frontier_goal\","
-         << "\"success\":" << (result.success ? "true" : "false") << ","
-         << "\"reason_code\":" << result.reason_code << ","
-         << "\"reason_text\":\"" << escape_json_string(result.reason_text) << "\","
-         << "\"raw_frontier_count\":" << result.raw_frontier_count << ","
-         << "\"candidate_count\":" << result.candidate_count << ","
-         << "\"blacklist_count\":" << result.blacklist_count << ","
-         << "\"exploration_complete\":" << (result.exploration_complete ? "true" : "false")
-         << ",\"selected\":";
-    if (result.success) {
-        json << "{"
-             << "\"x\":" << result.goal.pose.position.x << ","
-             << "\"y\":" << result.goal.pose.position.y << ","
-             << "\"score\":" << result.score << ","
-             << "\"distance_m\":" << result.distance_m << ","
-             << "\"clearance_m\":" << result.clearance_m
-             << "}";
-    } else {
-        json << "null";
-    }
-    json << "}";
-
-    std_msgs::msg::String msg;
-    msg.data = json.str();
-    decision_debug_pub_->publish(msg);
-}
-
 void FrontierExplorerNode::publish_decision_debug(const FrontierCandidatesResult & result)
 {
     if (!decision_debug_pub_) {
@@ -600,36 +555,6 @@ std::string FrontierExplorerNode::state_to_string(ExplorationState state) const
         case ExplorationState::STUCK: return "STUCK";
         default: return "UNKNOWN";
     }
-}
-
-void FrontierExplorerNode::handle_get_next_frontier_goal(
-    const std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Request>,
-    std::shared_ptr<robot_interfaces::srv::GetNextFrontierGoal::Response> response)
-{
-    update_robot_pose_from_tf();
-    const auto result = goal_provider_.compute_next_frontier_goal(this->now());
-    publish_decision_debug(result);
-    response->success = result.success;
-    response->goal = result.goal;
-    response->reason_code = result.reason_code;
-    response->reason_text = result.reason_text;
-    response->score = result.score;
-    response->distance_m = result.distance_m;
-    response->clearance_m = result.clearance_m;
-    response->raw_frontier_count = result.raw_frontier_count;
-    response->candidate_count = result.candidate_count;
-    response->blacklist_count = result.blacklist_count;
-    response->exploration_complete = result.exploration_complete;
-    response->recoverable = result.recoverable;
-
-    if (result.exploration_complete) {
-        if (marker_publisher_) {
-            marker_publisher_->clearAll();
-        }
-    } else {
-        publish_markers(result.visualization);
-    }
-    set_state(result.state, result.state_detail);
 }
 
 void FrontierExplorerNode::handle_get_frontier_candidates(

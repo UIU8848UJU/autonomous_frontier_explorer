@@ -58,9 +58,7 @@ BT 不直接维护 retry / blacklist。`retry_count`、`blacklisted`、goal blac
 
 | BT 节点 | 类型 | 依赖接口 | 职责 |
 | --- | --- | --- | --- |
-| `ComputeNextFrontierGoal` | StatefulAction | `robot_interfaces/srv/GetNextFrontierGoal` | 请求下一个 frontier goal |
 | `ComputeFrontierCandidates` | StatefulAction | `robot_interfaces/srv/GetFrontierCandidates` | 请求 frontier 候选列表 |
-| `SelectReachableFrontier` | StatefulAction | `robot_interfaces/srv/CheckPoseReachability` | 兼容旧 XML，从候选列表中选择第一个 planner 可达目标 |
 | `SelectFeasibleFrontier` | StatefulAction | `robot_interfaces/srv/CheckGoalFeasibility` | 在候选窗口内选择综合 score 和 path length 最优的可执行目标 |
 | `NavigateToFrontier` | StatefulAction | `robot_interfaces/action/NavigateToPose` | 导航到当前 frontier goal |
 | `MarkFrontierFailed` | StatefulAction | `robot_interfaces/srv/MarkFrontierFailed` | 通知 frontier 能力节点处理导航失败事件 |
@@ -102,10 +100,8 @@ include/frontier_explorer_nodes/nodes/exploration_bt_defaults.hpp
 ```yaml
 exploration_bt_orchestrator_node:
   ros__parameters:
-    frontier_goal_service: /frontier_explorer_node/get_next_frontier_goal
     frontier_candidates_service: /frontier_explorer_node/get_frontier_candidates
     mark_failed_service: /frontier_explorer_node/mark_frontier_failed
-    reachability_service: /navigation_node/check_pose_reachability
     goal_feasibility_service: /navigation_node/check_goal_feasibility
     navigation_action: /navigation_node/navigate_to_pose
     max_frontier_candidates: 8
@@ -145,9 +141,7 @@ navigation_node:
 
 | 插件节点 | 类型 | 说明 |
 | --- | --- | --- |
-| `ComputeNextFrontierGoal` | StatefulAction | 兼容旧 XML，请求 frontier 能力节点返回下一个 goal |
 | `ComputeFrontierCandidates` | StatefulAction | 请求 frontier 能力节点返回候选列表 |
-| `SelectReachableFrontier` | StatefulAction | 兼容旧 XML，调用 NavigationNode 可达性服务选择可达候选 |
 | `SelectFeasibleFrontier` | StatefulAction | 调用 NavigationNode 可执行性服务选择可执行候选 |
 | `NavigateToFrontier` | StatefulAction | 调用 NavigationNode `NavigateToPose` 导航到当前 goal |
 | `MarkFrontierFailed` | StatefulAction | 导航失败后通知 frontier 能力节点 |
@@ -180,7 +174,7 @@ navigation_node:
     <ReactiveSequence>
       <CheckMappingReady/>
       <RetryUntilSuccessful num_attempts="3">
-        <ComputeNextFrontierGoal/>
+        <ComputeFrontierCandidates/>
       </RetryUntilSuccessful>
       <Fallback>
         <NavigateToFrontier/>
