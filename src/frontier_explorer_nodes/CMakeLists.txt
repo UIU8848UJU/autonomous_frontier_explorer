@@ -127,7 +127,7 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY launch config rviz doc behavior_trees
+install(DIRECTORY launch config doc behavior_trees
   DESTINATION share/${PROJECT_NAME}
 )
 

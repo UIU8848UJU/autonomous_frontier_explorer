@@ -18,7 +18,7 @@ def generate_launch_description():
         )
     )
 
-    rviz_config = os.path.join(task_pkg, "rviz", "slam.rviz")
+    rviz_config = os.path.join(bringup_pkg, "rviz", "slam.rviz")
     rviz_node = Node(
         package="rviz2",
         executable="rviz2",

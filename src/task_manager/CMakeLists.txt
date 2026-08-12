@@ -37,7 +37,7 @@ target_include_directories(task_manager_node
     ${CMAKE_SOURCE_DIR}/src/util_package/include
 )
 
-install(DIRECTORY launch config rviz
+install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
 
