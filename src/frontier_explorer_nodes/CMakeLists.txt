@@ -27,7 +27,7 @@ find_package(robot_interfaces REQUIRED)
 find_package(util_package REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(behaviortree_cpp_v3 REQUIRED)
-find_package(frontier_explorer_core REQUIRED)
+find_package(frontier_explorer_ros REQUIRED)
 find_package(navigation_core REQUIRED)
 
 set(frontier_explorer_nodes_DEPS
@@ -47,7 +47,7 @@ set(frontier_explorer_nodes_DEPS
   util_package
   ament_index_cpp
   behaviortree_cpp_v3
-  frontier_explorer_core
+  frontier_explorer_ros
   navigation_core
 )
 

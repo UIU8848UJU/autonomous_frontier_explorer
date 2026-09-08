@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "frontier_explorer_core/costmap/costmap_adapter.hpp"
+#include "frontier_explorer_ros/costmap/costmap_adapter.hpp"
 #include "navigation_core/footprint_goal_validator.hpp"
 #include "navigation_core/path_safety_checker.hpp"
 #include "navigation_core/single_goal_gate.hpp"

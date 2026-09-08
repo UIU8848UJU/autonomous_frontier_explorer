@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 3.8)
+project(frontier_core_downstream_smoke)
+
+find_package(frontier_explorer_core REQUIRED)
+
+add_executable(frontier_core_downstream_smoke smoke.cpp)
+target_link_libraries(frontier_core_downstream_smoke
+  frontier_explorer_core::frontier_explorer_detection_core
+  frontier_explorer_core::frontier_explorer_scoring_core
+  frontier_explorer_core::frontier_explorer_selection_core
+  frontier_explorer_core::frontier_explorer_core
+)
+
+add_executable(frontier_selection_core_downstream_smoke selection_smoke.cpp)
+target_link_libraries(frontier_selection_core_downstream_smoke
+  frontier_explorer_core::frontier_explorer_selection_core
+)

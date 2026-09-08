@@ -2,8 +2,8 @@
 
 #include <string>
 
-#include "frontier_explorer_core/costmap/costmap_adapter.hpp"
-#include "frontier_explorer_core/geometry/footprint_collision_checker.hpp"
+#include "frontier_explorer_ros/costmap/costmap_adapter.hpp"
+#include "frontier_explorer_ros/geometry/footprint_collision_checker.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
 
 namespace frontier_explorer

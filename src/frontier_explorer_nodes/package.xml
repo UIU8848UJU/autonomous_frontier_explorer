@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>frontier_explorer_nodes</name>
-  <version>0.0.2</version>
+  <version>0.0.3</version>
   <description>ROS 2 nodes and BehaviorTree plugins for frontier exploration.</description>
 
   <maintainer email="819119802@qq.com">xxx</maintainer>
@@ -9,7 +9,7 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <depend>frontier_explorer_core</depend>
+  <depend>frontier_explorer_ros</depend>
   <depend>navigation_core</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>

@@ -1,8 +1,8 @@
 #include <string>
 #include <vector>
 
-#include "frontier_explorer_core/costmap/costmap_adapter.hpp"
-#include "frontier_explorer_core/geometry/footprint_collision_checker.hpp"
+#include "frontier_explorer_ros/costmap/costmap_adapter.hpp"
+#include "frontier_explorer_ros/geometry/footprint_collision_checker.hpp"
 #include "gtest/gtest.h"
 #include "navigation_core/footprint_goal_validator.hpp"
 #include "navigation_core/path_safety_checker.hpp"

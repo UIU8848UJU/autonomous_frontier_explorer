@@ -10,7 +10,7 @@
 #include <thread>
 
 #include "nav2_costmap_2d/cost_values.hpp"
-#include "frontier_explorer_core/geometry/footprint_collision_checker.hpp"
+#include "frontier_explorer_ros/geometry/footprint_collision_checker.hpp"
 #include "navigation_core/path_utils.hpp"
 #include "nav_msgs/msg/path.hpp"
 

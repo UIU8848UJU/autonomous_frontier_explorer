@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "frontier_explorer_core/costmap/costmap_adapter.hpp"
+#include "frontier_explorer_ros/costmap/costmap_adapter.hpp"
 #include "nav_msgs/msg/path.hpp"
 
 namespace frontier_explorer

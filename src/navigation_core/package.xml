@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>navigation_core</name>
-  <version>0.0.1</version>
+  <version>0.0.2</version>
   <description>Core navigation safety checks and single-goal protection shared by NavigationNode.</description>
 
   <maintainer email="819119802@qq.com">xxx</maintainer>
@@ -13,7 +13,7 @@
   <depend>nav_msgs</depend>
   <depend>nav2_costmap_2d</depend>
   <depend>geometry_msgs</depend>
-  <depend>frontier_explorer_core</depend>
+  <depend>frontier_explorer_ros</depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>

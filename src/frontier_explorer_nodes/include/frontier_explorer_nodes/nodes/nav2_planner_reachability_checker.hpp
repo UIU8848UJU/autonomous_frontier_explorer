@@ -1,8 +1,8 @@
 #pragma once
 
-#include "frontier_explorer_core/reachability/frontier_reachability_checker.hpp"
+#include "frontier_explorer_ros/reachability/frontier_reachability_checker.hpp"
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
-#include "frontier_explorer_core/types/frontier_explorer_params.hpp"
+#include "frontier_explorer_ros/types/frontier_explorer_params.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 

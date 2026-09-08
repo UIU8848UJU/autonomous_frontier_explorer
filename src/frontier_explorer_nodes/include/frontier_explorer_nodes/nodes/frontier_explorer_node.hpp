@@ -5,10 +5,10 @@
 #include <mutex>
 #include <string>
 
-#include "frontier_explorer_core/frontier_goal_provider.hpp"
+#include "frontier_explorer_ros/frontier_goal_provider.hpp"
 #include "frontier_explorer_core/types/frontier_types.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
-#include "frontier_explorer_core/types/frontier_explorer_params.hpp"
+#include "frontier_explorer_ros/types/frontier_explorer_params.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "robot_interfaces/msg/exploration_state.hpp"
 #include "robot_interfaces/srv/clear_frontier_blacklist.hpp"

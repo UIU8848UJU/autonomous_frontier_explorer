@@ -15,14 +15,14 @@ find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(geometry_msgs REQUIRED)
-find_package(frontier_explorer_core REQUIRED)
+find_package(frontier_explorer_ros REQUIRED)
 
 set(navigation_core_DEPS
   rclcpp
   nav_msgs
   nav2_costmap_2d
   geometry_msgs
-  frontier_explorer_core
+  frontier_explorer_ros
 )
 
 add_library(${PROJECT_NAME}

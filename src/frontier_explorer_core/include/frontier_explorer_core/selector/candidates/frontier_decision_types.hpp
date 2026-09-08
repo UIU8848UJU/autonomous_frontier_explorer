@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 
 #include "frontier_explorer_core/types/frontier_types.hpp"
 
@@ -25,6 +26,7 @@ struct FrontierCandidate
     bool reachability_checked{false};
     bool reachable{true};
     double path_length_m{0.0};
+    std::string reachability_reason;
 };
 
 // 打分结果。保留每个分项，方便调试和调权重。

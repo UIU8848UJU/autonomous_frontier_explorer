@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <string>
 
 #include "frontier_explorer_core/selector/candidates/frontier_decision_types.hpp"
 #include "frontier_explorer_core/types/frontier_types.hpp"
@@ -25,6 +26,7 @@ struct ApproachGoalCandidate
     bool reachability_checked{false};
     bool reachable{true};
     double path_length_m{0.0};
+    std::string reachability_reason;
 
     ApproachGoalCandidate() = default;
 
@@ -41,7 +43,8 @@ struct ApproachGoalCandidate
       goal_inset_applied(candidate.goal_inset_applied),
       reachability_checked(candidate.reachability_checked),
       reachable(candidate.reachable),
-      path_length_m(candidate.path_length_m)
+      path_length_m(candidate.path_length_m),
+      reachability_reason(candidate.reachability_reason)
     {
     }
 
@@ -60,7 +63,8 @@ struct ApproachGoalCandidate
             goal_inset_applied,
             reachability_checked,
             reachable,
-            path_length_m};
+            path_length_m,
+            reachability_reason};
     }
 };
 

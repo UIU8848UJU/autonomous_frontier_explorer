@@ -12,7 +12,6 @@
 #include "frontier_explorer_core/scoring/components/information_gain_score.hpp"
 #include "frontier_explorer_core/scoring/components/retry_penalty_score.hpp"
 #include "frontier_explorer_core/scoring/components/unknown_risk_penalty_score.hpp"
-#include "rclcpp/rclcpp.hpp"
 #include "frontier_explorer_core/types/frontier_types.hpp"
 
 namespace frontier_explorer
@@ -25,11 +24,9 @@ public:
     /// @brief: 构造 FrontierScorer
     /// @param weights 打分权重配置
     /// @param max_retry_count 最大重试次数
-    /// @param logger ROS2 日志器
     explicit FrontierScorer(
         FrontierScoringWeights weights = FrontierScoringWeights{},
-        int max_retry_count = 2,
-        const rclcpp::Logger & logger = rclcpp::get_logger("frontier_explorer"));
+        int max_retry_count = 2);
 
     /// @brief: 对候选 frontier 批量打分
     /// @param candidates pruner 产出的候选点
@@ -58,7 +55,6 @@ private:
     double compute_total_score(const ScoredFrontierCandidate & scored) const;
 
 private:
-    rclcpp::Logger logger_;
     FrontierScoringWeights weights_{};
     
     DistanceScore distance_score_;

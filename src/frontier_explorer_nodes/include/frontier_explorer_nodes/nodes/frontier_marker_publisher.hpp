@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "frontier_explorer_core/costmap/costmap_adapter.hpp"
+#include "frontier_explorer_ros/costmap/costmap_adapter.hpp"
 #include "frontier_explorer_core/selector/candidates/frontier_decision_types.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "frontier_explorer_core/types/frontier_types.hpp"
