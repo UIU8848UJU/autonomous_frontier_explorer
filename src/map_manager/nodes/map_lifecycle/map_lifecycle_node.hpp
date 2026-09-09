@@ -13,8 +13,8 @@
 namespace map_manager
 {
 
-/// @brief: 地图管理节点参数，集中描述订阅 topic、完成判定和自动保存策略
-struct MapManagerConfig
+/// @brief: 地图生命周期节点参数，集中描述订阅 topic、完成判定和自动保存策略
+struct MapLifecycleConfig
 {
   /// @brief: 当前地图 topic
   std::string map_topic{"/map"};
@@ -31,12 +31,12 @@ struct MapManagerConfig
 };
 
 /// @brief: 统一管理当前地图、探索完成判定和地图自动保存
-class MapManagerNode : public rclcpp::Node
+class MapLifecycleNode : public rclcpp::Node
 {
 public:
-  /// @brief: 构造地图管理节点
+  /// @brief: 构造地图生命周期节点
   /// @param options ROS2 节点选项
-  explicit MapManagerNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  explicit MapLifecycleNode(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
 private:
   using ExplorationStateMsg = robot_interfaces::msg::ExplorationState;
@@ -88,7 +88,7 @@ private:
   std::string map_manager_state_to_string(std::uint8_t state) const;
 
   rclcpp::Logger logger_;
-  MapManagerConfig config_;
+  MapLifecycleConfig config_;
   Nav2MapSaverConfig nav2_map_saver_config_;
   MapManagerCore core_;
   std::unique_ptr<Nav2MapSaver> nav2_map_saver_;

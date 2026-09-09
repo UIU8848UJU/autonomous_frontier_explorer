@@ -24,23 +24,23 @@ target_include_directories(map_manager_core PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-add_executable(map_manager_node
-  nodes/map_manager/main.cpp
-  nodes/map_manager/map_manager_node.cpp
-  nodes/map_manager/adapters/nav2_map_saver.cpp
-  nodes/map_manager/adapters/ros_message_converter.cpp
+add_executable(map_lifecycle_node
+  nodes/map_lifecycle/main.cpp
+  nodes/map_lifecycle/map_lifecycle_node.cpp
+  nodes/map_lifecycle/adapters/nav2_map_saver.cpp
+  nodes/map_lifecycle/adapters/ros_message_converter.cpp
 )
 
-target_include_directories(map_manager_node
+target_include_directories(map_lifecycle_node
   PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/nodes/map_manager
+    ${CMAKE_CURRENT_SOURCE_DIR}/nodes/map_lifecycle
 )
 
-target_link_libraries(map_manager_node
+target_link_libraries(map_lifecycle_node
   map_manager_core
 )
 
-ament_target_dependencies(map_manager_node
+ament_target_dependencies(map_lifecycle_node
   rclcpp
   nav_msgs
   nav2_msgs
@@ -56,7 +56,7 @@ install(TARGETS
 )
 
 install(TARGETS
-  map_manager_node
+  map_lifecycle_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -81,20 +81,20 @@ if(BUILD_TESTING)
     map_manager_core
   )
 
-  ament_add_gtest(test_map_manager_node
-    test/test_map_manager_node.cpp
-    nodes/map_manager/map_manager_node.cpp
-    nodes/map_manager/adapters/nav2_map_saver.cpp
-    nodes/map_manager/adapters/ros_message_converter.cpp
+  ament_add_gtest(test_map_lifecycle_node
+    test/test_map_lifecycle_node.cpp
+    nodes/map_lifecycle/map_lifecycle_node.cpp
+    nodes/map_lifecycle/adapters/nav2_map_saver.cpp
+    nodes/map_lifecycle/adapters/ros_message_converter.cpp
   )
-  target_include_directories(test_map_manager_node
+  target_include_directories(test_map_lifecycle_node
     PRIVATE
-      ${CMAKE_CURRENT_SOURCE_DIR}/nodes/map_manager
+      ${CMAKE_CURRENT_SOURCE_DIR}/nodes/map_lifecycle
   )
-  target_link_libraries(test_map_manager_node
+  target_link_libraries(test_map_lifecycle_node
     map_manager_core
   )
-  ament_target_dependencies(test_map_manager_node
+  ament_target_dependencies(test_map_lifecycle_node
     rclcpp
     nav_msgs
     nav2_msgs

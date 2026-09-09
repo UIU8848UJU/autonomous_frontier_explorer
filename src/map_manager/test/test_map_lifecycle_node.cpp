@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
-#include "map_manager_node.hpp"
+#include "map_lifecycle_node.hpp"
 #include "nav2_msgs/srv/save_map.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "rclcpp/rclcpp.hpp"
@@ -94,7 +94,7 @@ rclcpp::NodeOptions make_manager_options(
   return options;
 }
 
-class MapManagerNodeTest : public ::testing::Test
+class MapLifecycleNodeTest : public ::testing::Test
 {
 protected:
   static void SetUpTestSuite()
@@ -114,7 +114,7 @@ protected:
   }
 };
 
-TEST_F(MapManagerNodeTest, PublishesOneSpecificFailureForRejectedSaveAttempt)
+TEST_F(MapLifecycleNodeTest, PublishesOneSpecificFailureForRejectedSaveAttempt)
 {
   const auto suffix = unique_suffix();
   const auto topic_prefix = "/map_manager_failure_" + suffix;
@@ -125,7 +125,7 @@ TEST_F(MapManagerNodeTest, PublishesOneSpecificFailureForRejectedSaveAttempt)
   std::ofstream(invalid_directory.string()) << "not a directory";
 
   auto client_node = std::make_shared<rclcpp::Node>("map_manager_failure_client_" + suffix);
-  auto manager = std::make_shared<MapManagerNode>(
+  auto manager = std::make_shared<MapLifecycleNode>(
     make_manager_options(topic_prefix, invalid_directory.string(), topic_prefix + "/save_map"));
 
   auto map_publisher = client_node->create_publisher<nav_msgs::msg::OccupancyGrid>(
@@ -169,7 +169,7 @@ TEST_F(MapManagerNodeTest, PublishesOneSpecificFailureForRejectedSaveAttempt)
   std::filesystem::remove_all(temp_root);
 }
 
-TEST_F(MapManagerNodeTest, PublishesFinalMapOnceAcrossSaveRetry)
+TEST_F(MapLifecycleNodeTest, PublishesFinalMapOnceAcrossSaveRetry)
 {
   const auto suffix = unique_suffix();
   const auto topic_prefix = "/map_manager_success_" + suffix;
@@ -187,7 +187,7 @@ TEST_F(MapManagerNodeTest, PublishesFinalMapOnceAcrossSaveRetry)
       ++save_request_count;
       response->result = save_request_count >= 2U;
     });
-  auto manager = std::make_shared<MapManagerNode>(
+  auto manager = std::make_shared<MapLifecycleNode>(
     make_manager_options(topic_prefix, save_directory.string(), topic_prefix + "/save_map"));
 
   auto map_publisher = service_node->create_publisher<nav_msgs::msg::OccupancyGrid>(

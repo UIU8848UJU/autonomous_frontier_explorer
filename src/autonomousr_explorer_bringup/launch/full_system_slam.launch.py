@@ -63,10 +63,10 @@ def generate_launch_description():
     )
 
     map_manager_params = os.path.join(map_manager_pkg, "config", "map_manager.yaml")
-    map_manager_node = Node(
+    map_lifecycle_node = Node(
         package="map_manager",
-        executable="map_manager_node",
-        name="map_manager_node",
+        executable="map_lifecycle_node",
+        name="map_lifecycle_node",
         output="screen",
         parameters=[map_manager_params],
     )
@@ -78,5 +78,5 @@ def generate_launch_description():
         TimerAction(period=12.5, actions=[navigation_node]),
         TimerAction(period=13.0, actions=[exploration_bt_orchestrator_node]),
         TimerAction(period=14.0, actions=[task_node]),
-        TimerAction(period=14.0, actions=[map_manager_node]),
+        TimerAction(period=14.0, actions=[map_lifecycle_node]),
     ])

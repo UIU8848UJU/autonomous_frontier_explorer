@@ -1,4 +1,4 @@
-#include "map_manager_node.hpp"
+#include "map_lifecycle_node.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -17,20 +17,20 @@ constexpr std::size_t kMapManagerStatePubDepth = 10U;
 constexpr std::size_t kFinalMapPubDepth = 1U;
 }  // namespace
 
-MapManagerNode::MapManagerNode(const rclcpp::NodeOptions & options)
-: Node("map_manager_node", options),
-  logger_(this->get_logger().get_child("map_manager"))
+MapLifecycleNode::MapLifecycleNode(const rclcpp::NodeOptions & options)
+: Node("map_lifecycle_node", options),
+  logger_(this->get_logger().get_child("map_lifecycle"))
 {
   declare_params();
   load_params();
   apply_params();
   create_interfaces();
 
-  RCLCPP_INFO(logger_, "MapManagerNode started.");
+  RCLCPP_INFO(logger_, "MapLifecycleNode started.");
   publish_state(MapManagerStateMsg::IDLE, "started");
 }
 
-void MapManagerNode::declare_params()
+void MapLifecycleNode::declare_params()
 {
   this->declare_parameter<std::string>("map_topic", config_.map_topic);
   this->declare_parameter<std::string>(
@@ -69,7 +69,7 @@ void MapManagerNode::declare_params()
     nav2_map_saver_config_.service_wait_timeout_sec);
 }
 
-void MapManagerNode::load_params()
+void MapLifecycleNode::load_params()
 {
   config_.map_topic = this->get_parameter("map_topic").as_string();
   config_.exploration_state_topic =
@@ -95,7 +95,7 @@ void MapManagerNode::load_params()
     this->get_parameter("service_wait_timeout_sec").as_double();
 }
 
-void MapManagerNode::apply_params()
+void MapLifecycleNode::apply_params()
 {
   config_.completion_check_period_sec =
     std::max(0.5, config_.completion_check_period_sec);
@@ -124,19 +124,19 @@ void MapManagerNode::apply_params()
     nav2_map_saver_config_.map_saver_service_name.c_str());
 }
 
-void MapManagerNode::create_interfaces()
+void MapLifecycleNode::create_interfaces()
 {
   auto map_qos = rclcpp::QoS(rclcpp::KeepLast(kMapSubDepth)).reliable().transient_local();
   map_sub_ = this->create_subscription<nav_msgs::msg::OccupancyGrid>(
     config_.map_topic,
     map_qos,
-    std::bind(&MapManagerNode::map_callback, this, std::placeholders::_1));
+    std::bind(&MapLifecycleNode::map_callback, this, std::placeholders::_1));
 
   const auto state_qos = rclcpp::QoS(rclcpp::KeepLast(kStateSubDepth)).reliable();
   exploration_state_sub_ = this->create_subscription<ExplorationStateMsg>(
     config_.exploration_state_topic,
     state_qos,
-    std::bind(&MapManagerNode::exploration_state_callback, this, std::placeholders::_1));
+    std::bind(&MapLifecycleNode::exploration_state_callback, this, std::placeholders::_1));
 
   state_pub_ = this->create_publisher<MapManagerStateMsg>(
     config_.map_manager_state_topic,
@@ -150,10 +150,10 @@ void MapManagerNode::create_interfaces()
 
   completion_timer_ = this->create_wall_timer(
     std::chrono::duration<double>(config_.completion_check_period_sec),
-    std::bind(&MapManagerNode::completion_timer_callback, this));
+    std::bind(&MapLifecycleNode::completion_timer_callback, this));
 }
 
-void MapManagerNode::publish_state(std::uint8_t state, const std::string & detail)
+void MapLifecycleNode::publish_state(std::uint8_t state, const std::string & detail)
 {
   if (!state_pub_) {
     return;
@@ -176,7 +176,7 @@ void MapManagerNode::publish_state(std::uint8_t state, const std::string & detai
   state_pub_->publish(msg);
 }
 
-void MapManagerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
+void MapLifecycleNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr msg)
 {
   if (!msg) {
     RCLCPP_WARN(logger_, "Received null map message.");
@@ -201,7 +201,7 @@ void MapManagerNode::map_callback(const nav_msgs::msg::OccupancyGrid::SharedPtr 
     core_.map_statistics().unknown_ratio);
 }
 
-void MapManagerNode::exploration_state_callback(const ExplorationStateMsg::SharedPtr msg)
+void MapLifecycleNode::exploration_state_callback(const ExplorationStateMsg::SharedPtr msg)
 {
   if (!msg) {
     RCLCPP_WARN(logger_, "Received null exploration state message.");
@@ -216,7 +216,7 @@ void MapManagerNode::exploration_state_callback(const ExplorationStateMsg::Share
     core_.last_exploration_detail().c_str());
 }
 
-void MapManagerNode::completion_timer_callback()
+void MapLifecycleNode::completion_timer_callback()
 {
   if (!core_.should_save(config_.enable_auto_save)) {
     return;
@@ -234,7 +234,7 @@ void MapManagerNode::completion_timer_callback()
   trigger_save();
 }
 
-void MapManagerNode::trigger_save()
+void MapLifecycleNode::trigger_save()
 {
   if (!nav2_map_saver_) {
     RCLCPP_ERROR(logger_, "Cannot save map because Nav2MapSaver is not initialized.");
@@ -264,7 +264,7 @@ void MapManagerNode::trigger_save()
     });
 }
 
-void MapManagerNode::publish_final_map(const std::string & detail)
+void MapLifecycleNode::publish_final_map(const std::string & detail)
 {
   if (!final_map_pub_) {
     RCLCPP_WARN(logger_, "Cannot publish final map because publisher is not initialized.");
@@ -286,7 +286,7 @@ void MapManagerNode::publish_final_map(const std::string & detail)
     detail.c_str());
 }
 
-std::string MapManagerNode::exploration_state_to_string(ExplorationPhase state) const
+std::string MapLifecycleNode::exploration_state_to_string(ExplorationPhase state) const
 {
   switch (state) {
     case ExplorationPhase::IDLE:
@@ -304,7 +304,7 @@ std::string MapManagerNode::exploration_state_to_string(ExplorationPhase state) 
   }
 }
 
-std::string MapManagerNode::map_manager_state_to_string(std::uint8_t state) const
+std::string MapLifecycleNode::map_manager_state_to_string(std::uint8_t state) const
 {
   switch (state) {
     case MapManagerStateMsg::IDLE:

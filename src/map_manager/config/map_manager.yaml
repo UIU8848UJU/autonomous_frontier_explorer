@@ -1,4 +1,4 @@
-map_manager_node:
+map_lifecycle_node:
   ros__parameters:
     use_sim_time: true
     map_topic: /map
