@@ -63,7 +63,7 @@ def _extract_map_directory(config_data: dict) -> Optional[str]:
 
 
 def _default_maps_dir(pkg_path: Path, default_map_dir: str) -> Path:
-    # Try to locate the workspace root (`.../install` -> workspace) and append maps/
+    # 尝试定位工作区根目录（由 .../install 推导工作区），然后追加 maps/。
     parents = list(pkg_path.parents)
     workspace_root: Optional[Path] = None
     if len(parents) >= 3:

@@ -3,7 +3,7 @@ from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 import os
 
-# Task节点
+# TaskManager 节点
 
 
 def generate_launch_description():

@@ -35,7 +35,7 @@ struct FrontierPruningEnvironment
     std::function<std::optional<double>(const GridCell &)> clearance_query;
 };
 
-/// @brief ROS-free Frontier 硬过滤器，负责候选生成、地图约束和 fallback。
+/// @brief 不依赖 ROS 的 Frontier 硬过滤器，负责候选生成、地图约束和回退处理。
 class FrontierPruner
 {
 public:

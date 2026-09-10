@@ -14,7 +14,7 @@ namespace frontier_explorer
 {
 namespace
 {
-}  // namespace
+}  // 命名空间
 
 FrontierExplorerNode::FrontierExplorerNode(const rclcpp::NodeOptions & options)
 : Node("frontier_explorer_node", options),
@@ -683,4 +683,4 @@ void FrontierExplorerNode::handle_get_exploration_state(
     response->state.detail = detail.empty() ? state_to_string(current_state) : detail;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

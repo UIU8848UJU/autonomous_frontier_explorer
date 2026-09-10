@@ -44,4 +44,4 @@ std::vector<ScoredFrontierCandidate> rank_frontier_candidates(
     return scored_candidates;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

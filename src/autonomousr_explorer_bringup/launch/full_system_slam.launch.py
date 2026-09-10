@@ -9,8 +9,9 @@ import os
 def generate_launch_description():
     bringup_pkg = get_package_share_directory("autonomousr_explorer_bringup")
     frontier_pkg = get_package_share_directory("frontier_explorer_nodes")
+    exploration_bt_pkg = get_package_share_directory("exploration_bt")
     task_pkg = get_package_share_directory("task_manager")
-    map_manager_pkg = get_package_share_directory("map_manager")
+    map_lifecycle_pkg = get_package_share_directory("map_lifecycle")
 
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -37,12 +38,13 @@ def generate_launch_description():
         parameters=[frontier_params],
     )
 
+    exploration_bt_params = os.path.join(exploration_bt_pkg, "config", "exploration_bt.yaml")
     exploration_bt_orchestrator_node = Node(
-        package="frontier_explorer_nodes",
+        package="exploration_bt",
         executable="exploration_bt_orchestrator_node",
         name="exploration_bt_orchestrator_node",
         output="screen",
-        parameters=[frontier_params],
+        parameters=[exploration_bt_params],
     )
 
     navigation_node = Node(
@@ -62,13 +64,13 @@ def generate_launch_description():
         parameters=[task_params],
     )
 
-    map_manager_params = os.path.join(map_manager_pkg, "config", "map_manager.yaml")
+    map_lifecycle_params = os.path.join(map_lifecycle_pkg, "config", "map_lifecycle.yaml")
     map_lifecycle_node = Node(
-        package="map_manager",
+        package="map_lifecycle",
         executable="map_lifecycle_node",
         name="map_lifecycle_node",
         output="screen",
-        parameters=[map_manager_params],
+        parameters=[map_lifecycle_params],
     )
 
     return LaunchDescription([

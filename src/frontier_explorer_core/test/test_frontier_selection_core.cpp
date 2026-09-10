@@ -156,5 +156,5 @@ TEST(FrontierSelectionPolicyTest, ClearsFailuresWithoutClearingLastGoal)
     EXPECT_EQ(policy.pruning_context().last_goal, goal);
 }
 
-}  // namespace
-}  // namespace frontier_explorer
+}  // 命名空间
+}  // 命名空间 frontier_explorer

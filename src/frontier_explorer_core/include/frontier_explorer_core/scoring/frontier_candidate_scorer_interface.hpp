@@ -19,4 +19,4 @@ public:
         const RobotContext & context) const = 0;
 };
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

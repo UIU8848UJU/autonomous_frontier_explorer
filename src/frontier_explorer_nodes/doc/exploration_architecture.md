@@ -1,13 +1,13 @@
-# Exploration 架构说明
+# 探索架构说明
 
 ## 目标
 
-`frontier_explorer` 当前采用“能力节点 + BT 编排节点”的结构：
+当前探索系统按“核心能力 + ROS 适配 + BT 编排”分层：
 
-- `FrontierExplorerNode` 是 ROS wrapper，只负责 frontier 能力接口、订阅、marker 和 state。
-- `FrontierGoalProvider` 是纯 C++ 能力类，负责检测、过滤、打分、选择和 retry / blacklist 策略状态。
-- `ExplorationBtOrchestratorNode` 是唯一探索决策编排层。
-- `NavigationNode` 是导航能力中间层，对 BT 暴露目标可执行性检查和稳定导航 action，内部组合 Nav2 planner / navigator / costmap。
+- `frontier_explorer_core` 是纯 C++ 算法核心，负责 detector、scorer、selector 等可迁移能力。
+- `frontier_explorer_ros` 是 ROS 数据和 Nav2 适配层，承载 `FrontierGoalProvider` 等 ROS 侧组合能力。
+- `frontier_explorer_nodes` 只提供 FrontierExplorerNode、NavigationNode 等 ROS 能力节点。
+- `exploration_bt` 是唯一探索决策编排层，负责 BT XML、插件和流程状态发布。
 - retry / blacklist 仍由 frontier 能力层内部维护，对外只暴露失败事件接口。
 
 ## 架构图
@@ -16,7 +16,7 @@
 flowchart TD
     TM[TaskManagerNode] -->|start / stop exploration| BTO[ExplorationBtOrchestratorNode]
     BTO -->|load XML| BT[BehaviorTree.CPP<br/>exploration_tree.xml]
-    BTO -->|load .so| PLUGINS[frontier_explorer_bt_nodes<br/>BT plugin library]
+    BTO -->|load .so| PLUGINS[exploration_bt_nodes<br/>BT plugin library]
     BT --> CFC[ComputeFrontierCandidates]
     BT --> SFF[SelectFeasibleFrontier]
     BT --> NAVBT[NavigateToFrontier]
@@ -86,7 +86,7 @@ TaskManagerNode
 
 ## FrontierGoalProvider 职责
 
-`FrontierGoalProvider` 是可单测的 C++ 能力类，负责：
+`FrontierGoalProvider` 是 ROS 适配侧的可单测 C++ 能力类，负责：
 
 - 维护 `CostmapAdapter`。
 - 复用现有 `FrontierDetector`、`FrontierPruner`、`FrontierScorer`、`FrontierSelector`。
@@ -99,7 +99,7 @@ TaskManagerNode
 
 ## ExplorationBtOrchestratorNode 职责
 
-`ExplorationBtOrchestratorNode` 是唯一探索编排节点，负责：
+`ExplorationBtOrchestratorNode`（位于 `exploration_bt` 包）是唯一探索编排节点，负责：
 
 - 加载可配置 BT XML。
 - 加载 BehaviorTree.CPP 插件库。
@@ -158,14 +158,14 @@ ExplorationBtOrchestratorNode：
 
 ## 状态 topic
 
-- `/exploration_state`: 由 `exploration_bt_orchestrator_node` 唯一发布的探索状态 topic，TaskManager / MapManager / dataset_recorder 消费。
+- `/exploration_state`: 由 `exploration_bt_orchestrator_node` 唯一发布的探索状态 topic，TaskManager / MapLifecycle / dataset_recorder 消费。
 
 ## 参数约定
 
 服务名和 action 名属于运行时拓扑配置，不通过 CMake 写死。默认值集中在：
 
 ```text
-include/frontier_explorer_nodes/nodes/exploration_bt_defaults.hpp
+exploration_bt/include/exploration_bt/exploration_bt_defaults.hpp
 ```
 
 生产部署应通过 YAML 覆盖：
@@ -215,7 +215,7 @@ ros2 launch frontier_explorer_nodes frontier_explorer.launch.py
 单独启动 BT 编排节点：
 
 ```bash
-ros2 launch frontier_explorer_nodes exploration_bt_orchestrator.launch.py
+ros2 launch exploration_bt exploration_bt_orchestrator.launch.py
 ```
 
 启动探索：

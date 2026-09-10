@@ -23,7 +23,7 @@ struct FrontierSelectionCoreConfig
     bool require_reachable_goal{false};
 };
 
-/// @brief ROS-free selection state machine and candidate-pool policy.
+/// @brief 不依赖 ROS 的选择状态机和候选池策略。
 class FrontierSelectionPolicy
 {
 public:

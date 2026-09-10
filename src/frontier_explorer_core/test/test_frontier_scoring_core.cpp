@@ -21,7 +21,7 @@ FrontierCandidate make_candidate(GridCell goal, double distance, std::size_t clu
     return candidate;
 }
 
-}  // namespace
+}  // 命名空间
 
 TEST(FrontierScoringCore, ScoresCandidatesWithoutROS)
 {
@@ -83,4 +83,4 @@ TEST(FrontierScoringCore, RanksAndAnnotatesReachabilityWithoutROS)
     EXPECT_DOUBLE_EQ(ranked.front().candidate.path_length_m, 1.5);
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

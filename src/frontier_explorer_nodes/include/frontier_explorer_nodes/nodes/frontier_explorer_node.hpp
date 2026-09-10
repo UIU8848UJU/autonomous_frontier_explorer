@@ -141,4 +141,4 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr decision_debug_pub_;
 };
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

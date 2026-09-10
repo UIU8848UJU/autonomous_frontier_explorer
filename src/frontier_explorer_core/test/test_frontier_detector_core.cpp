@@ -20,7 +20,7 @@ GridMap make_map(unsigned int width, unsigned int height, std::int8_t value)
     return map;
 }
 
-}  // namespace
+}  // 命名空间
 
 TEST(FrontierDetectorCore, RejectsInvalidMapWithoutROS)
 {
@@ -46,4 +46,4 @@ TEST(FrontierDetectorCore, DetectsAndClustersFrontiersFromDomainMap)
     EXPECT_EQ(clusters.front().centroid, (GridCell{2, 2}));
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

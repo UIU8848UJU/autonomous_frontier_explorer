@@ -16,4 +16,4 @@ double ClearanceScore::score(
     return std::clamp(candidate.clearance_m / max_clearance_m, 0.0, 1.0);
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

@@ -20,4 +20,4 @@ std::vector<ScoredFrontierCandidate> rank_frontier_candidates(
     const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
         reachability_check = {});
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

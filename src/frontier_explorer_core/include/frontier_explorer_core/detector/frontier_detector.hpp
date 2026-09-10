@@ -9,7 +9,7 @@
 namespace frontier_explorer
 {
 
-/// @brief: ROS-free frontier 检测器，基于 GridMap 判断 free、unknown 和障碍邻域
+/// @brief: 不依赖 ROS 的前沿检测器，基于 GridMap 判断 free、unknown 和障碍邻域
 class FrontierDetector
 {
 public:
@@ -44,4 +44,4 @@ private:
     int obstacle_search_radius_cells_{2};
 };
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

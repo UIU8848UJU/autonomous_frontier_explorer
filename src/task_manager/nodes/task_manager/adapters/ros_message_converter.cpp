@@ -32,4 +32,4 @@ ExplorationEvent to_core_exploration_event(
   return event;
 }
 
-}  // namespace task_manager::adapters
+}  // 命名空间 task_manager::adapters

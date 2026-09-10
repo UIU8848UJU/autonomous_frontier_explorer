@@ -43,4 +43,4 @@ TEST(RosMessageConverterTest, MapsUnknownWireValuesToUnknown)
     ExplorationState::UNKNOWN);
 }
 
-}  // namespace task_manager
+}  // 命名空间 task_manager

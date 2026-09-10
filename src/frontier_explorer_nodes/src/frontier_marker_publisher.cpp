@@ -18,7 +18,7 @@ constexpr double kArrowLength = 0.4;
 constexpr double kArrowShaft = 0.08;
 constexpr double kMarkerAlpha = 0.9;
 constexpr std::size_t kMaxScoredTextMarkers = 5U;
-}  // namespace
+}  // 命名空间
 
 FrontierMarkerPublisher::FrontierMarkerPublisher(
     rclcpp::Node * node,
@@ -508,4 +508,4 @@ bool FrontierMarkerPublisher::cellToWorldPoint(
     return true;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

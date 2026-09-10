@@ -17,7 +17,7 @@ constexpr std::array<double, 2U> kSampleRadiiM{0.35, 0.55};
 constexpr double kAngleStepDeg = 30.0;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegreesToRadians = kPi / 180.0;
-}  // namespace
+}  // 命名空间
 
 FrontierPruner::FrontierPruner(
     double min_goal_distance_m,
@@ -402,4 +402,4 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
     return valid_candidates;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

@@ -124,4 +124,4 @@ double distance_in_meters(
     return std::hypot(p2.x - p1.x, p2.y - p1.y);
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

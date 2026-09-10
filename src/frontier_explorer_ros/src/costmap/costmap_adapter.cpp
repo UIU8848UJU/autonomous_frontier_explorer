@@ -298,4 +298,4 @@ unsigned char CostmapAdapter::interpretOccupancyValue(int8_t occupancy) const
             static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1)));
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

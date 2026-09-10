@@ -1,4 +1,4 @@
-# Exploration state shared between frontier explorer and task manager
+# frontier explorer 与 task_manager 共享的探索状态
 
 uint8 IDLE=0
 uint8 RUNNING=1

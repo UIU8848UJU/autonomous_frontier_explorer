@@ -85,7 +85,7 @@ double distance_to_map_edge_m(
 
     return static_cast<double>(min_cells) * map.info.resolution;
 }
-}  // namespace
+}  // 命名空间
 
 FrontierGoalProvider::FrontierGoalProvider(const rclcpp::Logger & logger)
 : logger_(logger),
@@ -459,4 +459,4 @@ std::vector<GridCell> FrontierGoalProvider::blacklisted_goals() const
     return selector_.blacklisted_goals();
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

@@ -18,4 +18,4 @@ inline double grid_distance_in_meters(
     return std::sqrt(dr * dr + dc * dc) * resolution;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

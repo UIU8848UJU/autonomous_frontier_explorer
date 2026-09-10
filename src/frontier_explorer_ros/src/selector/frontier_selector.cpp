@@ -344,4 +344,4 @@ void FrontierSelector::log_scored_candidates(
     RCLCPP_INFO(logger_, "%s", stream.str().c_str());
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

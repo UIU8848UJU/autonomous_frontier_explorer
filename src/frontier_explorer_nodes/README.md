@@ -4,16 +4,16 @@
 [![ROS 2](https://img.shields.io/badge/ROS%202-Humble-green)](https://docs.ros.org/en/humble/)
 [![Nav2](https://img.shields.io/badge/Nav2-Integrated-orange)](doc/exploration_architecture.md#navigationnode-职责)
 
-`frontier_explorer` 是面向 ROS 2 Humble / Nav2 的 frontier exploration 包。当前版本已经从单体探索节点重构为“能力节点 + BehaviorTree.CPP 编排 + NavigationNode 中间层”的结构，便于后续扩展商业化探索流程、地图保存、返航和任务管理。
+`frontier_explorer_nodes` 是面向 ROS 2 Humble / Nav2 的探索与导航能力节点包。当前版本将算法能力、ROS 节点和 BehaviorTree 编排分开，便于后续迁移到不同机器人平台。
 
 ## 当前架构
 
 ```text
 TaskManagerNode
-  -> ExplorationBtOrchestratorNode
+  -> exploration_bt/ExplorationBtOrchestratorNode
       -> BehaviorTree.CPP XML + BT plugins
-          -> FrontierExplorerNode / FrontierGoalProvider
-          -> NavigationNode
+          -> frontier_explorer_nodes/FrontierExplorerNode
+          -> frontier_explorer_nodes/NavigationNode
               -> Nav2 ComputePathToPose
               -> Nav2 NavigateToPose
 ```
@@ -21,7 +21,7 @@ TaskManagerNode
 核心边界：
 
 - `FrontierExplorerNode`：只提供 frontier 候选/目标生成、失败标记、blacklist 清理、marker；探索状态由 BT orchestrator 统一发布。
-- `ExplorationBtOrchestratorNode`：唯一探索编排入口，负责按 BT 请求候选、选择可执行目标、导航、失败重选、完成判断。
+- `ExplorationBtOrchestratorNode`：位于独立的 `exploration_bt` 包，是唯一探索编排入口，负责按 BT 请求候选、选择可执行目标、导航、失败重选、完成判断。
 - `NavigationNode`：导航能力中间层，负责 footprint 落脚检查、path safety 检查和 Nav2 `NavigateToPose` 桥接。
 - `FrontierGoalProvider`：纯 C++ 能力类，复用 detector / pruner / scorer / selector，不直接发送导航 goal。
 
@@ -35,7 +35,7 @@ TaskManagerNode
 - 支持候选回退策略：centroid fallback、向机器人方向退避、环形采样、候选 yaw 朝向 frontier centroid。
 - 使用 `/global_costmap/costmap` 对候选落脚点做安全硬约束，避免退避/采样候选落入障碍或 inflation 区。
 - 通过 NavigationNode 做 goal feasibility 检查：footprint 落脚碰撞 + Nav2 `ComputePathToPose` + path unknown/high-cost 审计。
-- 通过 BehaviorTree.CPP 插件库加载探索 BT 节点。
+- `frontier_explorer_nodes` 只提供 ROS 探索/导航能力节点；BehaviorTree.CPP 插件和 XML 编排位于独立的 `exploration_bt` 包。
 - 发布 raw / candidate / scored / selected / blacklist / rejected marker，支持 RViz 调试。
 
 ## 关键接口
@@ -120,7 +120,6 @@ ros2 service call /frontier_explorer_node/clear_frontier_blacklist robot_interfa
 ## 文档
 
 - [探索架构说明](doc/exploration_architecture.md)
-- [Behavior Tree 设计](doc/exploration_bt_design.md)
+- [Behavior Tree 设计](../exploration_bt/doc/exploration_bt_design.md)
 - [FrontierExplorerNode 技术文档](doc/frontier_explorer_node_doc.md)
 - [更新日志](CHANGELOG.rst)
-

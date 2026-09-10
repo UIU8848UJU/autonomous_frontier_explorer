@@ -12,7 +12,7 @@
 namespace frontier_explorer
 {
 
-/// @brief: ROS-free occupancy grid representation used by frontier algorithms
+/// @brief: 供前沿算法使用的无 ROS 栅格地图表示
 struct GridMap
 {
     unsigned int width{0U};

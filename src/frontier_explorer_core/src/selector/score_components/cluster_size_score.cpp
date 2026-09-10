@@ -21,4 +21,4 @@ double ClusterSizeScore::score(
     return std::clamp(normalized, 0.0, 1.0);
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

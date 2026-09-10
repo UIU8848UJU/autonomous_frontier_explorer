@@ -36,4 +36,4 @@ double distance_in_meters(
     const geometry_msgs::msg::Point & p1,
     const geometry_msgs::msg::Point & p2);
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

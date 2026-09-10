@@ -10,4 +10,4 @@ namespace task_manager::adapters
 ExplorationEvent to_core_exploration_event(
   const robot_interfaces::msg::ExplorationState & message);
 
-}  // namespace task_manager::adapters
+}  // 命名空间 task_manager::adapters

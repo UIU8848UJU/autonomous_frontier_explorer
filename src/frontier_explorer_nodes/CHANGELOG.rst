@@ -2,6 +2,15 @@
 frontier_explorer 包更新日志
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+0.2.0
+==========
+
+BehaviorTree 编排拆包
+----------------------
+- 将 BehaviorTree 插件、XML 和 `ExplorationBtOrchestratorNode` 移入独立的 `exploration_bt` 包。
+- `frontier_explorer_nodes` 现在只承载 FrontierExplorerNode、NavigationNode 及其 ROS/Nav2 适配节点。
+- 分离 frontier 节点配置与 BT 编排配置，避免 ROS 能力参数和流程编排参数互相耦合。
+
 0.1.0
 ==========
 

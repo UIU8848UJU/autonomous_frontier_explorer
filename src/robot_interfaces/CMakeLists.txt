@@ -9,7 +9,7 @@ find_package(std_msgs REQUIRED)
 
 set(MSG_FILES
   "msg/ExplorationState.msg"
-  "msg/MapManagerState.msg"
+  "msg/MapLifecycleState.msg"
   "msg/TaskManagerState.msg"
 )
 

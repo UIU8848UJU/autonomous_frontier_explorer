@@ -149,4 +149,4 @@ std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
   return clusters;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

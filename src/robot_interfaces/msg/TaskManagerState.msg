@@ -1,13 +1,11 @@
-# Task manager state broadcast to other modules
+# TaskManager 状态，向其他模块广播
 
 uint8 IDLE=0
-uint8 STARTING_EXPLORATION=1
-uint8 EXPLORING=2
-uint8 MAPPING_DONE=3
-uint8 STARTING_NAVIGATION=4
-uint8 NAVIGATING=5
-uint8 PAUSED=6
-uint8 FAILED=7
+uint8 STARTING_MAPPING=1
+uint8 MAPPING=2
+uint8 WAITING_MAP_SAVE=3
+uint8 MAPPING_DONE=4
+uint8 FAILED=5
 
 builtin_interfaces/Time stamp
 uint8 state

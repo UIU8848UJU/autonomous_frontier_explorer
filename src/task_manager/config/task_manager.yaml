@@ -2,13 +2,22 @@ task_manager_node:
   ros__parameters:
     use_sim_time: true
 
+    # 状态发布和健康检查周期。
     heartbeat_period_ms: 1000
+    exploration_state_timeout_ms: 5000
+
+    # ROS QoS 队列深度。高频探索或多机器人部署时可按需调整缓冲能力。
+    state_publisher_depth: 10
+    exploration_subscription_depth: 10
+    map_lifecycle_subscription_depth: 10
+
+    # 外部 Trigger 服务响应的最长等待时间。
+    service_call_timeout_ms: 3000
 
     exploration_state_topic: "/exploration_state"
-    map_manager_state_topic: "/map_manager_state"
+    map_lifecycle_state_topic: "/map_lifecycle_state"
     task_manager_state_topic: "/task_manager_state"
     start_mapping_service_name: "/start_mapping"
     stop_all_service_name: "/stop_all"
-    exploration_state_timeout_ms: 5000
     start_exploration_service_name: "/exploration_bt_orchestrator_node/start_exploration"
     stop_exploration_service_name: "/exploration_bt_orchestrator_node/stop_exploration"

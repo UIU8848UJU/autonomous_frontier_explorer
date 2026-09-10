@@ -23,6 +23,7 @@ public:
   bool stop_all();
 
   void update_exploration_state(const ExplorationEvent & event);
+  void fail(const std::string & error_text);
   void set_error(const std::string & error_text);
 
 private:
@@ -31,4 +32,4 @@ private:
   void touch_state_time() noexcept;
 };
 
-}  // namespace task_manager
+}  // 命名空间 task_manager

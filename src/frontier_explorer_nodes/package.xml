@@ -2,7 +2,7 @@
 <package format="3">
   <name>frontier_explorer_nodes</name>
   <version>0.0.3</version>
-  <description>ROS 2 nodes and BehaviorTree plugins for frontier exploration.</description>
+  <description>ROS 2 exploration and navigation nodes.</description>
 
   <maintainer email="819119802@qq.com">xxx</maintainer>
   <license>Apache-2.0</license>
@@ -24,9 +24,6 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>robot_interfaces</depend>
-  <depend>util_package</depend>
-  <depend>ament_index_cpp</depend>
-  <depend>behaviortree_cpp_v3</depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

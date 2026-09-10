@@ -65,4 +65,4 @@ private:
     InformationGainScore information_gain_score_;
 };
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

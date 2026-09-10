@@ -24,7 +24,7 @@ double pathLength(const nav_msgs::msg::Path & path)
     }
     return length;
 }
-}  // namespace
+}  // 命名空间
 
 Nav2PlannerReachabilityChecker::Nav2PlannerReachabilityChecker(
     rclcpp::Node * node,
@@ -104,4 +104,4 @@ FrontierReachabilityResult Nav2PlannerReachabilityChecker::check(
     return result;
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

@@ -15,16 +15,19 @@ ExplorationEvent make_event(ExplorationState state, std::string detail = {})
   event.detail = std::move(detail);
   return event;
 }
-}  // namespace
+}  // 匿名命名空间
 
 TEST(TaskFlowTest, StartsAndRejectsDuplicateMappingFlow)
 {
   TaskFlow flow;
 
   EXPECT_TRUE(flow.start_mapping_flow());
-  EXPECT_EQ(flow.state(), TaskManagerState::EXPLORING);
+  EXPECT_EQ(flow.state(), TaskManagerState::STARTING_MAPPING);
   EXPECT_TRUE(flow.context().exploration_running);
   EXPECT_FALSE(flow.context().map_ready);
+
+  flow.update_exploration_state(make_event(ExplorationState::RUNNING));
+  EXPECT_EQ(flow.state(), TaskManagerState::MAPPING);
   const auto state_before_duplicate = flow.state();
   const auto context_before_duplicate = flow.context();
   EXPECT_FALSE(flow.start_mapping_flow());
@@ -40,16 +43,30 @@ TEST(TaskFlowTest, UpdatesRunningAndCompletedExplorationStates)
 {
   TaskFlow flow;
 
+  flow.start_mapping_flow();
   flow.update_exploration_state(make_event(ExplorationState::RUNNING, "frontiers"));
-  EXPECT_EQ(flow.state(), TaskManagerState::EXPLORING);
+  EXPECT_EQ(flow.state(), TaskManagerState::MAPPING);
   EXPECT_TRUE(flow.context().exploration_running);
   EXPECT_EQ(flow.context().last_exploration_state, "RUNNING - frontiers");
 
   flow.update_exploration_state(make_event(ExplorationState::COMPLETED));
-  EXPECT_EQ(flow.state(), TaskManagerState::MAPPING_DONE);
+  EXPECT_EQ(flow.state(), TaskManagerState::WAITING_MAP_SAVE);
   EXPECT_FALSE(flow.context().exploration_running);
-  EXPECT_TRUE(flow.context().map_ready);
+  EXPECT_FALSE(flow.context().map_ready);
   EXPECT_EQ(flow.context().last_exploration_state, "COMPLETED");
+}
+
+TEST(TaskFlowTest, UnexpectedExplorationEventsFailAndFailureIsSticky)
+{
+  TaskFlow flow;
+
+  flow.update_exploration_state(make_event(ExplorationState::RUNNING));
+  EXPECT_EQ(flow.state(), TaskManagerState::FAILED);
+  EXPECT_EQ(flow.context().last_error, "Unexpected RUNNING exploration state.");
+
+  flow.update_exploration_state(make_event(ExplorationState::STOPPED));
+  EXPECT_EQ(flow.state(), TaskManagerState::FAILED);
+  EXPECT_EQ(flow.context().last_error, "Unexpected RUNNING exploration state.");
 }
 
 TEST(TaskFlowTest, StoppedAndIdleExplorationReturnToIdle)
@@ -80,7 +97,7 @@ TEST(TaskFlowTest, StuckExplorationFailsWithProvidedOrDefaultError)
   EXPECT_EQ(flow.context().last_error, "Exploration reported STUCK state.");
 
   EXPECT_TRUE(flow.start_mapping_flow());
-  EXPECT_EQ(flow.state(), TaskManagerState::EXPLORING);
+  EXPECT_EQ(flow.state(), TaskManagerState::STARTING_MAPPING);
   EXPECT_TRUE(flow.context().exploration_running);
   EXPECT_FALSE(flow.context().map_ready);
   EXPECT_TRUE(flow.context().last_error.empty());
@@ -91,6 +108,7 @@ TEST(TaskFlowTest, StopAllReportsWhetherAnActiveFlowExisted)
   TaskFlow flow;
 
   EXPECT_FALSE(flow.stop_all());
+  EXPECT_EQ(flow.state(), TaskManagerState::IDLE);
   flow.start_mapping_flow();
   EXPECT_TRUE(flow.stop_all());
   EXPECT_EQ(flow.state(), TaskManagerState::IDLE);
@@ -102,6 +120,7 @@ TEST(TaskFlowTest, MapSavedMarksMappingDoneAndClearsError)
 {
   TaskFlow flow;
   flow.start_mapping_flow();
+  flow.update_exploration_state(make_event(ExplorationState::COMPLETED));
   flow.set_error("temporary failure");
 
   EXPECT_TRUE(flow.mark_map_saved());
@@ -111,4 +130,4 @@ TEST(TaskFlowTest, MapSavedMarksMappingDoneAndClearsError)
   EXPECT_TRUE(flow.context().last_error.empty());
 }
 
-}  // namespace task_manager
+}  // 命名空间 task_manager

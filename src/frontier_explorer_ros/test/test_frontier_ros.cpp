@@ -64,7 +64,7 @@ bool contains_cell(const std::vector<GridCell> & cells, const GridCell & target)
     return std::find(cells.begin(), cells.end(), target) != cells.end();
 }
 
-}  // namespace
+}  // 命名空间
 
 TEST(CostmapAdapterTest, ConvertsOccupancyGridAndCoordinates)
 {
@@ -411,4 +411,4 @@ TEST(FrontierGoalProviderTest, RunsMapDetectorAndSelectorPath)
     EXPECT_FALSE(result.candidates.empty());
 }
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

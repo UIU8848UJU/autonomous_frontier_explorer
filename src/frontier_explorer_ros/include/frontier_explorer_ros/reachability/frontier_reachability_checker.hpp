@@ -21,4 +21,4 @@ public:
         const geometry_msgs::msg::PoseStamped & goal) = 0;
 };
 
-}  // namespace frontier_explorer
+}  // 命名空间 frontier_explorer

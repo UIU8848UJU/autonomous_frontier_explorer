@@ -1,0 +1,42 @@
+#pragma once
+
+namespace frontier_explorer
+{
+namespace exploration_bt_defaults
+{
+
+/// @brief: 默认前沿候选列表服务名，生产部署时优先通过 YAML 参数覆盖
+inline constexpr char kFrontierCandidatesService[] =
+    "/frontier_explorer_node/get_frontier_candidates";
+
+/// @brief: 默认前沿失败标记服务名，生产部署时优先通过 YAML 参数覆盖
+inline constexpr char kMarkFailedService[] =
+    "/frontier_explorer_node/mark_frontier_failed";
+
+/// @brief: 默认目标导航可执行性检查服务名
+inline constexpr char kGoalFeasibilityService[] =
+    "/navigation_node/check_goal_feasibility";
+
+/// @brief: 默认 NavigationNode 对外导航动作名称
+inline constexpr char kNavigationAction[] = "/navigation_node/navigate_to_pose";
+
+/// @brief: 默认 Nav2 NavigateToPose 动作名称，仅由 NavigationNode 内部使用
+inline constexpr char kNavigateToPoseAction[] = "navigate_to_pose";
+
+/// @brief: 默认 BT 执行周期，单位秒
+inline constexpr double kTickPeriodSec = 0.1;
+
+/// @brief: 默认服务不可用时的重试间隔，单位秒
+inline constexpr double kServiceRetryDelaySec = 2.0;
+
+/// @brief: 默认每轮最多请求的前沿候选数
+inline constexpr int kMaxFrontierCandidates = 8;
+
+/// @brief: 默认单个候选发生可恢复可执行性失败时的重试次数
+inline constexpr int kMaxFeasibilityRecoverableRetries = 2;
+
+/// @brief: 默认可执行候选选择时的路径长度惩罚权重
+inline constexpr double kFeasiblePathLengthWeight = 0.6;
+
+}  // 命名空间 exploration_bt_defaults
+}  // 命名空间 frontier_explorer

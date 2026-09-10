@@ -24,9 +24,6 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(robot_interfaces REQUIRED)
-find_package(util_package REQUIRED)
-find_package(ament_index_cpp REQUIRED)
-find_package(behaviortree_cpp_v3 REQUIRED)
 find_package(frontier_explorer_ros REQUIRED)
 find_package(navigation_core REQUIRED)
 
@@ -44,9 +41,6 @@ set(frontier_explorer_nodes_DEPS
   tf2_geometry_msgs
   tf2
   tf2_ros
-  util_package
-  ament_index_cpp
-  behaviortree_cpp_v3
   frontier_explorer_ros
   navigation_core
 )
@@ -91,30 +85,8 @@ target_link_libraries(navigation_node
 
 configure_frontier_explorer_nodes_target(navigation_node)
 
-add_library(frontier_explorer_bt_nodes SHARED
-  src/bt/exploration_bt_context.cpp
-  src/bt/is_exploration_complete_condition.cpp
-  src/bt/action/compute_frontier_candidates_action.cpp
-  src/bt/action/mark_frontier_failed_action.cpp
-  src/bt/action/navigate_to_frontier_action.cpp
-  src/bt/action/select_feasible_frontier_action.cpp
-  src/bt/plugins/exploration_bt_plugins.cpp
-)
-
-target_compile_definitions(frontier_explorer_bt_nodes PRIVATE BT_PLUGIN_EXPORT)
-configure_frontier_explorer_nodes_target(frontier_explorer_bt_nodes)
-
-add_executable(exploration_bt_orchestrator_node
-  src/bt/orchestrator/exploration_bt_orchestrator_main.cpp
-  src/bt/orchestrator/exploration_bt_orchestrator_node.cpp
-  src/bt/exploration_bt_context.cpp
-)
-
-configure_frontier_explorer_nodes_target(exploration_bt_orchestrator_node)
-
 install(TARGETS
   frontier_explorer_nodes_common
-  frontier_explorer_bt_nodes
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -123,11 +95,10 @@ install(TARGETS
 install(TARGETS
   frontier_explorer_node
   navigation_node
-  exploration_bt_orchestrator_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
-install(DIRECTORY launch config doc behavior_trees
+install(DIRECTORY launch config doc
   DESTINATION share/${PROJECT_NAME}
 )
 
