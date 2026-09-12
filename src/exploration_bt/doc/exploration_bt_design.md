@@ -11,7 +11,7 @@ behavior_trees/exploration_tree.xml
 当前 BT 节点已拆成 BehaviorTree.CPP 动态 plugin，默认插件库：
 
 ```text
-lib/libfrontier_explorer_bt_nodes.so
+lib/libexploration_bt_nodes.so
 ```
 
 `exploration_bt_orchestrator_node` 不再手写注册具体 BT 节点，只负责加载插件库、加载 XML、注入共享上下文、tick tree 和发布流程状态。
@@ -92,7 +92,7 @@ exploration_bt_context
 默认值集中在：
 
 ```text
-include/frontier_explorer_nodes/nodes/exploration_bt_defaults.hpp
+include/exploration_bt/exploration_bt_defaults.hpp
 ```
 
 生产部署通过 YAML 覆盖：
@@ -100,15 +100,15 @@ include/frontier_explorer_nodes/nodes/exploration_bt_defaults.hpp
 ```yaml
 exploration_bt_orchestrator_node:
   ros__parameters:
-    frontier_candidates_service: /frontier_explorer_node/get_frontier_candidates
-    mark_failed_service: /frontier_explorer_node/mark_frontier_failed
+    frontier_candidates_service: /frontier_strategy_node/get_frontier_candidates
+    mark_failed_service: /frontier_strategy_node/mark_frontier_failed
     goal_feasibility_service: /navigation_node/check_goal_feasibility
     navigation_action: /navigation_node/navigate_to_pose
     max_frontier_candidates: 8
     max_feasibility_recoverable_retries: 2
     feasible_path_length_weight: 0.6
     bt_plugin_libraries:
-      - /home/xxx/mk_nav2/install/frontier_explorer_nodes/lib/libfrontier_explorer_bt_nodes.so
+      - /home/xxx/mk_nav2/install/exploration_nodes/lib/libexploration_bt_nodes.so
     tick_period_sec: 0.1
     service_retry_delay_sec: 2.0
 

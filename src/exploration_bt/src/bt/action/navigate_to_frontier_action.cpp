@@ -3,7 +3,7 @@
 #include <chrono>
 #include <mutex>
 
-namespace frontier_explorer
+namespace exploration
 {
 
 NavigateToFrontierAction::NavigateToFrontierAction(
@@ -115,4 +115,4 @@ void NavigateToFrontierAction::onHalted()
     }
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

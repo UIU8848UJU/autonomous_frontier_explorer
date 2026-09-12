@@ -11,7 +11,7 @@ TEST(FrontierDecisionPluginTest, ExpandsCandidatesAndMatchesSelectedGoal)
 {
   FrontierDecisionPluginConfig config;
   config.episode_id = "episode_001";
-  config.decision_topic = "/frontier_explorer/decision_debug_json";
+  config.decision_topic = "/exploration/decision_debug_json";
   config.navigation_result_topic = "/navigation/navigation_result_debug_json";
   config.map_summary_topic = "__map_summary";
   config.exploration_state_topic = "/exploration_state";

@@ -31,10 +31,10 @@
   <a href="CHANGELOG.rst">
     <img alt="Status" src="https://img.shields.io/badge/status-active%20development-yellow">
   </a>
-  <a href="src/frontier_explorer_nodes/doc/frontier_explorer_node_doc.md">
-    <img alt="Frontier Explorer Docs" src="https://img.shields.io/badge/docs-frontier_explorer-0ea5e9">
+  <a href="src/exploration_nodes/doc/frontier_strategy_node_doc.md">
+    <img alt="Frontier Strategy Docs" src="https://img.shields.io/badge/docs-exploration-0ea5e9">
   </a>
-  <a href="src/frontier_explorer_nodes/doc/exploration_architecture.md">
+  <a href="src/exploration_nodes/doc/exploration_architecture.md">
     <img alt="Exploration Architecture" src="https://img.shields.io/badge/architecture-BT--ready%20exploration-blue">
   </a>
 </p>
@@ -75,9 +75,9 @@ https://github.com/user-attachments/assets/9e4f8a30-9b6f-4366-87e5-293d407cfe1d
 
 ## 当前能力
 
-- 一键 bringup：仿真、SLAM、Nav2、RViz、FrontierExplorer、TaskManager 分阶段启动。
+- 一键 bringup：仿真、SLAM、Nav2、RViz、Frontier 策略节点、TaskManager 分阶段启动。
 - 自主探索：基于 OccupancyGrid 检测 frontier，通过 BT 请求候选、选择可执行目标并触发 NavigationNode 导航。
-- 架构分层：`FrontierExplorerNode` 只负责 frontier 能力，`ExplorationBtOrchestratorNode` 负责流程，`NavigationNode` 负责 Nav2 桥接和可执行性检查。
+- 架构分层：`FrontierStrategyNode` 只负责 frontier 能力，`ExplorationBtOrchestratorNode` 负责流程，`NavigationNode` 负责 Nav2 桥接和可执行性检查。
 - 决策分层：frontier 决策拆成 detector、pruner、scorer、selector，BT 插件负责流程节点组合。
 - 权重策略：通过 YAML 权重组合表达探索风格，当前作为规则 baseline 保留。
 - 小边界兜底：小 frontier 不会被直接删除，但会延后到正常候选耗尽后再选择。
@@ -87,13 +87,13 @@ https://github.com/user-attachments/assets/9e4f8a30-9b6f-4366-87e5-293d407cfe1d
 探索节点这里只做概览。详细设计、状态机、参数和调试说明见：
 
 <p>
-  <a href="src/frontier_explorer_nodes/README.md">
-    <img alt="Open Frontier Explorer README" src="https://img.shields.io/badge/open-frontier_explorer_README-blue">
+  <a href="src/exploration_nodes/README.md">
+    <img alt="Open Frontier Strategy README" src="https://img.shields.io/badge/open-exploration_README-blue">
   </a>
-  <a href="src/frontier_explorer_nodes/doc/frontier_explorer_node_doc.md">
-    <img alt="Open Frontier Explorer Docs" src="https://img.shields.io/badge/open-frontier_explorer_doc-0ea5e9">
+  <a href="src/exploration_nodes/doc/frontier_strategy_node_doc.md">
+    <img alt="Open Frontier Strategy Docs" src="https://img.shields.io/badge/open-exploration_doc-0ea5e9">
   </a>
-  <a href="src/frontier_explorer_nodes/doc/exploration_architecture.md">
+  <a href="src/exploration_nodes/doc/exploration_architecture.md">
     <img alt="Open Exploration Architecture" src="https://img.shields.io/badge/open-exploration_architecture-2563eb">
   </a>
 </p>
@@ -108,9 +108,15 @@ mk_nav2/
 ├── maps/                               # 静态地图输入/输出目录
 ├── src/
 │   ├── autonomousr_explorer_bringup/    # 统一 launch/config/rviz
-│   ├── frontier_explorer_core/           # frontier 算法与共享类型
-│   ├── frontier_explorer_nodes/          # frontier 节点与 BT 插件
-│   ├── task_manager/                    # 高层任务编排
+│   ├── grid_map_core/                    # 通用栅格地图领域模型
+│   ├── exploration_core/                 # 探索行为协议与策略接口
+│   ├── robot_geometry_core/              # 通用机器人二维几何核心
+│   ├── navigation_core/                  # 纯路径与目标安全核心
+│   ├── frontier_strategy_core/           # Frontier 检测、评分与选择策略
+│   ├── frontier_strategy_ros/            # Frontier 策略的 ROS/Nav2 适配层
+│   ├── exploration_nodes/                # ROS 能力节点
+│   ├── exploration_bt/                   # 探索行为编排与 BT 插件
+│   ├── task_manager/                     # 高层任务编排
 │   ├── robot_interfaces/                # 自定义消息/服务
 │   └── util_package/                    # 日志等公共工具
 ├── build/
@@ -125,26 +131,26 @@ mk_nav2/
 集中管理系统启动入口和运行参数：
 
 - `full_system.launch.py`：默认按地图文件是否存在自动选择 SLAM/静态模式，可用 `mode:=slam|static|auto` 显式指定。
-- `full_system_slam.launch.py`：在线 SLAM + Nav2 + RViz + FrontierExplorer + TaskManager。
-- `full_system_static.launch.py`：静态地图定位 + Nav2 + RViz + FrontierExplorer + TaskManager。
+- `full_system_slam.launch.py`：在线 SLAM + Nav2 + RViz + Frontier 策略节点 + TaskManager。
+- `full_system_static.launch.py`：静态地图定位 + Nav2 + RViz + Frontier 策略节点 + TaskManager。
 - `config/nav2_exploration.yaml`：探索模式 Nav2 参数，当前 FollowPath 使用 RPP。
 
-### frontier_explorer_nodes
+### exploration_nodes
 
 负责从 `/map` 中寻找 frontier，提供候选生成、失败标记、blacklist、marker 和 state。当前探索链路是：
 
-探索参数统一放在 `config/frontier_explorer.yaml`（决策权重与候选过滤），由 bringup launch 引用。
+Frontier 策略参数统一放在 `config/frontier_strategy.yaml`（决策权重与候选过滤），由 bringup launch 引用。
 
 ```text
 TaskManagerNode
   -> ExplorationBtOrchestratorNode
   -> BehaviorTree.CPP XML + BT plugins
-  -> FrontierExplorerNode / FrontierGoalProvider
+  -> FrontierStrategyNode / FrontierGoalProvider
   -> NavigationNode
   -> Nav2
 ```
 
-`FrontierExplorerNode` 不再直接发送 Nav2 goal。BT 负责什么时候请求候选、什么时候导航、失败后什么时候标记失败和重新选点。`NavigationNode` 对外提供 `/navigation_node/navigate_to_pose`，内部桥接 Nav2 `NavigateToPose`。
+`FrontierStrategyNode` 不再直接发送 Nav2 goal。BT 负责什么时候请求候选、什么时候导航、失败后什么时候标记失败和重新选点。`NavigationNode` 对外提供 `/navigation_node/navigate_to_pose`，内部桥接 Nav2 `NavigateToPose`。
 
 ### task_manager
 
@@ -319,8 +325,8 @@ ros2 topic echo /cmd_vel
 
 ## 参考文档
 
-- [Frontier Explorer 详细设计](src/frontier_explorer_nodes/doc/frontier_explorer_node_doc.md)
-- [Frontier Explorer README](src/frontier_explorer_nodes/README.md)
-- [Exploration 架构说明](src/frontier_explorer_nodes/doc/exploration_architecture.md)
-- [Exploration BT 设计](src/frontier_explorer_nodes/doc/exploration_bt_design.md)
+- [Frontier 策略节点详细设计](src/exploration_nodes/doc/frontier_strategy_node_doc.md)
+- [Frontier 策略节点 README](src/exploration_nodes/README.md)
+- [Exploration 架构说明](src/exploration_nodes/doc/exploration_architecture.md)
+- [Exploration BT 设计](src/exploration_bt/doc/exploration_bt_design.md)
 - [顶层变更记录](CHANGELOG.rst)

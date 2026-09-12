@@ -7,7 +7,7 @@
 #include "exploration_bt/exploration_bt_context.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
 /// @brief: 将当前前沿目标发送给 Nav2 NavigateToPose 的 BT 动作节点，后续可替换为 NavigationNode 调用
@@ -60,4 +60,4 @@ private:
     bool result_success_{false};
 };
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

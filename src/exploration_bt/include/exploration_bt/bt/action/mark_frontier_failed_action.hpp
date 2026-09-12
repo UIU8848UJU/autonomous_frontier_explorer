@@ -7,10 +7,10 @@
 #include "exploration_bt/exploration_bt_context.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
-/// @brief: 导航失败后通知 FrontierExplorerNode 处理失败事件的 BT 动作节点，不直接管理重试和黑名单
+/// @brief: 导航失败后通知 FrontierStrategyNode 处理失败事件的 BT 动作节点，不直接管理重试和黑名单
 class MarkFrontierFailedAction : public BT::StatefulActionNode
 {
 public:
@@ -55,4 +55,4 @@ private:
     robot_interfaces::srv::MarkFrontierFailed::Response::SharedPtr last_response_;
 };
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

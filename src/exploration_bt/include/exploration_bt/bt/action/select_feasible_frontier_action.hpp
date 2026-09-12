@@ -10,7 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot_interfaces/srv/check_goal_feasibility.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
 /// @brief: 从前沿候选列表中选择经 NavigationNode 判定可执行且综合代价最优的目标
@@ -77,4 +77,4 @@ private:
     robot_interfaces::srv::CheckGoalFeasibility::Response::SharedPtr last_response_;
 };
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

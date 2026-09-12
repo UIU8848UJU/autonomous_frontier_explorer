@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>grid_map_core</name>
+  <version>0.1.0</version>
+  <description>不依赖 ROS 的通用二维栅格地图数据结构与基础查询。</description>
+
+  <maintainer email="819119802@qq.com">xxx</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>cmake</buildtool_depend>
+  <test_depend>gtest</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

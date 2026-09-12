@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(grid_map_core)
+find_dependency(exploration_core)
+include("${CMAKE_CURRENT_LIST_DIR}/frontier_strategy_coreTargets.cmake")
+
+check_required_components(frontier_strategy_core)

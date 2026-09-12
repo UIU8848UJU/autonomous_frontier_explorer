@@ -2,41 +2,29 @@
 
 #include <string>
 
-#include "frontier_explorer_ros/costmap/costmap_adapter.hpp"
-#include "frontier_explorer_ros/geometry/footprint_collision_checker.hpp"
-#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "grid_map_core/types/grid_map.hpp"
+#include "robot_geometry_core/footprint_collision_checker.hpp"
 
-namespace frontier_explorer
+namespace navigation
 {
 namespace navigation_core
 {
 
-/// @brief: ???? footprint ?????
+/// 使用 robot_geometry_core 检查目标位姿是否具备安全落脚空间。
 class FootprintGoalValidator
 {
 public:
-    /// @brief: ?????
-    /// @param costmap ??????? costmap???????????
-    explicit FootprintGoalValidator(const CostmapAdapter & costmap);
+    void configure(const robot_geometry_core::FootprintCollisionConfig & config);
 
-    /// @brief: ????
-    /// @param config footprint ??????
-    void configure(const FootprintCollisionCheckerConfig & config);
-
-    /// @brief: ??????? robot footprint ??????
-    /// @param goal ???????
-    /// @param reason ??????
-    /// @param max_cost ?? footprint ???
-    /// @return: true ?? footprint ???
     bool isGoalValid(
-        const geometry_msgs::msg::PoseStamped & goal,
+        const robot_geometry_core::Pose2D & goal,
+        const grid_map_core::GridMap & map,
         std::string & reason,
         double & max_cost) const;
 
 private:
-    const CostmapAdapter & costmap_;
-    FootprintCollisionCheckerConfig config_;
+    robot_geometry_core::FootprintCollisionConfig config_;
 };
 
 }  // namespace navigation_core
-}  // namespace frontier_explorer
+}  // namespace navigation

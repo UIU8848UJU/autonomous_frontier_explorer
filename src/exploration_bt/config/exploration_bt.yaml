@@ -1,8 +1,8 @@
 exploration_bt_orchestrator_node:
   ros__parameters:
     use_sim_time: true
-    frontier_candidates_service: /frontier_explorer_node/get_frontier_candidates
-    mark_failed_service: /frontier_explorer_node/mark_frontier_failed
+    frontier_candidates_service: /frontier_strategy_node/get_frontier_candidates
+    mark_failed_service: /frontier_strategy_node/mark_frontier_failed
     goal_feasibility_service: /navigation_node/check_goal_feasibility
     navigation_action: /navigation_node/navigate_to_pose
     max_frontier_candidates: 16

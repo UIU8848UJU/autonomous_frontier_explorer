@@ -1,5 +1,5 @@
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-autonomous_frontier_explorer v0.1.0 发布说明
+autonomous_exploration v0.1.0 发布说明
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 v0.1.0 - 2026-05-13
@@ -16,9 +16,9 @@ v0.1.0 - 2026-05-13
 - 新增 ``autonomousr_explorer_bringup``，集中维护 full system launch、Nav2、SLAM、frontier、task manager 和 RViz 配置。
 - 新增 ``robot_interfaces``，统一定义探索状态、任务状态、服务和 action 协议。
 - 新增 ``task_manager``，负责任务状态机、探索状态心跳、服务接线和上层流程控制。
-- 将原 ``frontier_explorer`` 单包拆分为 ``frontier_explorer_core`` 与 ``frontier_explorer_nodes``。
-- ``frontier_explorer_core`` 承载核心算法和共享类型，包括 ``costmap``、``detector``、``selector``、``scoring``、``types``、``geometry``、``reachability``、``utils`` 和 ``FrontierGoalProvider``。
-- ``frontier_explorer_nodes`` 承载 ROS 节点、BehaviorTree 插件、Nav2 reachability adapter、marker publisher、launch、config、rviz 和文档资源。
+- 将原 ``exploration`` 单包拆分为 ``frontier_strategy_core`` 与 ``exploration_nodes``。
+- ``frontier_strategy_core`` 承载核心算法和共享类型，包括 ``costmap``、``detector``、``selector``、``scoring``、``types``、``geometry``、``reachability``、``utils`` 和 ``FrontierGoalProvider``。
+- ``exploration_nodes`` 承载 ROS 节点、BehaviorTree 插件、Nav2 reachability adapter、marker publisher、launch、config、rviz 和文档资源。
 - 新增 ``exploration_learning`` 骨架包，预留 ``data_collection``、``reward``、``dataset`` 三个模块，用于后续 RL 数据采集、reward 计算和 dataset 写入。
 
 Frontier 探索能力
@@ -40,23 +40,23 @@ Costmap 与安全策略
 
 ROS 节点与 BT 编排
 ------------------
-- ``frontier_explorer_node`` 作为 frontier 能力节点，提供 frontier goal、候选列表、失败标记、黑名单清理和探索状态查询服务。
+- ``frontier_strategy_node`` 作为 frontier 能力节点，提供 frontier goal、候选列表、失败标记、黑名单清理和探索状态查询服务。
 - ``navigation_node`` 作为导航中间层，封装 reachability、feasibility 和导航 action 相关能力。
 - ``exploration_bt_orchestrator_node`` 使用 BehaviorTree.CPP 编排探索流程。
-- BT 动态插件库目标名为 ``frontier_explorer_bt_nodes``，默认加载路径为 ``frontier_explorer_nodes`` 包下的 ``lib/libfrontier_explorer_bt_nodes.so``。
-- 节点运行时名称、topic 和 service 名称保持兼容，包括 ``/frontier_explorer_node/get_next_frontier_goal``、``/frontier_explorer_node/get_frontier_candidates``、``/frontier_explorer_node/mark_frontier_failed`` 和 ``/frontier_explorer/state``。
+- BT 动态插件库目标名为 ``exploration_bt_nodes``，默认加载路径为 ``exploration_nodes`` 包下的 ``lib/libexploration_bt_nodes.so``。
+- 节点运行时名称、topic 和 service 名称保持兼容，包括 ``/frontier_strategy_node/get_next_frontier_goal``、``/frontier_strategy_node/get_frontier_candidates``、``/frontier_strategy_node/mark_frontier_failed`` 和 ``/exploration/state``。
 
 TaskManager 与统一接口
 ----------------------
 - ``robot_interfaces`` 定义 ``ExplorationState``、``TaskManagerState``、``StartExploration``、``Explore`` 等统一协议。
-- ``frontier_explorer_node`` 发布结构化 ``ExplorationState``，包含时间戳、状态枚举和 detail 文本。
+- ``frontier_strategy_node`` 发布结构化 ``ExplorationState``，包含时间戳、状态枚举和 detail 文本。
 - ``task_manager`` 订阅探索状态，维护 ``TaskFlow`` 上下文，并通过 ``TaskManagerState`` 心跳发布 map_ready、运行标志和错误描述。
 - ``TaskManagerNode`` 的 topic、service 名称和心跳周期均支持 YAML 参数配置。
 - 延长 TaskManager 调用探索相关 Trigger service 的等待时间，减少启动阶段误判失败。
 
 Nav2 与运行配置
 ---------------
-- full system launch 串联 Gazebo、SLAM Toolbox、Nav2、RViz、FrontierExplorer、NavigationNode、BT Orchestrator、TaskManager 和 MapManager。
+- full system launch 串联 Gazebo、SLAM Toolbox、Nav2、RViz、Frontier 策略节点、NavigationNode、BT Orchestrator、TaskManager 和 MapLifecycle。
 - 探索模式 Nav2 控制器切换为 RPP（Regulated Pure Pursuit），用于降低 DWB 在 frontier 场景中的抖动和卡顿。
 - 调整 ``min_goal_distance_m`` 与 Nav2 ``xy_goal_tolerance`` 的关系，避免过近目标导致 FollowPath 立即 SUCCESS。
 - 探索配置中支持设置 ``GridBased.allow_unknown``，用于控制 planner 是否穿越 unknown cell。
@@ -73,15 +73,15 @@ RViz 与调试
 工程与构建
 ----------
 - 全部 C++ 包统一使用 C++17，并关闭编译器扩展。
-- 内部 include 路径迁移为 ``frontier_explorer_core/...`` 与 ``frontier_explorer_nodes/...``。
-- ``frontier_explorer_nodes`` 通过 ``find_package(frontier_explorer_core REQUIRED)`` 链接核心库，形成 nodes 依赖 core 的单向依赖关系。
-- ``autonomousr_explorer_bringup`` 与 ``task_manager`` 中引用 frontier 节点的 launch 文件已改用 ``frontier_explorer_nodes`` 包名。
-- ``autonomousr_explorer_bringup/package.xml`` 的运行依赖同步改为 ``frontier_explorer_nodes``。
+- 内部 include 路径迁移为 ``frontier_strategy_core/...`` 与 ``exploration_nodes/...``。
+- ``exploration_nodes`` 通过 ``find_package(frontier_strategy_core REQUIRED)`` 链接核心库，形成 nodes 依赖 core 的单向依赖关系。
+- ``autonomousr_explorer_bringup`` 与 ``task_manager`` 中引用 frontier 节点的 launch 文件已改用 ``exploration_nodes`` 包名。
+- ``autonomousr_explorer_bringup/package.xml`` 的运行依赖同步改为 ``exploration_nodes``。
 
 验证记录
 --------
-- 已验证 ``colcon build --symlink-install --packages-select frontier_explorer_core frontier_explorer_nodes exploration_learning`` 通过。
-- 已验证 ``colcon build --symlink-install --packages-select autonomousr_explorer_bringup task_manager frontier_explorer_core frontier_explorer_nodes exploration_learning`` 通过。
+- 已验证 ``colcon build --symlink-install --packages-select frontier_strategy_core exploration_nodes exploration_learning`` 通过。
+- 已验证 ``colcon build --symlink-install --packages-select autonomousr_explorer_bringup task_manager frontier_strategy_core exploration_nodes exploration_learning`` 通过。
 - 已完成基础仿真演示录制，包含激进探索与保守探索两种配置。
 
 已知限制

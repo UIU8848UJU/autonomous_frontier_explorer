@@ -1,6 +1,6 @@
 #include "exploration_bt/bt/is_exploration_complete_condition.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
 IsExplorationCompleteCondition::IsExplorationCompleteCondition(
@@ -24,4 +24,4 @@ BT::NodeStatus IsExplorationCompleteCondition::tick()
     return context_->exploration_complete ? BT::NodeStatus::SUCCESS : BT::NodeStatus::FAILURE;
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

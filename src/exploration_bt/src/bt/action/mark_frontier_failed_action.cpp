@@ -3,7 +3,7 @@
 #include <mutex>
 #include <optional>
 
-namespace frontier_explorer
+namespace exploration
 {
 namespace
 {
@@ -92,4 +92,4 @@ void MarkFrontierFailedAction::onHalted()
     request_sent_ = false;
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

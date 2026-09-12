@@ -7,14 +7,14 @@
 
 BT_REGISTER_NODES(factory)
 {
-    factory.registerNodeType<frontier_explorer::IsExplorationCompleteCondition>(
+    factory.registerNodeType<exploration::IsExplorationCompleteCondition>(
         "IsExplorationComplete");
-    factory.registerNodeType<frontier_explorer::ComputeFrontierCandidatesAction>(
+    factory.registerNodeType<exploration::ComputeFrontierCandidatesAction>(
         "ComputeFrontierCandidates");
-    factory.registerNodeType<frontier_explorer::SelectFeasibleFrontierAction>(
+    factory.registerNodeType<exploration::SelectFeasibleFrontierAction>(
         "SelectFeasibleFrontier");
-    factory.registerNodeType<frontier_explorer::NavigateToFrontierAction>(
+    factory.registerNodeType<exploration::NavigateToFrontierAction>(
         "NavigateToFrontier");
-    factory.registerNodeType<frontier_explorer::MarkFrontierFailedAction>(
+    factory.registerNodeType<exploration::MarkFrontierFailedAction>(
         "MarkFrontierFailed");
 }

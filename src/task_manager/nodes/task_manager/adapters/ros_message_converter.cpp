@@ -24,6 +24,9 @@ ExplorationEvent to_core_exploration_event(
     case RosExplorationState::STUCK:
       event.state = ExplorationState::STUCK;
       break;
+    case RosExplorationState::FAILED:
+      event.state = ExplorationState::FAILED;
+      break;
     default:
       event.state = ExplorationState::UNKNOWN;
       break;

@@ -1,0 +1,152 @@
+#include "frontier_strategy_core/detector/frontier_detector.hpp"
+
+#include <cmath>
+#include <queue>
+#include <unordered_set>
+
+namespace frontier_strategy
+{
+
+FrontierDetector::FrontierDetector(
+    int obstacle_search_radius_cells)
+: obstacle_search_radius_cells_(obstacle_search_radius_cells)
+{
+}
+
+bool FrontierDetector::is_frontier_cell_safe( const grid_map_core::GridMap & map,
+    const GridCell & cell) const
+{
+    for (int dr = -obstacle_search_radius_cells_; 
+            dr <= obstacle_search_radius_cells_; ++dr) {
+
+        for (int dc = -obstacle_search_radius_cells_; 
+                dc <= obstacle_search_radius_cells_; ++dc) {
+                
+            const int row = cell.row + dr;
+            const int col = cell.col + dc;
+            if (!map.inBounds(col, row) ||
+                map.isObstacle(static_cast<unsigned int>(col), static_cast<unsigned int>(row)))
+            {
+                return false;
+            }
+        }
+    }
+  return true;
+}
+
+std::vector<GridCell> FrontierDetector::detect_frontier_cells(
+    const grid_map_core::GridMap & map) const
+{
+    std::vector<GridCell> frontier_cells;
+
+    if (!map.isReady()) {
+        return frontier_cells;
+    }
+
+    const int rows = static_cast<int>(map.height);
+    const int cols = static_cast<int>(map.width);
+
+    for (int r = 1; r < rows - 1; ++r) {
+
+        for (int c = 1; c < cols - 1; ++c) {
+            const auto mx = static_cast<unsigned int>(c);
+            const auto my = static_cast<unsigned int>(r);
+            if (!map.isFree(mx, my)) {
+                continue;
+            }
+
+            bool has_unknown_neighbor = false;
+            for (int dr = -1; dr <= 1 && !has_unknown_neighbor; ++dr) {
+                for (int dc = -1; dc <= 1; ++dc) {
+                    if (dr == 0 && dc == 0) {
+                        continue;
+                    }
+                    const int neighbor_row = r + dr;
+                    const int neighbor_col = c + dc;
+                    if (map.inBounds(neighbor_col, neighbor_row) &&
+                        map.isUnknown(
+                            static_cast<unsigned int>(neighbor_col),
+                            static_cast<unsigned int>(neighbor_row)))
+                    {
+                        has_unknown_neighbor = true;
+                        break;
+                    }
+                }
+            }
+            if (!has_unknown_neighbor) {
+                continue;
+            }
+
+            GridCell cell{r, c};
+            if (is_frontier_cell_safe(map, cell)) {
+                frontier_cells.push_back(cell);
+            }
+        }
+    }
+
+    return frontier_cells;
+}
+
+std::vector<FrontierCluster> FrontierDetector::cluster_frontiers(
+    const grid_map_core::GridMap &,
+    const std::vector<GridCell> & frontier_cells) const
+{
+    std::vector<FrontierCluster> clusters;
+
+    std::unordered_set<GridCell, GridCellHash> frontier_set(
+        frontier_cells.begin(), frontier_cells.end());
+    std::unordered_set<GridCell, GridCellHash> visited;
+
+    for (const auto & start : frontier_cells) {
+        if (visited.count(start) > 0) {
+            continue;
+        }
+
+        FrontierCluster cluster;
+        std::queue<GridCell> q;
+        q.push(start);
+        visited.insert(start);
+
+        while (!q.empty()) {
+            const auto current = q.front();
+            q.pop();
+            cluster.cells.push_back(current);
+
+            for (int dr = -1; dr <= 1; ++dr) {
+                for (int dc = -1; dc <= 1; ++dc) {
+
+                    if (dr == 0 && dc == 0) {
+                        continue;
+                    }
+
+                    GridCell next{current.row + dr, current.col + dc};
+
+                    if (frontier_set.count(next) > 0 && visited.count(next) == 0) {
+                        visited.insert(next);
+                        q.push(next);
+                    }
+                }
+            }
+        }
+
+        double sum_row = 0.0;
+        double sum_col = 0.0;
+        for (const auto & cell : cluster.cells) {
+            sum_row += static_cast<double>(cell.row);
+            sum_col += static_cast<double>(cell.col);
+        }
+
+        cluster.centroid = GridCell{
+            static_cast<int>(std::round(sum_row / cluster.cells.size())),
+            static_cast<int>(std::round(sum_col / cluster.cells.size()))
+        };
+
+        // centroid 只作为 cluster id 和优先候选点；如果它不可用，
+        // FrontierPruner 会在 cluster.cells 里寻找回退目标。
+        clusters.push_back(cluster);
+    }
+
+  return clusters;
+}
+
+}  // 命名空间 frontier_strategy

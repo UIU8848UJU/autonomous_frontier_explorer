@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(grid_map_core)
+include("${CMAKE_CURRENT_LIST_DIR}/robot_geometry_coreTargets.cmake")
+check_required_components(robot_geometry_core)

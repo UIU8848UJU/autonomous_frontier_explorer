@@ -8,10 +8,10 @@
 #include "rclcpp/rclcpp.hpp"
 #include "robot_interfaces/srv/get_frontier_candidates.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
-/// @brief: 请求 FrontierExplorerNode 计算前沿候选列表的 BT 动作节点
+/// @brief: 请求 FrontierStrategyNode 计算前沿候选列表的 BT 动作节点
 class ComputeFrontierCandidatesAction : public BT::StatefulActionNode
 {
 public:
@@ -57,4 +57,4 @@ private:
     robot_interfaces::srv::GetFrontierCandidates::Response::SharedPtr last_response_;
 };
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

@@ -4,10 +4,9 @@ set -euo pipefail
 # ------------------------------------------
 # Usage:
 # ./build.sh                         -> build whole workspace
-# ./build.sh frontier_explorer        -> build frontier_explorer_nodes and its deps
-# ./build.sh exploration              -> build robot_interfaces/frontier_explorer_*/bringup/task_manager
+# ./build.sh exploration        -> build exploration runtime and its dependencies
 # ./build.sh util_package             -> build util_package and its deps
-# BUILD_TYPE=Debug ./build.sh frontier_explorer
+# BUILD_TYPE=Debug ./build.sh exploration
 # ------------------------------------------
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,8 +25,8 @@ fi
 refresh_compile_commands() {
     if [ -f "$WORKSPACE_ROOT/build/compile_commands.json" ]; then
         ln -sf build/compile_commands.json "$WORKSPACE_ROOT/compile_commands.json"
-    elif [ -f "$WORKSPACE_ROOT/build/frontier_explorer_nodes/compile_commands.json" ]; then
-        ln -sf build/frontier_explorer_nodes/compile_commands.json "$WORKSPACE_ROOT/compile_commands.json"
+    elif [ -f "$WORKSPACE_ROOT/build/exploration_nodes/compile_commands.json" ]; then
+        ln -sf build/exploration_nodes/compile_commands.json "$WORKSPACE_ROOT/compile_commands.json"
     fi
 
     if [ -f "$WORKSPACE_ROOT/compile_commands.json" ]; then
@@ -78,10 +77,10 @@ if [ "$#" -eq 0 ] || [ "$1" = "all" ]; then
     build_all
 elif [ "$1" = "exploration" ]; then
     echo "Building exploration runtime packages..."
-    build_select robot_interfaces frontier_explorer_core frontier_explorer_nodes autonomousr_explorer_bringup task_manager
-elif [ "$1" = "frontier" ] || [ "$1" = "frontier_explorer" ]; then
-    echo "Building frontier_explorer_nodes and dependencies..."
-    build_up_to frontier_explorer_nodes
+    build_up_to autonomousr_explorer_bringup task_manager
+elif [ "$1" = "frontier" ]; then
+    echo "Building exploration_nodes and dependencies..."
+    build_up_to exploration_nodes
 else
     echo "Building packages and dependencies: $*"
     build_up_to "$@"

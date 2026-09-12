@@ -3,7 +3,7 @@
 #include <cmath>
 #include <mutex>
 
-namespace frontier_explorer
+namespace exploration
 {
 
 SelectFeasibleFrontierAction::SelectFeasibleFrontierAction(
@@ -206,4 +206,4 @@ bool SelectFeasibleFrontierAction::send_current_request()
     return true;
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

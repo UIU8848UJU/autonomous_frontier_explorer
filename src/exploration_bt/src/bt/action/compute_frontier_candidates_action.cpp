@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <mutex>
 
-namespace frontier_explorer
+namespace exploration
 {
 
 ComputeFrontierCandidatesAction::ComputeFrontierCandidatesAction(
@@ -145,4 +145,4 @@ void ComputeFrontierCandidatesAction::onHalted()
     request_sent_ = false;
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

@@ -204,6 +204,7 @@ void TaskManagerNode::handle_exploration_state(const ExplorationStateMsg::Shared
     case ExplorationState::STOPPED: reason = "exploration_stopped"; break;
     case ExplorationState::IDLE: reason = "exploration_idle"; break;
     case ExplorationState::STUCK: reason = "exploration_stuck"; break;
+    case ExplorationState::FAILED: reason = "exploration_failed"; break;
     default: reason = "unknown_exploration_state"; break;
   }
   log_state_transition(previous_state, reason);

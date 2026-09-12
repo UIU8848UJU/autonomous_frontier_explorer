@@ -1,20 +1,15 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>navigation_core</name>
-  <version>0.0.2</version>
-  <description>Core navigation safety checks and single-goal protection shared by NavigationNode.</description>
+  <version>0.1.0</version>
+  <description>不依赖 ROS 的路径安全、目标安全和单目标保护核心。</description>
 
   <maintainer email="819119802@qq.com">xxx</maintainer>
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-
-  <depend>rclcpp</depend>
-  <depend>nav_msgs</depend>
-  <depend>nav2_costmap_2d</depend>
-  <depend>geometry_msgs</depend>
-  <depend>frontier_explorer_ros</depend>
-
+  <depend>grid_map_core</depend>
+  <depend>robot_geometry_core</depend>
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

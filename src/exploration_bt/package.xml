@@ -17,7 +17,7 @@
   <depend>robot_interfaces</depend>
   <depend>std_srvs</depend>
 
-  <exec_depend>frontier_explorer_nodes</exec_depend>
+  <exec_depend>exploration_nodes</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

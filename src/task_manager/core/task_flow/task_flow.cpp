@@ -82,6 +82,7 @@ std::string exploration_state_to_string(ExplorationState state)
     case ExplorationState::STOPPED: return "STOPPED";
     case ExplorationState::COMPLETED: return "COMPLETED";
     case ExplorationState::STUCK: return "STUCK";
+    case ExplorationState::FAILED: return "FAILED";
     default: return "UNKNOWN";
   }
 }
@@ -145,6 +146,12 @@ void TaskFlow::update_exploration_state(const ExplorationEvent & event)
       context_.exploration_running = false;
       context_.last_error = event.detail.empty() ?
         "Exploration reported STUCK state." : event.detail;
+      set_state(TaskManagerState::FAILED);
+      break;
+    case ExplorationState::FAILED:
+      context_.exploration_running = false;
+      context_.last_error = event.detail.empty() ?
+        "Exploration reported FAILED state." : event.detail;
       set_state(TaskManagerState::FAILED);
       break;
     default:

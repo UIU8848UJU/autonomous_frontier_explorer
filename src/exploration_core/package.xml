@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>exploration_core</name>
+  <version>0.1.0</version>
+  <description>不依赖 ROS 的探索行为协议和策略接口。</description>
+
+  <maintainer email="819119802@qq.com">xxx</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>cmake</buildtool_depend>
+  <depend>grid_map_core</depend>
+  <test_depend>gtest</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

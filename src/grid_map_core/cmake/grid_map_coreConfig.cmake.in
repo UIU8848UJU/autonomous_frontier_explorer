@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/grid_map_coreTargets.cmake")
+
+check_required_components(grid_map_core)

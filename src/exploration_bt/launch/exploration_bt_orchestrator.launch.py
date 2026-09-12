@@ -6,9 +6,9 @@ import os
 
 def generate_launch_description():
     bt_pkg_share = get_package_share_directory("exploration_bt")
-    ros_pkg_share = get_package_share_directory("frontier_explorer_nodes")
+    ros_pkg_share = get_package_share_directory("exploration_nodes")
     bt_params_file = os.path.join(bt_pkg_share, "config", "exploration_bt.yaml")
-    ros_params_file = os.path.join(ros_pkg_share, "config", "frontier_explorer.yaml")
+    ros_params_file = os.path.join(ros_pkg_share, "config", "frontier_strategy.yaml")
 
     bt_orchestrator_node = Node(
         package="exploration_bt",
@@ -19,7 +19,7 @@ def generate_launch_description():
     )
 
     navigation_node = Node(
-        package="frontier_explorer_nodes",
+        package="exploration_nodes",
         executable="navigation_node",
         name="navigation_node",
         output="screen",

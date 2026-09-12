@@ -36,7 +36,7 @@ DatasetRecorderNode
   -> DatasetRecorderNode
   -> record_type: map_summary
 
-/frontier_explorer/decision_debug_json
+/exploration/decision_debug_json
   -> DatasetRecorderNode
   -> record_type: decision_debug_json
 
@@ -47,7 +47,7 @@ DatasetRecorderNode
 
 `/map` 使用 `nav_msgs/msg/OccupancyGrid`，节点只统计摘要，不写入完整 `data` 数组。
 
-`/frontier_explorer/decision_debug_json` 和 `/navigation/navigation_result_debug_json` 暂时使用 `std_msgs/msg/String`，用于预留上游调试 JSON 接口。后续如果 `robot_interfaces` 中新增了正式消息，可以替换这两个临时 topic。
+`/exploration/decision_debug_json` 和 `/navigation/navigation_result_debug_json` 暂时使用 `std_msgs/msg/String`，用于预留上游调试 JSON 接口。后续如果 `robot_interfaces` 中新增了正式消息，可以替换这两个临时 topic。
 
 ## 3. 输出格式
 

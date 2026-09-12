@@ -16,6 +16,7 @@ enum class ExplorationState : std::uint8_t
   STOPPED = 2U,
   COMPLETED = 3U,
   STUCK = 4U,
+  FAILED = 5U,
   UNKNOWN = 255U
 };
 

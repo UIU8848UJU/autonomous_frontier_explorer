@@ -15,7 +15,7 @@
 #include "robot_interfaces/srv/get_frontier_candidates.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
 /// @brief: BT 黑板中保存 ExplorationBtContext 的键名
@@ -47,7 +47,7 @@ struct ExplorationBtContext
     };
 
     rclcpp::Node * node{nullptr};
-    rclcpp::Logger logger{rclcpp::get_logger("frontier_explorer.bt")};
+    rclcpp::Logger logger{rclcpp::get_logger("exploration.bt")};
     rclcpp::Client<robot_interfaces::srv::GetFrontierCandidates>::SharedPtr get_candidates_client;
     rclcpp::Client<robot_interfaces::srv::MarkFrontierFailed>::SharedPtr mark_failed_client;
     rclcpp::Client<robot_interfaces::srv::CheckGoalFeasibility>::SharedPtr feasibility_client;
@@ -77,4 +77,4 @@ struct ExplorationBtContext
 std::shared_ptr<ExplorationBtContext> get_exploration_bt_context(
     const BT::NodeConfiguration & config);
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

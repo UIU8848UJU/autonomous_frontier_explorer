@@ -1,17 +1,17 @@
 #pragma once
 
-namespace frontier_explorer
+namespace exploration
 {
 namespace exploration_bt_defaults
 {
 
 /// @brief: 默认前沿候选列表服务名，生产部署时优先通过 YAML 参数覆盖
 inline constexpr char kFrontierCandidatesService[] =
-    "/frontier_explorer_node/get_frontier_candidates";
+    "/frontier_strategy_node/get_frontier_candidates";
 
 /// @brief: 默认前沿失败标记服务名，生产部署时优先通过 YAML 参数覆盖
 inline constexpr char kMarkFailedService[] =
-    "/frontier_explorer_node/mark_frontier_failed";
+    "/frontier_strategy_node/mark_frontier_failed";
 
 /// @brief: 默认目标导航可执行性检查服务名
 inline constexpr char kGoalFeasibilityService[] =
@@ -39,4 +39,4 @@ inline constexpr int kMaxFeasibilityRecoverableRetries = 2;
 inline constexpr double kFeasiblePathLengthWeight = 0.6;
 
 }  // 命名空间 exploration_bt_defaults
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

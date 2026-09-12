@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>frontier_strategy_core</name>
+  <version>0.0.5</version>
+  <description>ROS-independent frontier detection, scoring, pruning and selection policies.</description>
+
+  <maintainer email="819119802@qq.com">xxx</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>cmake</buildtool_depend>
+  <depend>grid_map_core</depend>
+  <depend>exploration_core</depend>
+  <test_depend>gtest</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>

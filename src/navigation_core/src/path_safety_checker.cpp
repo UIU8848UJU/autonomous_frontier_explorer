@@ -2,17 +2,10 @@
 
 #include <algorithm>
 
-#include "nav2_costmap_2d/cost_values.hpp"
-
-namespace frontier_explorer
+namespace navigation
 {
 namespace navigation_core
 {
-
-PathSafetyChecker::PathSafetyChecker(const CostmapAdapter & costmap)
-: costmap_(costmap)
-{
-}
 
 void PathSafetyChecker::configure(const PathSafetyCheckerConfig & config)
 {
@@ -20,7 +13,8 @@ void PathSafetyChecker::configure(const PathSafetyCheckerConfig & config)
 }
 
 bool PathSafetyChecker::isSafe(
-    const nav_msgs::msg::Path & path,
+    const Path2D & path,
+    const grid_map_core::GridMap & map,
     std::string & reason,
     double & max_path_cost) const
 {
@@ -33,26 +27,29 @@ bool PathSafetyChecker::isSafe(
         reason = "path_empty";
         return false;
     }
-    if (!costmap_.isReady()) {
+    if (!map.isReady()) {
         reason = "path_costmap_unavailable";
         return false;
     }
 
     for (const auto & pose : path.poses) {
-        unsigned int mx = 0U;
-        unsigned int my = 0U;
-        if (!costmap_.worldToMap(pose.pose.position.x, pose.pose.position.y, mx, my)) {
+        grid_map_core::GridCell cell;
+        if (!map.worldToMap(pose.x, pose.y, cell)) {
             reason = "path_out_of_costmap";
             return false;
         }
 
-        const auto cost = costmap_.getCost(mx, my);
-        max_path_cost = std::max(max_path_cost, static_cast<double>(cost));
-        if (cost == nav2_costmap_2d::NO_INFORMATION && !config_.allow_unknown) {
+        const auto value = map.value(
+            static_cast<unsigned int>(cell.col),
+            static_cast<unsigned int>(cell.row));
+        max_path_cost = std::max(
+            max_path_cost,
+            static_cast<double>(std::max<std::int8_t>(0, value)));
+        if (value < 0 && !config_.allow_unknown) {
             reason = "path_crosses_unknown";
             return false;
         }
-        if (cost != nav2_costmap_2d::NO_INFORMATION && cost >= config_.cost_threshold) {
+        if (value >= config_.occupied_threshold) {
             reason = "path_crosses_high_cost";
             return false;
         }
@@ -63,4 +60,4 @@ bool PathSafetyChecker::isSafe(
 }
 
 }  // namespace navigation_core
-}  // namespace frontier_explorer
+}  // namespace navigation

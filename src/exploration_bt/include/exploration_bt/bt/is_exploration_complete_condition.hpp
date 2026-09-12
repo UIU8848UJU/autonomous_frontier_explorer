@@ -6,7 +6,7 @@
 #include "behaviortree_cpp_v3/condition_node.h"
 #include "exploration_bt/exploration_bt_context.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
 /// @brief: 判断探索是否已经完成的 BT 条件节点
@@ -44,4 +44,4 @@ private:
     std::shared_ptr<ExplorationBtContext> context_;
 };
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

@@ -11,7 +11,7 @@
 #include "robot_interfaces/msg/exploration_state.hpp"
 #include "std_srvs/srv/trigger.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 
 /// @brief: 探索 BT 编排器运行状态
@@ -84,4 +84,4 @@ private:
     rclcpp::TimerBase::SharedPtr timer_;
 };
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

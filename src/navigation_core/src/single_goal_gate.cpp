@@ -1,6 +1,6 @@
 #include "navigation_core/single_goal_gate.hpp"
 
-namespace frontier_explorer
+namespace navigation
 {
 namespace navigation_core
 {
@@ -28,4 +28,4 @@ bool SingleGoalGate::isActive() const
 }
 
 }  // namespace navigation_core
-}  // namespace frontier_explorer
+}  // namespace navigation

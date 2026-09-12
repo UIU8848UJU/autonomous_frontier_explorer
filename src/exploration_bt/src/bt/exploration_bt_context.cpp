@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-namespace frontier_explorer
+namespace exploration
 {
 
 rclcpp::Time ExplorationBtContext::now() const
@@ -25,4 +25,4 @@ std::shared_ptr<ExplorationBtContext> get_exploration_bt_context(
     return context;
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration

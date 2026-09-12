@@ -1,9 +1,9 @@
 # TaskManager 技术说明
 
 ## 模块定位
-- `task_manager` 是 Nav2 探索流程的调度中枢，用统一的状态机协调 `frontier_explorer` 探索流程与其他上层业务。
-- `robot_interfaces` 中的消息定义为所有模块提供统一协议；`frontier_explorer` 按此协议发布 `ExplorationState`，`task_manager` 发布 `TaskManagerState`。
-- `frontier_explorer` 仍然负责地图感知与目标选择；`task_manager` 不干预其内部算法，仅消费其状态并决定何时启动或停止探索。
+- `task_manager` 是 Nav2 探索流程的调度中枢，用统一的状态机协调 `exploration` 探索流程与其他上层业务。
+- `robot_interfaces` 中的消息定义为所有模块提供统一协议；`exploration` 按此协议发布 `ExplorationState`，`task_manager` 发布 `TaskManagerState`。
+- `exploration` 仍然负责地图感知与目标选择；`task_manager` 不干预其内部算法，仅消费其状态并决定何时启动或停止探索。
 
 ## 目录结构
 - `config/`：参数文件（如 `task_manager.yaml`）控制话题、服务名称、心跳周期、超时、QoS 队列深度等运行参数。
@@ -46,7 +46,7 @@
 - 导航已由 `exploration_bt_orchestrator_node` / BT 编排，`task_manager` 不再触发导航；导航结果反馈可后续接入。
 
 ## 后续扩展方向
-1. **导航结果回调**：将 Nav2 action result 或 `frontier_explorer` 反馈映射到 TaskManager，触发重新探索或结束流程。
+1. **导航结果回调**：将 Nav2 action result 或 `exploration` 反馈映射到 TaskManager，触发重新探索或结束流程。
 2. **多任务编排**：在 `TaskFlow` 中增加任务队列/优先级，与 future navigation/exploration 请求共存。
 3. **Recovery/Fallback**：根据 `ExplorationState::STUCK` 或导航失败计数自动切换 recovery 流程。
 4. **更细粒度参数**：把 cooldown、frontier 策略参数暴露到 YAML，并在 `TaskFlow` 里使用。

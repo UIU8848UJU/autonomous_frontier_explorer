@@ -11,7 +11,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
 
-namespace frontier_explorer
+namespace exploration
 {
 namespace
 {
@@ -277,7 +277,7 @@ void ExplorationBtOrchestratorNode::publish_state(const std::string & detail)
             msg.state = msg.COMPLETED;
             break;
         case ExplorationBtOrchestratorState::FAILED:
-            msg.state = msg.STUCK;
+            msg.state = msg.FAILED;
             break;
         case ExplorationBtOrchestratorState::CANCELLED:
             msg.state = msg.STOPPED;
@@ -286,4 +286,4 @@ void ExplorationBtOrchestratorNode::publish_state(const std::string & detail)
     state_pub_->publish(msg);
 }
 
-}  // 命名空间 frontier_explorer
+}  // 命名空间 exploration
