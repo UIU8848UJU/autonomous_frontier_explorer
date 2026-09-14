@@ -19,6 +19,18 @@ frontier_strategy_node:
       candidate_unknown_margin_cells: 2
       candidate_goal_inset_cells: 3
       candidate_max_unknown_ratio: 0.25
+      cleanup_enabled: true
+      cleanup_trigger_no_candidate_cycles: 3
+      cleanup_trigger_only_small_clusters: true
+      cleanup_min_cluster_size: 1
+      cleanup_candidate_max_unknown_ratio: 0.40
+      # 未确认具体传感器量程前保持关闭；部署时按实际传感器填写即可启用射线信息增益。
+      sensor_range_m: 0.0
+      viewpoint_retreat_distances_m: [0.25, 0.40]
+      viewpoint_sample_radii_m: [0.35, 0.55]
+      viewpoint_angle_step_deg: 30.0
+      information_gain_ray_step_cells: 1.0
+      minimum_visible_unknown_cells: 0
       enable_footprint_filter: true
       allow_unknown_footprint: false
       robot_radius: 0.1
@@ -34,6 +46,7 @@ frontier_strategy_node:
     global_frame: map
     robot_base_frame: base_link
     robot_pose_timeout_ms: 200
+    stable_no_frontier_cycles: 3
     show_all_candidate_markers: true
 
 navigation_node:

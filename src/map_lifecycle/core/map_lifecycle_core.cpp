@@ -7,7 +7,7 @@
 namespace map_lifecycle
 {
 
-void MapLifecycleCore::update_map(MapSnapshot map)
+void MapLifecycleCore::update_map(grid_map_core::GridMap map)
 {
   latest_map_ = std::move(map);
   map_stats_.width = latest_map_.width;
@@ -31,11 +31,7 @@ void MapLifecycleCore::update_map(MapSnapshot map)
     map_stats_.free_ratio = static_cast<double>(free_count) / cell_count;
     map_stats_.occupied_ratio = static_cast<double>(occupied_count) / cell_count;
   }
-  const auto expected_cell_count =
-    static_cast<std::size_t>(latest_map_.width) *
-    static_cast<std::size_t>(latest_map_.height);
-  map_stats_.valid = latest_map_.width > 0U && latest_map_.height > 0U &&
-    latest_map_.data.size() == expected_cell_count;
+  map_stats_.valid = latest_map_.isReady();
 
   if (state_ != MapLifecycleState::SAVING && state_ != MapLifecycleState::SAVED) {
     state_ = map_stats_.valid ?
@@ -76,7 +72,7 @@ void MapLifecycleCore::record_save_result(bool success, const std::string & map_
   }
 }
 
-double MapLifecycleCore::calculate_unknown_ratio(const MapSnapshot & map)
+double MapLifecycleCore::calculate_unknown_ratio(const grid_map_core::GridMap & map)
 {
   if (map.data.empty()) {
     return 1.0;
@@ -86,7 +82,7 @@ double MapLifecycleCore::calculate_unknown_ratio(const MapSnapshot & map)
   return static_cast<double>(unknown_count) / static_cast<double>(map.data.size());
 }
 
-const MapSnapshot & MapLifecycleCore::latest_map() const
+const grid_map_core::GridMap & MapLifecycleCore::latest_map() const
 {
   return latest_map_;
 }

@@ -51,7 +51,7 @@ TEST(FrontierScoringCore, ReturnsEmptyForEmptyCandidateSet)
     EXPECT_TRUE(scorer.score_candidates({}, std::nullopt).empty());
 }
 
-TEST(FrontierScoringCore, RanksAndAnnotatesReachabilityWithoutROS)
+TEST(FrontierScoringCore, RanksCandidatesWithoutApplyingNavigationConstraints)
 {
     FrontierScoringWeights weights;
     weights.weight_distance = 1.0;
@@ -65,21 +65,13 @@ TEST(FrontierScoringCore, RanksAndAnnotatesReachabilityWithoutROS)
             make_candidate(GridCell{1, 1}, 3.0, 1U),
             make_candidate(GridCell{2, 2}, 1.0, 1U)
         },
-        std::nullopt,
-        [](FrontierCandidate & candidate) {
-            FrontierReachabilityResult result;
-            result.checked = true;
-            result.reachable = candidate.goal == (GridCell{2, 2});
-            result.path_length_m = candidate.distance_m + 0.5;
-            return result;
-        });
+        std::nullopt);
 
     ASSERT_EQ(ranked.size(), 2U);
     EXPECT_EQ(ranked.front().candidate.goal, (GridCell{2, 2}));
-    EXPECT_TRUE(ranked.front().candidate.reachability_checked);
+    EXPECT_FALSE(ranked.front().candidate.reachability_checked);
     EXPECT_TRUE(ranked.front().candidate.reachable);
-    EXPECT_FALSE(ranked.back().candidate.reachable);
-    EXPECT_DOUBLE_EQ(ranked.front().candidate.path_length_m, 1.5);
+    EXPECT_DOUBLE_EQ(ranked.front().candidate.path_length_m, 0.0);
 }
 
 }  // 命名空间 frontier_strategy

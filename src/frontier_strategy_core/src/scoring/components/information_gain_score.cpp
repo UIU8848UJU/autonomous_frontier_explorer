@@ -20,6 +20,21 @@ double InformationGainScore::score(const FrontierCandidate & candidate) const
         return 0.0;
     }
 
+    // 新路径优先使用观测位姿的射线可见性结果；旧调用方没有地图时仍保留
+    // 原有方窗估计，避免纯 Core 使用者因未配置传感器参数而突然失去排序能力。
+    if (candidate.information_gain_valid) {
+        const double visible_gain = 1.0 - std::exp(
+            -candidate.information_gain / kClusterSizeSaturationCells);
+        double quality_factor = 1.0;
+        if (candidate.used_fallback) {
+            quality_factor *= kFallbackGoalPenalty;
+        }
+        if (candidate.goal_inset_applied) {
+            quality_factor *= kInsetGoalPenalty;
+        }
+        return std::clamp(visible_gain * quality_factor, 0.0, 1.0);
+    }
+
     const double unknown_density = std::clamp(
         candidate.unknown_ratio / kUsefulUnknownRatio,
         0.0,

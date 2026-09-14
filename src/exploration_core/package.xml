@@ -2,7 +2,7 @@
 <package format="3">
   <name>exploration_core</name>
   <version>0.1.0</version>
-  <description>不依赖 ROS 的探索行为协议和策略接口。</description>
+  <description>不依赖 ROS 的探索行为结果和决策数据类型。</description>
 
   <maintainer email="819119802@qq.com">xxx</maintainer>
   <license>Apache-2.0</license>

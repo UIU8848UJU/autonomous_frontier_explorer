@@ -14,3 +14,4 @@ float32 path_length_m
 uint32 pose_count
 float32 footprint_cost
 string footprint_reason
+uint64 costmap_revision

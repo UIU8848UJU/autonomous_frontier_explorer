@@ -15,9 +15,7 @@ RuleBasedFrontierRanker::RuleBasedFrontierRanker(
 
 std::vector<ScoredFrontierCandidate> RuleBasedFrontierRanker::rank(
     const std::vector<FrontierCandidate> & candidates,
-    const std::optional<GridCell> & last_goal,
-    const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
-        reachability_check) const
+    const std::optional<GridCell> & last_goal) const
 {
     auto scored_candidates = scorer_.score_candidates(candidates, last_goal);
     std::sort(
@@ -30,18 +28,6 @@ std::vector<ScoredFrontierCandidate> RuleBasedFrontierRanker::rank(
             return lhs.total_score > rhs.total_score;
         });
 
-    for (auto & scored : scored_candidates) {
-        if (!reachability_check) {
-            continue;
-        }
-        const auto reachability = reachability_check(scored.candidate);
-        scored.candidate.reachability_reason = reachability.reason;
-        if (reachability.checked) {
-            scored.candidate.reachability_checked = true;
-            scored.candidate.reachable = reachability.reachable;
-            scored.candidate.path_length_m = reachability.path_length_m;
-        }
-    }
     return scored_candidates;
 }
 

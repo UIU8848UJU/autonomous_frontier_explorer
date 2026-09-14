@@ -1,10 +1,8 @@
 #pragma once
 
-#include <functional>
 #include <optional>
 #include <vector>
 
-#include "frontier_strategy_core/reachability/frontier_reachability_result.hpp"
 #include "frontier_strategy_core/scoring/frontier_scorer.hpp"
 
 namespace frontier_strategy
@@ -18,9 +16,7 @@ public:
 
     virtual std::vector<ScoredFrontierCandidate> rank(
         const std::vector<FrontierCandidate> & candidates,
-        const std::optional<GridCell> & last_goal,
-        const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
-            reachability_check = {}) const = 0;
+        const std::optional<GridCell> & last_goal) const = 0;
 };
 
 /// 当前默认的规则排序器，保持现有分项评分和确定性排序行为。
@@ -33,9 +29,7 @@ public:
 
     std::vector<ScoredFrontierCandidate> rank(
         const std::vector<FrontierCandidate> & candidates,
-        const std::optional<GridCell> & last_goal,
-        const std::function<FrontierReachabilityResult(FrontierCandidate &)> &
-            reachability_check = {}) const override;
+        const std::optional<GridCell> & last_goal) const override;
 
 private:
     FrontierScorer scorer_;

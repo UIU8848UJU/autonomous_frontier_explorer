@@ -130,7 +130,7 @@ TEST(CostmapAdapterTest, RejectsInvalidGridAndResetsReadiness)
     EXPECT_EQ(adapter.getCost(0U, 0U), nav2_costmap_2d::NO_INFORMATION);
 }
 
-TEST(CostmapAdapterTest, PreservesOccupancyClassificationInGridMapSnapshot)
+TEST(CostmapAdapterTest, PreservesOccupancyClassificationInGridMap)
 {
     const auto grid = make_grid(
         5,
@@ -326,6 +326,45 @@ TEST(FrontierGoalProviderTest, RunsMapDetectorAndSelectorPath)
     EXPECT_GT(result.raw_frontier_count, 0U);
     EXPECT_GT(result.candidate_count, 0U);
     EXPECT_FALSE(result.candidates.empty());
+}
+
+TEST(FrontierGoalProviderTest, RequiresStableNoFrontierCyclesBeforeCompletion)
+{
+    auto grid = make_filled_grid(6, 6, 1.0F, 0);
+    grid.header.frame_id = "map";
+
+    FrontierGoalProvider provider(rclcpp::get_logger("frontier_goal_provider_stable_test"));
+    auto params = FrontierStrategyParams{};
+    params.runtime.obstacle_search_radius_cells = 0;
+    params.runtime.enable_reachability_filter = false;
+    params.runtime.stable_no_frontier_cycles = 3;
+    provider.configure(params);
+
+    auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>(grid);
+    ASSERT_TRUE(provider.update_map(map, rclcpp::Time(1, 0)));
+
+    geometry_msgs::msg::PoseStamped pose;
+    pose.header.frame_id = "map";
+    pose.pose.position.x = 2.5;
+    pose.pose.position.y = 2.5;
+    provider.update_robot_pose(pose);
+
+    const auto first = provider.compute_frontier_candidates(rclcpp::Time(2, 0));
+    EXPECT_FALSE(first.exploration_complete);
+    EXPECT_TRUE(first.recoverable);
+    EXPECT_EQ(first.reason_text, "WAITING_FOR_STABLE_NO_FRONTIER");
+    EXPECT_EQ(first.stable_no_frontier_cycles, 1);
+
+    const auto second = provider.compute_frontier_candidates(rclcpp::Time(2, 1));
+    EXPECT_FALSE(second.exploration_complete);
+    EXPECT_TRUE(second.recoverable);
+    EXPECT_EQ(second.stable_no_frontier_cycles, 2);
+
+    const auto third = provider.compute_frontier_candidates(rclcpp::Time(2, 2));
+    EXPECT_TRUE(third.exploration_complete);
+    EXPECT_FALSE(third.recoverable);
+    EXPECT_EQ(third.reason_text, "NO_FRONTIER_FOUND");
+    EXPECT_EQ(third.stable_no_frontier_cycles, 3);
 }
 
 }  // 命名空间 frontier_strategy

@@ -47,6 +47,7 @@ add_library(exploration_bt_nodes SHARED
   src/bt/action/compute_frontier_candidates_action.cpp
   src/bt/action/mark_frontier_failed_action.cpp
   src/bt/action/navigate_to_frontier_action.cpp
+  src/bt/action/prefetch_frontier_candidates_action.cpp
   src/bt/action/select_feasible_frontier_action.cpp
   src/bt/plugins/exploration_bt_plugins.cpp
 )
@@ -84,5 +85,26 @@ install(DIRECTORY include/
 
 ament_export_include_directories(include)
 ament_export_dependencies(${exploration_bt_DEPS})
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_feasibility_batch
+    test/test_feasibility_batch.cpp
+  )
+  target_include_directories(test_feasibility_batch PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+
+  ament_add_gtest(test_feasibility_cache_key
+    test/test_feasibility_cache_key.cpp
+  )
+  target_include_directories(test_feasibility_cache_key PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
+  ament_target_dependencies(test_feasibility_cache_key
+    geometry_msgs
+  )
+endif()
 
 ament_package()

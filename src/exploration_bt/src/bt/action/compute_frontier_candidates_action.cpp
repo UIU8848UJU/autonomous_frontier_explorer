@@ -1,7 +1,8 @@
 #include "exploration_bt/bt/action/compute_frontier_candidates_action.hpp"
 
-#include <algorithm>
 #include <mutex>
+
+#include "exploration_bt/bt/frontier_candidate_conversion.hpp"
 
 namespace exploration
 {
@@ -26,6 +27,36 @@ BT::NodeStatus ComputeFrontierCandidatesAction::onStart()
     response_ready_ = false;
     request_sent_ = false;
     next_request_time_ = context_->now();
+
+    {
+        std::lock_guard<std::mutex> lock(context_->mutex);
+        if (context_->prefetch_ready) {
+            const auto age_sec =
+                (context_->now() - context_->prefetched_generated_at).seconds();
+            const bool fresh_enough = age_sec >= 0.0 &&
+                age_sec <= context_->prefetch_max_age_sec &&
+                context_->prefetched_map_revision >= context_->latest_map_revision;
+            if (fresh_enough) {
+                if (context_->prefetched_map_revision != context_->latest_map_revision) {
+                    // 地图版本变化后，旧版本的 planner 结论不能复用。
+                    context_->feasibility_cache.clear();
+                }
+                context_->frontier_candidates = std::move(context_->prefetched_candidates);
+                context_->latest_map_revision = context_->prefetched_map_revision;
+                context_->exploration_complete = context_->prefetched_exploration_complete;
+                context_->navigation_failed = false;
+                context_->last_detail = context_->exploration_complete ?
+                    "PREFETCHED_EXPLORATION_COMPLETE" : "PREFETCHED_FRONTIER_CANDIDATES_READY";
+                context_->prefetch_ready = false;
+                return context_->exploration_complete || context_->frontier_candidates.empty() ?
+                    BT::NodeStatus::FAILURE : BT::NodeStatus::SUCCESS;
+            }
+            // 旧预取不能直接执行；清掉后回退到普通同步请求。
+            context_->prefetched_candidates.clear();
+            context_->prefetch_ready = false;
+            context_->prefetched_exploration_complete = false;
+        }
+    }
     return onRunning();
 }
 
@@ -43,39 +74,14 @@ BT::NodeStatus ComputeFrontierCandidatesAction::onRunning()
         request_sent_ = false;
 
         if (last_response_->success) {
-            std::vector<ExplorationBtContext::FrontierCandidate> candidates;
-            const auto count = std::min({
-                last_response_->goals.size(),
-                last_response_->scores.size(),
-                last_response_->distance_m.size(),
-                last_response_->clearance_m.size(),
-                last_response_->unknown_ratio.size(),
-                last_response_->cluster_sizes.size(),
-                last_response_->retry_counts.size()});
-            candidates.reserve(count);
-            for (std::size_t index = 0; index < count; ++index) {
-                ExplorationBtContext::FrontierCandidate candidate;
-                candidate.goal = last_response_->goals[index];
-                candidate.score = last_response_->scores[index];
-                candidate.distance_m = last_response_->distance_m[index];
-                candidate.clearance_m = last_response_->clearance_m[index];
-                candidate.unknown_ratio = last_response_->unknown_ratio[index];
-                candidate.cluster_size = last_response_->cluster_sizes[index];
-                candidate.retry_count = last_response_->retry_counts[index];
-                if (index < last_response_->reachability_checked.size()) {
-                    candidate.reachability_checked = last_response_->reachability_checked[index];
-                }
-                if (index < last_response_->reachable.size()) {
-                    candidate.reachable = last_response_->reachable[index];
-                }
-                if (index < last_response_->path_length_m.size()) {
-                    candidate.path_length_m = last_response_->path_length_m[index];
-                }
-                candidates.push_back(candidate);
-            }
+            auto candidates = convert_frontier_candidates(*last_response_);
 
             std::lock_guard<std::mutex> lock(context_->mutex);
+            if (last_response_->map_revision != context_->latest_map_revision) {
+                context_->feasibility_cache.clear();
+            }
             context_->frontier_candidates = candidates;
+            context_->latest_map_revision = last_response_->map_revision;
             context_->current_goal.reset();
             context_->exploration_complete = false;
             context_->navigation_failed = false;

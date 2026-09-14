@@ -5,6 +5,7 @@
 #include <cmath>
 #include <limits>
 #include <unordered_set>
+#include <utility>
 
 #include "frontier_strategy_core/utils/frontier_selector_utils.hpp"
 
@@ -12,12 +13,68 @@ namespace frontier_strategy
 {
 namespace
 {
-constexpr std::array<double, 2U> kRetreatDistancesM{0.25, 0.4};
-constexpr std::array<double, 2U> kSampleRadiiM{0.35, 0.55};
-constexpr double kAngleStepDeg = 30.0;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegreesToRadians = kPi / 180.0;
 }  // 命名空间
+
+std::size_t estimate_visible_unknown_cells(
+    const grid_map_core::GridMap & map,
+    const GridCell & viewpoint,
+    double sensor_range_m,
+    double ray_step_cells,
+    double angle_step_deg)
+{
+    if (!map.isReady() || !map.inBounds(viewpoint.col, viewpoint.row) ||
+        !map.isFree(
+            static_cast<unsigned int>(viewpoint.col),
+            static_cast<unsigned int>(viewpoint.row)) ||
+        sensor_range_m <= 0.0 || ray_step_cells <= 0.0 || angle_step_deg <= 0.0)
+    {
+        return 0U;
+    }
+
+    const int ray_count = static_cast<int>(std::ceil(360.0 / angle_step_deg));
+    const int step_count = static_cast<int>(std::ceil(
+        sensor_range_m / (ray_step_cells * map.resolution)));
+    std::unordered_set<GridCell, GridCellHash> visible_unknown;
+    double viewpoint_x = 0.0;
+    double viewpoint_y = 0.0;
+    if (!map.mapToWorld(viewpoint, viewpoint_x, viewpoint_y)) {
+        return 0U;
+    }
+
+    for (int ray_index = 0; ray_index < ray_count; ++ray_index) {
+        const double angle =
+            static_cast<double>(ray_index) * angle_step_deg * kDegreesToRadians;
+        const double direction_x = std::cos(angle);
+        const double direction_y = std::sin(angle);
+        for (int step = 1; step <= step_count; ++step) {
+            GridCell cell;
+            const double distance_m =
+                static_cast<double>(step) * ray_step_cells * map.resolution;
+            if (!map.worldToMap(
+                    viewpoint_x + direction_x * distance_m,
+                    viewpoint_y + direction_y * distance_m,
+                    cell))
+            {
+                break;
+            }
+            if (map.isObstacle(
+                    static_cast<unsigned int>(cell.col),
+                    static_cast<unsigned int>(cell.row)))
+            {
+                break;
+            }
+            if (map.isUnknown(
+                    static_cast<unsigned int>(cell.col),
+                    static_cast<unsigned int>(cell.row)))
+            {
+                visible_unknown.insert(cell);
+            }
+        }
+    }
+    return visible_unknown.size();
+}
 
 FrontierPruner::FrontierPruner(
     double min_goal_distance_m,
@@ -26,15 +83,37 @@ FrontierPruner::FrontierPruner(
     std::size_t min_cluster_size,
     int unknown_margin_cells,
     int goal_inset_cells,
-    double max_unknown_ratio)
+    double max_unknown_ratio,
+    std::vector<double> retreat_distances_m,
+    std::vector<double> sample_radii_m,
+    double viewpoint_angle_step_deg,
+    double sensor_range_m,
+    double information_gain_ray_step_cells,
+    std::size_t minimum_visible_unknown_cells)
 : min_goal_distance_m_(min_goal_distance_m),
   max_retry_count_(max_retry_count),
   max_cluster_retry_count_(max_cluster_retry_count),
   min_cluster_size_(min_cluster_size),
   unknown_margin_cells_(std::max(0, unknown_margin_cells)),
   goal_inset_cells_(std::max(0, goal_inset_cells)),
-  max_unknown_ratio_(std::clamp(max_unknown_ratio, 0.0, 1.0))
+  max_unknown_ratio_(std::clamp(max_unknown_ratio, 0.0, 1.0)),
+  retreat_distances_m_(std::move(retreat_distances_m)),
+  sample_radii_m_(std::move(sample_radii_m)),
+  viewpoint_angle_step_deg_(std::clamp(viewpoint_angle_step_deg, 0.1, 360.0)),
+  sensor_range_m_(std::max(0.0, sensor_range_m)),
+  information_gain_ray_step_cells_(std::max(0.1, information_gain_ray_step_cells)),
+  minimum_visible_unknown_cells_(minimum_visible_unknown_cells)
 {
+    retreat_distances_m_.erase(
+        std::remove_if(
+            retreat_distances_m_.begin(), retreat_distances_m_.end(),
+            [](double value) { return value <= 0.0; }),
+        retreat_distances_m_.end());
+    sample_radii_m_.erase(
+        std::remove_if(
+            sample_radii_m_.begin(), sample_radii_m_.end(),
+            [](double value) { return value <= 0.0; }),
+        sample_radii_m_.end());
 }
 
 bool FrontierPruner::is_same_as_last_goal(
@@ -224,7 +303,8 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
     double resolution,
     const FrontierPruningEnvironment & environment,
     const FrontierPruningContext & context,
-    std::vector<GridCell> * failed_cluster_ids) const
+    std::vector<GridCell> * failed_cluster_ids,
+    FrontierDecisionDiagnostics * diagnostics) const
 {
     std::vector<FrontierCandidate> valid_candidates;
     valid_candidates.reserve(clusters.size() * 4U);
@@ -233,11 +313,17 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
     for (std::size_t cluster_index = 0; cluster_index < clusters.size(); ++cluster_index) {
         const auto & cluster = clusters[cluster_index];
         if (cluster.cells.size() < min_cluster_size_) {
+            if (diagnostics != nullptr) {
+                diagnostics->record_rejection(FrontierRejectionReason::CLUSTER_TOO_SMALL);
+            }
             continue;
         }
         if (context.cluster_blacklist != nullptr &&
             context.cluster_blacklist->count(cluster.centroid) > 0U)
         {
+            if (diagnostics != nullptr) {
+                diagnostics->record_rejection(FrontierRejectionReason::CLUSTER_BLACKLISTED);
+            }
             continue;
         }
         if (context.failed_cluster_counts != nullptr) {
@@ -245,6 +331,9 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
             if (retry != context.failed_cluster_counts->end() &&
                 retry->second >= max_cluster_retry_count_)
             {
+                if (diagnostics != nullptr) {
+                    diagnostics->record_rejection(FrontierRejectionReason::CLUSTER_RETRY_EXHAUSTED);
+                }
                 continue;
             }
         }
@@ -252,14 +341,31 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
         bool cluster_generated_candidate = false;
         auto append_candidate =
             [&](GridCell candidate, bool used_fallback, bool allow_inset) {
-                if (should_skip_goal(candidate, context) ||
-                    is_same_as_last_goal(candidate, context.last_goal))
-                {
+                if (context.goal_blacklist != nullptr &&
+                    context.goal_blacklist->count(candidate) > 0U) {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(FrontierRejectionReason::GOAL_BLACKLISTED);
+                    }
+                    return false;
+                }
+                if (retry_count_of_goal(candidate, context) >= max_retry_count_) {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(FrontierRejectionReason::GOAL_RETRY_EXHAUSTED);
+                    }
+                    return false;
+                }
+                if (is_same_as_last_goal(candidate, context.last_goal)) {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(FrontierRejectionReason::SAME_AS_LAST_GOAL);
+                    }
                     return false;
                 }
 
                 double distance_m = grid_distance_in_meters(robot_grid, candidate, resolution);
                 if (distance_m < min_goal_distance_m_) {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(FrontierRejectionReason::GOAL_TOO_CLOSE);
+                    }
                     return false;
                 }
 
@@ -267,9 +373,26 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
                 if (!pass_map_candidate_constraints(
                         candidate,
                         environment.frontier_map,
-                        &unknown_ratio) ||
-                    !pass_safety_candidate_constraints(candidate, environment))
+                        &unknown_ratio))
                 {
+                    if (diagnostics != nullptr) {
+                        if (environment.frontier_map != nullptr &&
+                            (!environment.frontier_map->inBounds(candidate.col, candidate.row) ||
+                             !environment.frontier_map->isFree(
+                                 static_cast<unsigned int>(candidate.col),
+                                 static_cast<unsigned int>(candidate.row)))) {
+                            diagnostics->record_rejection(FrontierRejectionReason::MAP_CELL_INVALID);
+                        } else {
+                            diagnostics->record_rejection(
+                                FrontierRejectionReason::UNKNOWN_RATIO_TOO_HIGH);
+                        }
+                    }
+                    return false;
+                }
+                if (!pass_safety_candidate_constraints(candidate, environment)) {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(FrontierRejectionReason::SAFETY_REJECTED);
+                    }
                     return false;
                 }
 
@@ -283,33 +406,82 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
                         context);
                     goal_inset_applied = !(candidate == original_candidate);
                     if (goal_inset_applied) {
-                        if (should_skip_goal(candidate, context) ||
-                            is_same_as_last_goal(candidate, context.last_goal))
-                        {
+                        if (context.goal_blacklist != nullptr &&
+                            context.goal_blacklist->count(candidate) > 0U) {
+                            if (diagnostics != nullptr) {
+                                diagnostics->record_rejection(FrontierRejectionReason::GOAL_BLACKLISTED);
+                            }
+                            return false;
+                        }
+                        if (retry_count_of_goal(candidate, context) >= max_retry_count_) {
+                            if (diagnostics != nullptr) {
+                                diagnostics->record_rejection(
+                                    FrontierRejectionReason::GOAL_RETRY_EXHAUSTED);
+                            }
+                            return false;
+                        }
+                        if (is_same_as_last_goal(candidate, context.last_goal)) {
+                            if (diagnostics != nullptr) {
+                                diagnostics->record_rejection(FrontierRejectionReason::SAME_AS_LAST_GOAL);
+                            }
                             return false;
                         }
                         distance_m = grid_distance_in_meters(
                             robot_grid,
                             candidate,
                             resolution);
-                        if (distance_m < min_goal_distance_m_ ||
-                            !pass_map_candidate_constraints(
-                                candidate,
-                                environment.frontier_map,
-                                &unknown_ratio) ||
-                            !pass_safety_candidate_constraints(candidate, environment))
-                        {
+                        const bool passes_distance = distance_m >= min_goal_distance_m_;
+                        const bool passes_map = pass_map_candidate_constraints(
+                            candidate,
+                            environment.frontier_map,
+                            &unknown_ratio);
+                        const bool passes_safety = pass_safety_candidate_constraints(
+                            candidate,
+                            environment);
+                        if (!passes_distance || !passes_map || !passes_safety) {
+                            if (diagnostics != nullptr) {
+                                if (!passes_distance) {
+                                    diagnostics->record_rejection(
+                                        FrontierRejectionReason::GOAL_TOO_CLOSE);
+                                } else if (!passes_map) {
+                                    diagnostics->record_rejection(
+                                        FrontierRejectionReason::UNKNOWN_RATIO_TOO_HIGH);
+                                } else {
+                                    diagnostics->record_rejection(
+                                        FrontierRejectionReason::SAFETY_REJECTED);
+                                }
+                            }
                             return false;
                         }
                     }
                 }
 
+                const auto visible_unknown_cells = environment.frontier_map != nullptr ?
+                    estimate_visible_unknown_cells(
+                        *environment.frontier_map,
+                        candidate,
+                        sensor_range_m_,
+                        information_gain_ray_step_cells_,
+                        viewpoint_angle_step_deg_) : 0U;
+                if (environment.frontier_map != nullptr && sensor_range_m_ > 0.0 &&
+                    visible_unknown_cells < minimum_visible_unknown_cells_)
+                {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(
+                            FrontierRejectionReason::INFORMATION_GAIN_TOO_LOW);
+                    }
+                    return false;
+                }
+
                 if (emitted_goals.count(candidate) > 0U) {
+                    if (diagnostics != nullptr) {
+                        diagnostics->record_rejection(FrontierRejectionReason::DUPLICATE_GOAL);
+                    }
                     return false;
                 }
                 emitted_goals.insert(candidate);
 
-                valid_candidates.push_back(FrontierCandidate{
+                FrontierCandidate generated_candidate{
                     candidate,
                     cluster.centroid,
                     cluster.cells.size(),
@@ -323,8 +495,15 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
                     false,
                     true,
                     0.0,
-                    {}
-                });
+                    {},
+                    static_cast<double>(visible_unknown_cells)
+                };
+                generated_candidate.information_gain_valid =
+                    environment.frontier_map != nullptr && sensor_range_m_ > 0.0;
+                valid_candidates.push_back(std::move(generated_candidate));
+                if (diagnostics != nullptr) {
+                    ++diagnostics->generated_candidates;
+                }
                 return true;
             };
 
@@ -355,7 +534,7 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
             const double direction_y = robot_y - centroid_y;
             const double direction_norm = std::hypot(direction_x, direction_y);
             if (direction_norm > 1e-6) {
-                for (const auto retreat_distance_m : kRetreatDistancesM) {
+                for (const auto retreat_distance_m : retreat_distances_m_) {
                     GridCell candidate;
                     const double world_x =
                         centroid_x + direction_x / direction_norm * retreat_distance_m;
@@ -372,10 +551,10 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
                 }
             }
 
-            for (const auto sample_radius_m : kSampleRadiiM) {
+            for (const auto sample_radius_m : sample_radii_m_) {
                 for (double angle_deg = 0.0;
                     angle_deg < 360.0;
-                    angle_deg += kAngleStepDeg)
+                    angle_deg += viewpoint_angle_step_deg_)
                 {
                     const double angle_rad = angle_deg * kDegreesToRadians;
                     GridCell candidate;
@@ -396,6 +575,9 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
         }
 
         if (!cluster_generated_candidate && failed_cluster_ids != nullptr) {
+            if (diagnostics != nullptr) {
+                diagnostics->record_rejection(FrontierRejectionReason::NO_CANDIDATE_GENERATED);
+            }
             failed_cluster_ids->push_back(cluster.centroid);
         }
     }

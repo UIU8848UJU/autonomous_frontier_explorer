@@ -3,12 +3,14 @@
 namespace map_lifecycle::adapters
 {
 
-MapSnapshot to_core_map(const nav_msgs::msg::OccupancyGrid & message)
+grid_map_core::GridMap to_core_map(const nav_msgs::msg::OccupancyGrid & message)
 {
-  MapSnapshot map;
+  grid_map_core::GridMap map;
   map.width = message.info.width;
   map.height = message.info.height;
   map.resolution = message.info.resolution;
+  map.origin_x = message.info.origin.position.x;
+  map.origin_y = message.info.origin.position.y;
   map.data = message.data;
   return map;
 }

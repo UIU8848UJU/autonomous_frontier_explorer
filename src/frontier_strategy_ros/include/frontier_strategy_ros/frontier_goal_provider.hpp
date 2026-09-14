@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <string>
@@ -44,6 +45,7 @@ struct FrontierCandidateResult
     float distance_m{0.0F};
     float clearance_m{0.0F};
     float unknown_ratio{0.0F};
+    float information_gain{0.0F};
     uint32_t cluster_size{0U};
     uint32_t retry_count{0U};
     bool used_fallback{false};
@@ -66,8 +68,16 @@ struct FrontierCandidatesResult
     uint32_t blacklist_count{0U};
     bool exploration_complete{false};
     bool recoverable{false};
+    bool cleanup_mode{false};
     ExplorationStatus state{ExplorationStatus::RUNNING};
     std::string state_detail;
+    FrontierDecisionDiagnostics diagnostics;
+    double detection_ms{0.0};
+    double pruning_ms{0.0};
+    double ranking_ms{0.0};
+    double total_ms{0.0};
+    uint64_t map_revision{0U};
+    int stable_no_frontier_cycles{0};
     FrontierGoalVisualization visualization;
 };
 
@@ -89,7 +99,9 @@ class FrontierGoalProvider
 public:
     /// @brief: 构造 frontier 目标提供器
     /// @param logger ROS2 日志器，仅用于能力层日志
-    explicit FrontierGoalProvider(const rclcpp::Logger & logger);
+    explicit FrontierGoalProvider(
+        const rclcpp::Logger & logger,
+        std::shared_ptr<IFrontierRanker> ranker = {});
 
     /// @brief: 应用参数并重建 detector/selector
     /// @param params frontier 策略参数
@@ -163,12 +175,18 @@ private:
     FrontierStrategyParams params_;
     CostmapAdapter map_costmap_;
     CostmapAdapter global_costmap_;
+    std::shared_ptr<IFrontierRanker> ranker_;
     FrontierStrategyPolicy policy_;
     std::shared_ptr<FrontierReachabilityChecker> reachability_checker_;
     nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
     std::optional<geometry_msgs::msg::PoseStamped> robot_pose_;
     std::optional<GridCell> robot_grid_;
     rclcpp::Time last_map_update_time_;
+    uint64_t map_fingerprint_{0U};
+    uint64_t map_revision_{0U};
+    uint64_t no_frontier_revision_{0U};
+    int stable_no_frontier_cycles_{0};
+    bool has_map_fingerprint_{false};
     std::size_t consecutive_frontier_failures_{0U};
 };
 

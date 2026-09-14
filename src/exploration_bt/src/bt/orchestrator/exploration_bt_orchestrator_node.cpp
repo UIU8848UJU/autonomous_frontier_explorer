@@ -54,6 +54,40 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
         "max_frontier_candidates",
         exploration_bt_defaults::kMaxFrontierCandidates);
     declare_parameter<int>(
+        "feasibility_top_k",
+        exploration_bt_defaults::kFeasibilityTopK);
+    declare_parameter<bool>(
+        "enable_candidate_prefetch",
+        exploration_bt_defaults::kEnableCandidatePrefetch);
+    declare_parameter<double>(
+        "prefetch_max_age_sec",
+        exploration_bt_defaults::kPrefetchMaxAgeSec);
+    declare_parameter<bool>(
+        "feasibility_cache_enabled",
+        exploration_bt_defaults::kEnableFeasibilityCache);
+    declare_parameter<double>(
+        "feasibility_cache_ttl_sec",
+        exploration_bt_defaults::kFeasibilityCacheTtlSec);
+    declare_parameter<double>(
+        "feasibility_cache_region_size_m",
+        exploration_bt_defaults::kFeasibilityCacheRegionSizeM);
+    declare_parameter<std::string>("feasibility_planner_id", "");
+    declare_parameter<bool>(
+        "enable_active_goal_replacement",
+        exploration_bt_defaults::kEnableActiveGoalReplacement);
+    declare_parameter<double>(
+        "goal_switch_min_utility_gain",
+        exploration_bt_defaults::kGoalSwitchMinUtilityGain);
+    declare_parameter<double>(
+        "goal_min_hold_duration_sec",
+        exploration_bt_defaults::kGoalMinHoldDurationSec);
+    declare_parameter<int>(
+        "max_goal_switches_per_navigation",
+        exploration_bt_defaults::kMaxGoalSwitchesPerNavigation);
+    declare_parameter<double>(
+        "active_goal_reached_tolerance_m",
+        exploration_bt_defaults::kActiveGoalReachedToleranceM);
+    declare_parameter<int>(
         "max_feasibility_recoverable_retries",
         exploration_bt_defaults::kMaxFeasibilityRecoverableRetries);
     declare_parameter<double>(
@@ -71,10 +105,34 @@ ExplorationBtOrchestratorNode::ExplorationBtOrchestratorNode(
         std::max(0.1, get_parameter("service_retry_delay_sec").as_double());
     context_->max_frontier_candidates = static_cast<uint32_t>(
         std::max(1, static_cast<int>(get_parameter("max_frontier_candidates").as_int())));
+    context_->feasibility_top_k = static_cast<uint32_t>(
+        std::max(1, static_cast<int>(get_parameter("feasibility_top_k").as_int())));
     context_->max_feasibility_recoverable_retries = static_cast<uint32_t>(
         std::max(
             0,
             static_cast<int>(get_parameter("max_feasibility_recoverable_retries").as_int())));
+    context_->enable_candidate_prefetch =
+        get_parameter("enable_candidate_prefetch").as_bool();
+    context_->prefetch_max_age_sec =
+        std::max(0.0, get_parameter("prefetch_max_age_sec").as_double());
+    context_->feasibility_cache_enabled =
+        get_parameter("feasibility_cache_enabled").as_bool();
+    context_->feasibility_cache_ttl_sec = std::max(
+        0.0, get_parameter("feasibility_cache_ttl_sec").as_double());
+    context_->feasibility_cache_region_size_m = std::max(
+        0.01, get_parameter("feasibility_cache_region_size_m").as_double());
+    context_->feasibility_planner_id =
+        get_parameter("feasibility_planner_id").as_string();
+    context_->enable_active_goal_replacement =
+        get_parameter("enable_active_goal_replacement").as_bool();
+    context_->goal_switch_min_utility_gain = std::max(
+        0.0, get_parameter("goal_switch_min_utility_gain").as_double());
+    context_->goal_min_hold_duration_sec = std::max(
+        0.0, get_parameter("goal_min_hold_duration_sec").as_double());
+    context_->max_goal_switches_per_navigation = static_cast<uint32_t>(std::max(
+        0, static_cast<int>(get_parameter("max_goal_switches_per_navigation").as_int())));
+    context_->active_goal_reached_tolerance_m = std::max(
+        0.01, get_parameter("active_goal_reached_tolerance_m").as_double());
     context_->feasible_path_length_weight =
         std::max(0.0, get_parameter("feasible_path_length_weight").as_double());
     context_->get_candidates_client =
@@ -159,6 +217,16 @@ void ExplorationBtOrchestratorNode::handle_start(
         std::lock_guard<std::mutex> lock(context_->mutex);
         context_->exploration_complete = false;
         context_->navigation_failed = false;
+        context_->navigation_active = false;
+        context_->navigation_finished = false;
+        context_->navigation_result_success = false;
+        context_->replacement_candidate.reset();
+        context_->goal_switch_count = 0U;
+        context_->prefetched_candidates.clear();
+        context_->feasibility_cache.clear();
+        ++context_->feasibility_start_region_revision;
+        context_->prefetch_ready = false;
+        context_->prefetched_exploration_complete = false;
         context_->stop_requested = false;
         context_->current_goal.reset();
         context_->last_detail = "BT_STARTED";

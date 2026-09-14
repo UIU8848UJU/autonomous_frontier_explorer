@@ -28,23 +28,31 @@ find_package(frontier_strategy_ros REQUIRED)
 find_package(navigation_core REQUIRED)
 find_package(robot_geometry_core REQUIRED)
 
-set(exploration_nodes_DEPS
+set(frontier_strategy_node_DEPS
+  rclcpp
+  rclcpp_action
+  nav_msgs
+  nav2_msgs
+  geometry_msgs
+  visualization_msgs
+  std_msgs
+  std_srvs
+  robot_interfaces
+  tf2
+  tf2_ros
+  frontier_strategy_ros
+)
+
+set(navigation_node_DEPS
   rclcpp
   rclcpp_action
   nav_msgs
   nav2_msgs
   nav2_costmap_2d
   geometry_msgs
-  visualization_msgs
   std_msgs
-  std_srvs
   robot_interfaces
-  tf2_geometry_msgs
-  tf2
-  tf2_ros
   frontier_strategy_ros
-  navigation_core
-  robot_geometry_core
 )
 
 function(configure_exploration_nodes_target target_name)
@@ -54,42 +62,64 @@ function(configure_exploration_nodes_target target_name)
   )
 
   ament_target_dependencies(${target_name}
-    ${exploration_nodes_DEPS}
+    ${ARGN}
   )
 endfunction()
 
-add_library(exploration_nodes_common
+add_library(frontier_strategy_node_lib
   src/frontier_strategy_node.cpp
-  src/navigation_node.cpp
   src/nav2_planner_reachability_checker.cpp
   src/frontier_marker_publisher.cpp
-  src/adapters/navigation_converters.cpp
 )
 
-configure_exploration_nodes_target(exploration_nodes_common)
+configure_exploration_nodes_target(
+  frontier_strategy_node_lib
+  ${frontier_strategy_node_DEPS}
+)
 
 add_executable(frontier_strategy_node
   src/frontier_strategy_main.cpp
 )
 
 target_link_libraries(frontier_strategy_node
-  exploration_nodes_common
+  frontier_strategy_node_lib
 )
 
-configure_exploration_nodes_target(frontier_strategy_node)
+configure_exploration_nodes_target(
+  frontier_strategy_node
+  ${frontier_strategy_node_DEPS}
+)
+
+add_library(navigation_node_lib
+  src/navigation_node.cpp
+  src/adapters/navigation_converters.cpp
+)
+
+configure_exploration_nodes_target(
+  navigation_node_lib
+  ${navigation_node_DEPS}
+)
+target_link_libraries(navigation_node_lib
+  navigation_core::navigation_core
+  robot_geometry_core::robot_geometry_core
+)
 
 add_executable(navigation_node
   src/navigation_main.cpp
 )
 
 target_link_libraries(navigation_node
-  exploration_nodes_common
+  navigation_node_lib
 )
 
-configure_exploration_nodes_target(navigation_node)
+configure_exploration_nodes_target(
+  navigation_node
+  ${navigation_node_DEPS}
+)
 
 install(TARGETS
-  exploration_nodes_common
+  frontier_strategy_node_lib
+  navigation_node_lib
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -110,6 +140,9 @@ install(DIRECTORY include/
 )
 
 ament_export_include_directories(include)
-ament_export_dependencies(${exploration_nodes_DEPS})
+ament_export_dependencies(
+  ${frontier_strategy_node_DEPS}
+  ${navigation_node_DEPS}
+)
 
 ament_package()

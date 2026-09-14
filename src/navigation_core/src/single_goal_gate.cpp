@@ -7,24 +7,18 @@ namespace navigation_core
 
 bool SingleGoalGate::tryAcquire()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (active_) {
-        return false;
-    }
-    active_ = true;
-    return true;
+    bool expected = false;
+    return active_.compare_exchange_strong(expected, true);
 }
 
 void SingleGoalGate::release()
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    active_ = false;
+    active_.store(false);
 }
 
 bool SingleGoalGate::isActive() const
 {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return active_;
+    return active_.load();
 }
 
 }  // namespace navigation_core

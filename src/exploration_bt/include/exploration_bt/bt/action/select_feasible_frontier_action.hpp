@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <optional>
 #include <string>
@@ -69,11 +70,15 @@ private:
     std::vector<ExplorationBtContext::FrontierCandidate> candidates_;
     std::vector<uint32_t> recoverable_retry_counts_;
     std::size_t current_index_{0U};
+    std::size_t batch_end_{0U};
     std::optional<std::size_t> best_feasible_index_;
     bool saw_recoverable_failure_{false};
     bool request_sent_{false};
-    bool response_ready_{false};
+    std::atomic_bool response_ready_{false};
     rclcpp::Time next_request_time_;
+    std::string request_cache_key_;
+    uint64_t request_map_revision_{0U};
+    uint64_t request_start_region_revision_{0U};
     robot_interfaces::srv::CheckGoalFeasibility::Response::SharedPtr last_response_;
 };
 

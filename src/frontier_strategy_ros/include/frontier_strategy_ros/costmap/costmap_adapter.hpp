@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <cstdint>
 #include <optional>
 
 #include "nav2_costmap_2d/costmap_2d.hpp"
@@ -27,6 +28,9 @@ public:
     /// @brief: 获取 ROS 地图转换后的纯 C++ 地图快照
     /// @return: 只读 GridMap；未成功更新时为空快照
     const grid_map_core::GridMap & gridMap() const;
+
+    /// @brief 获取每次输入地图更新后的单调版本号，用于失效 planner 缓存。
+    uint64_t revision() const;
 
     /// @brief: 判断内部 costmap 是否可用
     /// @return: true 表示已经有有效地图
@@ -128,6 +132,7 @@ private:
     std::unique_ptr<nav2_costmap_2d::Costmap2D> costmap_;
     grid_map_core::GridMap grid_map_;
     bool ready_{false};
+    uint64_t revision_{0U};
 };
 
 }  // 命名空间 frontier_strategy

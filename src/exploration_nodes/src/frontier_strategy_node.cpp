@@ -122,6 +122,40 @@ void FrontierStrategyNode::declare_params()
     this->declare_parameter<std::string>(
         "frontier_decision.reachability_planner_id",
         params_.runtime.reachability_planner_id);
+    this->declare_parameter<int>(
+        "stable_no_frontier_cycles", params_.runtime.stable_no_frontier_cycles);
+    this->declare_parameter<bool>(
+        "frontier_decision.cleanup_enabled", params_.runtime.cleanup_enabled);
+    this->declare_parameter<int>(
+        "frontier_decision.cleanup_trigger_no_candidate_cycles",
+        params_.runtime.cleanup_trigger_no_candidate_cycles);
+    this->declare_parameter<bool>(
+        "frontier_decision.cleanup_trigger_only_small_clusters",
+        params_.runtime.cleanup_trigger_only_small_clusters);
+    this->declare_parameter<int>(
+        "frontier_decision.cleanup_min_cluster_size",
+        static_cast<int>(params_.pruner.cleanup_min_cluster_size));
+    this->declare_parameter<double>(
+        "frontier_decision.cleanup_candidate_max_unknown_ratio",
+        params_.pruner.cleanup_candidate_max_unknown_ratio);
+    this->declare_parameter<double>(
+        "frontier_decision.sensor_range_m",
+        params_.pruner.sensor_range_m);
+    this->declare_parameter<std::vector<double>>(
+        "frontier_decision.viewpoint_retreat_distances_m",
+        params_.pruner.viewpoint_retreat_distances_m);
+    this->declare_parameter<std::vector<double>>(
+        "frontier_decision.viewpoint_sample_radii_m",
+        params_.pruner.viewpoint_sample_radii_m);
+    this->declare_parameter<double>(
+        "frontier_decision.viewpoint_angle_step_deg",
+        params_.pruner.viewpoint_angle_step_deg);
+    this->declare_parameter<double>(
+        "frontier_decision.information_gain_ray_step_cells",
+        params_.pruner.information_gain_ray_step_cells);
+    this->declare_parameter<int>(
+        "frontier_decision.minimum_visible_unknown_cells",
+        static_cast<int>(params_.pruner.minimum_visible_unknown_cells));
 }
 
 void FrontierStrategyNode::load_params()
@@ -196,6 +230,30 @@ void FrontierStrategyNode::load_params()
             "frontier_decision.reachability_check_timeout_ms").as_int());
     params_.runtime.reachability_planner_id =
         this->get_parameter("frontier_decision.reachability_planner_id").as_string();
+    params_.runtime.stable_no_frontier_cycles =
+        this->get_parameter("stable_no_frontier_cycles").as_int();
+    params_.runtime.cleanup_enabled =
+        this->get_parameter("frontier_decision.cleanup_enabled").as_bool();
+    params_.runtime.cleanup_trigger_no_candidate_cycles =
+        this->get_parameter("frontier_decision.cleanup_trigger_no_candidate_cycles").as_int();
+    params_.runtime.cleanup_trigger_only_small_clusters =
+        this->get_parameter("frontier_decision.cleanup_trigger_only_small_clusters").as_bool();
+    params_.pruner.cleanup_min_cluster_size = static_cast<std::size_t>(
+        this->get_parameter("frontier_decision.cleanup_min_cluster_size").as_int());
+    params_.pruner.cleanup_candidate_max_unknown_ratio =
+        this->get_parameter("frontier_decision.cleanup_candidate_max_unknown_ratio").as_double();
+    params_.pruner.sensor_range_m =
+        this->get_parameter("frontier_decision.sensor_range_m").as_double();
+    params_.pruner.viewpoint_retreat_distances_m =
+        this->get_parameter("frontier_decision.viewpoint_retreat_distances_m").as_double_array();
+    params_.pruner.viewpoint_sample_radii_m =
+        this->get_parameter("frontier_decision.viewpoint_sample_radii_m").as_double_array();
+    params_.pruner.viewpoint_angle_step_deg =
+        this->get_parameter("frontier_decision.viewpoint_angle_step_deg").as_double();
+    params_.pruner.information_gain_ray_step_cells =
+        this->get_parameter("frontier_decision.information_gain_ray_step_cells").as_double();
+    params_.pruner.minimum_visible_unknown_cells = static_cast<std::size_t>(
+        this->get_parameter("frontier_decision.minimum_visible_unknown_cells").as_int());
 
 }
 
@@ -215,6 +273,10 @@ void FrontierStrategyNode::apply_params()
         std::max(0.01, params_.runtime.goal_reached_tolerance_m);
     params_.runtime.robot_pose_timeout =
         std::chrono::milliseconds(std::max<int64_t>(10, params_.runtime.robot_pose_timeout.count()));
+    params_.runtime.stable_no_frontier_cycles =
+        std::max(1, params_.runtime.stable_no_frontier_cycles);
+    params_.runtime.cleanup_trigger_no_candidate_cycles =
+        std::max(1, params_.runtime.cleanup_trigger_no_candidate_cycles);
     if (params_.runtime.global_frame.empty()) {
         params_.runtime.global_frame = "map";
     }
@@ -243,12 +305,33 @@ void FrontierStrategyNode::apply_params()
         std::max(1, params_.selection.max_cluster_retry_count);
     params_.pruner.candidate_max_unknown_ratio =
         std::clamp(params_.pruner.candidate_max_unknown_ratio, 0.0, 1.0);
+    params_.pruner.cleanup_min_cluster_size = std::max<std::size_t>(
+        1U, params_.pruner.cleanup_min_cluster_size);
+    params_.pruner.cleanup_candidate_max_unknown_ratio = std::clamp(
+        params_.pruner.cleanup_candidate_max_unknown_ratio, 0.0, 1.0);
     params_.pruner.robot_radius =
         std::max(0.01, params_.pruner.robot_radius);
     params_.pruner.footprint_padding =
         std::max(0.0, params_.pruner.footprint_padding);
     params_.pruner.footprint_cost_threshold =
         std::clamp(params_.pruner.footprint_cost_threshold, 1, 255);
+    params_.pruner.sensor_range_m = std::max(0.0, params_.pruner.sensor_range_m);
+    params_.pruner.viewpoint_angle_step_deg = std::clamp(
+        params_.pruner.viewpoint_angle_step_deg, 0.1, 360.0);
+    params_.pruner.information_gain_ray_step_cells = std::max(
+        0.1, params_.pruner.information_gain_ray_step_cells);
+    params_.pruner.viewpoint_retreat_distances_m.erase(
+        std::remove_if(
+            params_.pruner.viewpoint_retreat_distances_m.begin(),
+            params_.pruner.viewpoint_retreat_distances_m.end(),
+            [](double value) { return value <= 0.0; }),
+        params_.pruner.viewpoint_retreat_distances_m.end());
+    params_.pruner.viewpoint_sample_radii_m.erase(
+        std::remove_if(
+            params_.pruner.viewpoint_sample_radii_m.begin(),
+            params_.pruner.viewpoint_sample_radii_m.end(),
+            [](double value) { return value <= 0.0; }),
+        params_.pruner.viewpoint_sample_radii_m.end());
 
     params_.pruner.min_cluster_size =
         static_cast<std::size_t>(params_.runtime.min_frontier_cluster_size);
@@ -488,7 +571,30 @@ void FrontierStrategyNode::publish_decision_debug(const FrontierCandidatesResult
          << "\"raw_frontier_count\":" << result.raw_frontier_count << ","
          << "\"candidate_count\":" << result.candidate_count << ","
          << "\"blacklist_count\":" << result.blacklist_count << ","
-         << "\"exploration_complete\":" << (result.exploration_complete ? "true" : "false")
+         << "\"exploration_complete\":" << (result.exploration_complete ? "true" : "false") << ","
+         << "\"cleanup_mode\":" << (result.cleanup_mode ? "true" : "false") << ","
+         << "\"detection_ms\":" << result.detection_ms << ","
+         << "\"pruning_ms\":" << result.pruning_ms << ","
+         << "\"ranking_ms\":" << result.ranking_ms << ","
+         << "\"total_ms\":" << result.total_ms << ","
+         << "\"map_revision\":" << result.map_revision << ","
+         << "\"stable_no_frontier_cycles\":" << result.stable_no_frontier_cycles << ","
+         << "\"diagnostics\":{";
+    for (std::size_t reason_index = 0U;
+        reason_index < static_cast<std::size_t>(FrontierRejectionReason::COUNT);
+        ++reason_index)
+    {
+        if (reason_index > 0U) {
+            json << ",";
+        }
+        const auto reason = static_cast<FrontierRejectionReason>(reason_index);
+        json << "\"" << frontier_rejection_reason_name(reason) << "\":"
+             << result.diagnostics.rejection_count(reason);
+    }
+    json << "},"
+         << "\"raw_frontier_cells\":" << result.diagnostics.raw_frontier_cells << ","
+         << "\"raw_clusters\":" << result.diagnostics.raw_clusters << ","
+         << "\"generated_candidates\":" << result.diagnostics.generated_candidates
          << ",\"candidates\":[";
     for (std::size_t index = 0; index < result.candidates.size(); ++index) {
         const auto & candidate = result.candidates[index];
@@ -503,6 +609,7 @@ void FrontierStrategyNode::publish_decision_debug(const FrontierCandidatesResult
              << "\"distance_m\":" << candidate.distance_m << ","
              << "\"clearance_m\":" << candidate.clearance_m << ","
              << "\"unknown_ratio\":" << candidate.unknown_ratio << ","
+             << "\"information_gain\":" << candidate.information_gain << ","
              << "\"cluster_size\":" << candidate.cluster_size << ","
              << "\"retry_count\":" << candidate.retry_count << ","
              << "\"reachable\":" << (candidate.reachable ? "true" : "false") << ","
@@ -574,6 +681,7 @@ void FrontierStrategyNode::handle_get_frontier_candidates(
     response->raw_frontier_count = result.raw_frontier_count;
     response->candidate_count = result.candidate_count;
     response->blacklist_count = result.blacklist_count;
+    response->map_revision = result.map_revision;
     response->exploration_complete = result.exploration_complete;
     response->recoverable = result.recoverable;
 
@@ -582,6 +690,7 @@ void FrontierStrategyNode::handle_get_frontier_candidates(
     response->distance_m.reserve(result.candidates.size());
     response->clearance_m.reserve(result.candidates.size());
     response->unknown_ratio.reserve(result.candidates.size());
+    response->information_gain.reserve(result.candidates.size());
     response->cluster_sizes.reserve(result.candidates.size());
     response->retry_counts.reserve(result.candidates.size());
     response->used_fallback.reserve(result.candidates.size());
@@ -596,6 +705,7 @@ void FrontierStrategyNode::handle_get_frontier_candidates(
         response->distance_m.push_back(candidate.distance_m);
         response->clearance_m.push_back(candidate.clearance_m);
         response->unknown_ratio.push_back(candidate.unknown_ratio);
+        response->information_gain.push_back(candidate.information_gain);
         response->cluster_sizes.push_back(candidate.cluster_size);
         response->retry_counts.push_back(candidate.retry_count);
         response->used_fallback.push_back(candidate.used_fallback);

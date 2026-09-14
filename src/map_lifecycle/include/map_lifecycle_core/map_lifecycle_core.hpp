@@ -2,19 +2,10 @@
 
 #include <cstdint>
 #include <string>
-#include <vector>
+#include "grid_map_core/types/grid_map.hpp"
 
 namespace map_lifecycle
 {
-
-/// @brief Core 使用的二维栅格地图快照。
-struct MapSnapshot
-{
-  std::uint32_t width{0U};
-  std::uint32_t height{0U};
-  double resolution{0.0};
-  std::vector<std::int8_t> data;
-};
 
 /// @brief Core 使用的地图生命周期状态。
 enum class MapLifecycleState : std::uint8_t
@@ -56,7 +47,7 @@ class MapLifecycleCore
 {
 public:
   /// @brief 接收一份最新地图并更新统计信息。
-  void update_map(MapSnapshot map);
+  void update_map(grid_map_core::GridMap map);
 
   /// @brief 接收探索完成事件。
   void handle_exploration_completed(const ExplorationCompletedEvent & event);
@@ -71,16 +62,16 @@ public:
   void record_save_result(bool success, const std::string & map_url);
 
   /// @brief 计算地图中 unknown cell 的比例。
-  static double calculate_unknown_ratio(const MapSnapshot & map);
+  static double calculate_unknown_ratio(const grid_map_core::GridMap & map);
 
-  const MapSnapshot & latest_map() const;
+  const grid_map_core::GridMap & latest_map() const;
   const MapStatistics & map_statistics() const;
   MapLifecycleState state() const;
   const std::string & saved_map_url() const;
   bool completion_detected() const;
 
 private:
-  MapSnapshot latest_map_;
+  grid_map_core::GridMap latest_map_;
   MapStatistics map_stats_;
   MapLifecycleState state_{MapLifecycleState::EMPTY};
   std::string saved_map_url_;

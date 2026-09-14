@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <memory>
 #include <string>
 
@@ -51,7 +52,7 @@ public:
 private:
     std::shared_ptr<ExplorationBtContext> context_;
     bool request_sent_{false};
-    bool response_ready_{false};
+    std::atomic_bool response_ready_{false};
     robot_interfaces::srv::MarkFrontierFailed::Response::SharedPtr last_response_;
 };
 

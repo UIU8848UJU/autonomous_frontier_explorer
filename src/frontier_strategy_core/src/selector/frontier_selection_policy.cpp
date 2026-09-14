@@ -64,10 +64,25 @@ std::vector<ScoredFrontierCandidate> FrontierSelectionPolicy::score_and_rank_can
     const std::vector<FrontierCandidate> & candidates,
     const ReachabilityCheck & reachability_check) const
 {
-    return ranker_->rank(
+    auto scored_candidates = ranker_->rank(
         candidates,
-        state_.last_goal_grid,
-        reachability_check);
+        state_.last_goal_grid);
+
+    // 可达性是稳定的安全约束，不能交给可替换的排序器决定是否执行。
+    for (auto & scored : scored_candidates) {
+        if (!reachability_check) {
+            continue;
+        }
+
+        const auto reachability = reachability_check(scored.candidate);
+        scored.candidate.reachability_reason = reachability.reason;
+        if (reachability.checked) {
+            scored.candidate.reachability_checked = true;
+            scored.candidate.reachable = reachability.reachable;
+            scored.candidate.path_length_m = reachability.path_length_m;
+        }
+    }
+    return scored_candidates;
 }
 
 std::optional<ScoredFrontierCandidate>

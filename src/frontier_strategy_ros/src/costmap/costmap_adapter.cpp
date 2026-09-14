@@ -17,6 +17,7 @@ CostmapAdapter::CostmapAdapter(const rclcpp::Logger & logger)
 
 bool CostmapAdapter::updateFromOccupancyGrid(const nav_msgs::msg::OccupancyGrid & map_msg)
 {
+    ++revision_;
     const auto width = map_msg.info.width;
     const auto height = map_msg.info.height;
     const auto resolution = map_msg.info.resolution;
@@ -93,6 +94,11 @@ bool CostmapAdapter::updateFromOccupancyGrid(const nav_msgs::msg::OccupancyGrid 
 const grid_map_core::GridMap & CostmapAdapter::gridMap() const
 {
     return grid_map_;
+}
+
+uint64_t CostmapAdapter::revision() const
+{
+    return revision_;
 }
 
 bool CostmapAdapter::isReady() const

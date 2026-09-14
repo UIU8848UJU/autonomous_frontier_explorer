@@ -1,6 +1,6 @@
 #pragma once
 
-#include <mutex>
+#include <atomic>
 
 namespace navigation
 {
@@ -23,8 +23,7 @@ public:
     bool isActive() const;
 
 private:
-    mutable std::mutex mutex_;
-    bool active_{false};
+    std::atomic_bool active_{false};
 };
 
 }  // namespace navigation_core

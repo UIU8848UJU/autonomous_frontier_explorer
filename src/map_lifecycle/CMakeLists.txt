@@ -14,9 +14,14 @@ find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(robot_interfaces REQUIRED)
+find_package(grid_map_core CONFIG REQUIRED)
 
 add_library(map_lifecycle_core SHARED
   core/map_lifecycle_core.cpp
+)
+
+target_link_libraries(map_lifecycle_core PUBLIC
+  grid_map_core::grid_map_core
 )
 
 target_include_directories(map_lifecycle_core PUBLIC
@@ -70,6 +75,7 @@ install(DIRECTORY config
 
 ament_export_targets(export_map_lifecycle_core HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
+ament_export_dependencies(grid_map_core)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)

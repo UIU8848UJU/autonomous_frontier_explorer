@@ -2,7 +2,7 @@
 #include "frontier_strategy_core/scoring/frontier_scorer.hpp"
 #include "frontier_strategy_core/selector/filters/frontier_pruner.hpp"
 #include "frontier_strategy_core/selector/frontier_selection_policy.hpp"
-#include "frontier_strategy_core/types/grid_map.hpp"
+#include "grid_map_core/types/grid_map.hpp"
 
 int main()
 {

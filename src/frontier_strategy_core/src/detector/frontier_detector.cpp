@@ -24,7 +24,8 @@ bool FrontierDetector::is_frontier_cell_safe( const grid_map_core::GridMap & map
                 
             const int row = cell.row + dr;
             const int col = cell.col + dc;
-            if (!map.inBounds(col, row) ||
+            // 地图外不是障碍物；只检查地图内实际存在的单元。
+            if (map.inBounds(col, row) &&
                 map.isObstacle(static_cast<unsigned int>(col), static_cast<unsigned int>(row)))
             {
                 return false;
@@ -46,9 +47,9 @@ std::vector<GridCell> FrontierDetector::detect_frontier_cells(
     const int rows = static_cast<int>(map.height);
     const int cols = static_cast<int>(map.width);
 
-    for (int r = 1; r < rows - 1; ++r) {
+    for (int r = 0; r < rows; ++r) {
 
-        for (int c = 1; c < cols - 1; ++c) {
+        for (int c = 0; c < cols; ++c) {
             const auto mx = static_cast<unsigned int>(c);
             const auto my = static_cast<unsigned int>(r);
             if (!map.isFree(mx, my)) {

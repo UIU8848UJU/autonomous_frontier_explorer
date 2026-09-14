@@ -11,7 +11,7 @@
 namespace map_lifecycle::adapters
 {
 
-MapSnapshot to_core_map(const nav_msgs::msg::OccupancyGrid & message);
+grid_map_core::GridMap to_core_map(const nav_msgs::msg::OccupancyGrid & message);
 
 std::uint8_t to_ros_map_lifecycle_state(MapLifecycleState state);
 

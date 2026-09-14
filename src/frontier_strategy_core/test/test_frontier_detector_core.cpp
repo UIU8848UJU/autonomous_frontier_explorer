@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -44,6 +45,17 @@ TEST(FrontierDetectorCore, DetectsAndClustersFrontiersFromDomainMap)
     ASSERT_EQ(clusters.size(), 1U);
     EXPECT_EQ(clusters.front().cells.size(), 8U);
     EXPECT_EQ(clusters.front().centroid, (GridCell{2, 2}));
+}
+
+TEST(FrontierDetectorCore, DetectsFrontierOnMapBoundary)
+{
+    auto map = make_map(3U, 3U, 0);
+    map.data[0U] = -1;
+
+    const FrontierDetector detector(1);
+    const auto cells = detector.detect_frontier_cells(map);
+
+    EXPECT_TRUE(std::find(cells.begin(), cells.end(), GridCell{0, 1}) != cells.end());
 }
 
 }  // 命名空间 frontier_strategy

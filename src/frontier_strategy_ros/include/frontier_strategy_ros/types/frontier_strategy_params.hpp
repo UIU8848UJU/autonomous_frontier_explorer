@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "frontier_strategy_core/scoring/frontier_scoring_weights.hpp"
@@ -53,6 +54,14 @@ struct FrontierStrategyRuntimeConfig
     std::chrono::milliseconds reachability_check_timeout{std::chrono::milliseconds(500)};
     /// @brief: Nav2 planner_id，空字符串表示使用默认 planner
     std::string reachability_planner_id;
+    /// @brief: 连续多少次稳定的无 frontier 结果才允许判定完成
+    int stable_no_frontier_cycles{3};
+    /// @brief: 是否启用收尾模式
+    bool cleanup_enabled{true};
+    /// @brief: 连续无候选多少轮后进入收尾模式
+    int cleanup_trigger_no_candidate_cycles{3};
+    /// @brief: 是否在只剩小 cluster 时直接进入收尾模式
+    bool cleanup_trigger_only_small_clusters{true};
 };
 
 // pruner 参数：只描述 frontier 硬过滤和候选修复需要的阈值。
@@ -60,9 +69,23 @@ struct FrontierPrunerConfig
 {
     double min_goal_distance_m{0.45};
     std::size_t min_cluster_size{1U};
+    std::size_t cleanup_min_cluster_size{1U};
     int candidate_unknown_margin_cells{2};
     int candidate_goal_inset_cells{2};
     double candidate_max_unknown_ratio{0.4};
+    double cleanup_candidate_max_unknown_ratio{0.4};
+    /// @brief 观测位姿的传感器量程；设为 0 时关闭射线信息增益估计。
+    double sensor_range_m{0.0};
+    /// @brief 远离 frontier 的候选观测距离，单位 m。
+    std::vector<double> viewpoint_retreat_distances_m{0.25, 0.4};
+    /// @brief 围绕 frontier 采样的候选观测半径，单位 m。
+    std::vector<double> viewpoint_sample_radii_m{0.35, 0.55};
+    /// @brief 候选观测射线的角度间隔，单位 degree。
+    double viewpoint_angle_step_deg{30.0};
+    /// @brief 射线步长，单位栅格。
+    double information_gain_ray_step_cells{1.0};
+    /// @brief 观测位姿至少需要看到的未知栅格数；0 表示不设该门槛。
+    std::size_t minimum_visible_unknown_cells{0U};
     bool enable_footprint_filter{true};
     bool allow_unknown_footprint{false};
     double robot_radius{0.1};

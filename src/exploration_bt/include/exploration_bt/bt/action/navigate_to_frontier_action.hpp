@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 
 #include "behaviortree_cpp_v3/action_node.h"
@@ -52,12 +53,17 @@ public:
     void onHalted() override;
 
 private:
+    /// @brief 发送一个已经通过服务端约束检查的导航目标。
+    bool send_goal(const geometry_msgs::msg::PoseStamped & goal_pose);
+
     std::shared_ptr<ExplorationBtContext> context_;
+    std::mutex callback_mutex_;
     GoalHandleNavigateToPose::SharedPtr goal_handle_;
     bool accepted_{false};
     bool rejected_{false};
     bool result_ready_{false};
     bool result_success_{false};
+    bool replacement_cancel_requested_{false};
 };
 
 }  // 命名空间 exploration

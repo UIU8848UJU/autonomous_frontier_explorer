@@ -7,7 +7,10 @@
         <Fallback name="SelectNavigateOrBlacklist">
           <Sequence name="SelectAndNavigate">
             <SelectFeasibleFrontier/>
-            <NavigateToFrontier/>
+            <Parallel name="NavigateAndPrefetch" success_threshold="2" failure_threshold="1">
+              <NavigateToFrontier/>
+              <PrefetchFrontierCandidates/>
+            </Parallel>
           </Sequence>
           <MarkFrontierFailed/>
         </Fallback>

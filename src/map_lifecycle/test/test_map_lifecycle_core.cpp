@@ -8,16 +8,18 @@ namespace map_lifecycle
 {
 namespace
 {
-MapSnapshot make_map(
+grid_map_core::GridMap make_map(
   std::uint32_t width,
   std::uint32_t height,
   double resolution,
   std::initializer_list<std::int8_t> data)
 {
-  MapSnapshot map;
+  grid_map_core::GridMap map;
   map.width = width;
   map.height = height;
   map.resolution = resolution;
+  map.origin_x = 1.25;
+  map.origin_y = -0.5;
   map.data = data;
   return map;
 }
@@ -39,6 +41,8 @@ TEST(MapLifecycleCoreTest, UpdatesMapStatisticsAndKeepsLatestMap)
 
   EXPECT_EQ(core.latest_map().width, 3U);
   EXPECT_EQ(core.latest_map().height, 2U);
+  EXPECT_DOUBLE_EQ(core.latest_map().origin_x, 1.25);
+  EXPECT_DOUBLE_EQ(core.latest_map().origin_y, -0.5);
   EXPECT_EQ(core.latest_map().data, map.data);
   EXPECT_DOUBLE_EQ(core.map_statistics().resolution, 0.05);
   EXPECT_DOUBLE_EQ(core.map_statistics().unknown_ratio, 2.0 / 6.0);
@@ -59,6 +63,15 @@ TEST(MapLifecycleCoreTest, EmptyMapHasUnknownRatioOneAndIsInvalid)
   EXPECT_FALSE(core.map_statistics().valid);
   EXPECT_EQ(core.state(), MapLifecycleState::EMPTY);
   EXPECT_FALSE(core.should_save(true));
+}
+
+TEST(MapLifecycleCoreTest, NonPositiveResolutionMakesMapInvalid)
+{
+  MapLifecycleCore core;
+  core.update_map(make_map(1U, 1U, 0.0, {0}));
+
+  EXPECT_FALSE(core.map_statistics().valid);
+  EXPECT_EQ(core.state(), MapLifecycleState::EMPTY);
 }
 
 TEST(MapLifecycleCoreTest, RejectsMismatchedMapDataLength)

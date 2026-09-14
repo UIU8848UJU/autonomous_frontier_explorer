@@ -6,6 +6,18 @@ exploration_bt_orchestrator_node:
     goal_feasibility_service: /navigation_node/check_goal_feasibility
     navigation_action: /navigation_node/navigate_to_pose
     max_frontier_candidates: 16
+    feasibility_top_k: 3
+    enable_candidate_prefetch: true
+    prefetch_max_age_sec: 1.0
+    feasibility_cache_enabled: true
+    feasibility_cache_ttl_sec: 1.0
+    feasibility_cache_region_size_m: 0.5
+    feasibility_planner_id: ""
+    enable_active_goal_replacement: false
+    goal_switch_min_utility_gain: 0.25
+    goal_min_hold_duration_sec: 2.0
+    max_goal_switches_per_navigation: 1
+    active_goal_reached_tolerance_m: 0.05
     max_feasibility_recoverable_retries: 2
     feasible_path_length_weight: 0.6
     tick_period_sec: 0.1

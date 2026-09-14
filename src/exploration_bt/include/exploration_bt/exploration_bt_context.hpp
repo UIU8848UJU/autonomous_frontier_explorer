@@ -1,9 +1,12 @@
 #pragma once
 
+#include <cstdint>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "behaviortree_cpp_v3/tree_node.h"
@@ -35,6 +38,7 @@ struct ExplorationBtContext
         float distance_m{0.0F};
         float clearance_m{0.0F};
         float unknown_ratio{0.0F};
+        float information_gain{0.0F};
         uint32_t cluster_size{0U};
         uint32_t retry_count{0U};
         bool reachable{false};
@@ -44,6 +48,21 @@ struct ExplorationBtContext
         float path_length_m{0.0F};
         float footprint_cost{0.0F};
         std::string feasibility_detail;
+    };
+
+    /// @brief 可行性服务结果的短期缓存；缓存只在同一地图和机器人起点区域内复用。
+    struct CachedFeasibilityResult
+    {
+        bool success{false};
+        bool feasible{false};
+        bool reachable{false};
+        bool footprint_valid{false};
+        bool recoverable{false};
+        uint16_t result_code{0U};
+        std::string message;
+        float path_length_m{0.0F};
+        float footprint_cost{0.0F};
+        rclcpp::Time created_at;
     };
 
     rclcpp::Node * node{nullptr};
@@ -56,13 +75,42 @@ struct ExplorationBtContext
     mutable std::mutex mutex;
     std::optional<geometry_msgs::msg::PoseStamped> current_goal;
     std::vector<FrontierCandidate> frontier_candidates;
+    std::vector<FrontierCandidate> prefetched_candidates;
+    uint64_t latest_map_revision{0U};
+    uint64_t latest_costmap_revision{0U};
+    // 每次导航开始都递增；导航移动后旧起点区域的缓存不能继续使用。
+    uint64_t feasibility_start_region_revision{0U};
+    std::unordered_map<std::string, CachedFeasibilityResult> feasibility_cache;
+    uint64_t prefetched_map_revision{0U};
+    rclcpp::Time prefetched_generated_at;
     bool exploration_complete{false};
     bool navigation_failed{false};
+    bool navigation_active{false};
+    bool navigation_finished{false};
+    bool navigation_result_success{false};
+    bool prefetch_ready{false};
+    bool prefetched_exploration_complete{false};
     bool stop_requested{false};
 
     double service_retry_delay_sec{2.0};
     uint32_t max_frontier_candidates{8U};
+    uint32_t feasibility_top_k{3U};
     uint32_t max_feasibility_recoverable_retries{2U};
+    bool enable_candidate_prefetch{true};
+    double prefetch_max_age_sec{1.0};
+    bool feasibility_cache_enabled{true};
+    double feasibility_cache_ttl_sec{1.0};
+    double feasibility_cache_region_size_m{0.5};
+    std::string feasibility_planner_id;
+    bool enable_active_goal_replacement{false};
+    double goal_switch_min_utility_gain{0.25};
+    double goal_min_hold_duration_sec{2.0};
+    uint32_t max_goal_switches_per_navigation{1U};
+    rclcpp::Time navigation_started_at;
+    double navigation_distance_remaining{std::numeric_limits<double>::infinity()};
+    double active_goal_reached_tolerance_m{0.05};
+    uint32_t goal_switch_count{0U};
+    std::optional<FrontierCandidate> replacement_candidate;
     double feasible_path_length_weight{0.6};
     std::string last_detail{"IDLE"};
 

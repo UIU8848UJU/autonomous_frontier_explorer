@@ -1,8 +1,12 @@
 #include "frontier_strategy_ros/frontier_goal_provider.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <limits>
+#include <utility>
 
 #include "frontier_strategy_ros/geometry/footprint_collision_checker.hpp"
 
@@ -20,6 +24,24 @@ constexpr uint16_t kReasonNoFrontier = 5U;
 constexpr uint16_t kReasonNoValidFrontier = 6U;
 constexpr uint16_t kReasonAllFrontiersBlacklisted = 7U;
 
+uint64_t map_fingerprint(const nav_msgs::msg::OccupancyGrid & map)
+{
+    uint64_t fingerprint = 1469598103934665603ULL;
+    const auto mix = [&fingerprint](uint64_t value) {
+        fingerprint ^= value;
+        fingerprint *= 1099511628211ULL;
+    };
+    mix(map.info.width);
+    mix(map.info.height);
+    mix(std::hash<double>{}(map.info.resolution));
+    mix(std::hash<double>{}(map.info.origin.position.x));
+    mix(std::hash<double>{}(map.info.origin.position.y));
+    for (const auto value : map.data) {
+        mix(static_cast<uint8_t>(value));
+    }
+    return fingerprint;
+}
+
 FrontierStrategyPolicyConfig make_policy_config(const FrontierStrategyParams & params)
 {
     FrontierStrategyPolicyConfig config;
@@ -33,6 +55,19 @@ FrontierStrategyPolicyConfig make_policy_config(const FrontierStrategyParams & p
     config.max_unknown_ratio = params.pruner.candidate_max_unknown_ratio;
     config.defer_small_clusters = params.selection.defer_small_clusters;
     config.small_cluster_size_threshold = params.selection.small_cluster_size_threshold;
+    config.cleanup_enabled = params.runtime.cleanup_enabled;
+    config.cleanup_min_cluster_size = params.pruner.cleanup_min_cluster_size;
+    config.cleanup_trigger_no_candidate_cycles =
+        params.runtime.cleanup_trigger_no_candidate_cycles;
+    config.cleanup_trigger_only_small_clusters =
+        params.runtime.cleanup_trigger_only_small_clusters;
+    config.cleanup_max_unknown_ratio = params.pruner.cleanup_candidate_max_unknown_ratio;
+    config.sensor_range_m = params.pruner.sensor_range_m;
+    config.viewpoint_retreat_distances_m = params.pruner.viewpoint_retreat_distances_m;
+    config.viewpoint_sample_radii_m = params.pruner.viewpoint_sample_radii_m;
+    config.viewpoint_angle_step_deg = params.pruner.viewpoint_angle_step_deg;
+    config.information_gain_ray_step_cells = params.pruner.information_gain_ray_step_cells;
+    config.minimum_visible_unknown_cells = params.pruner.minimum_visible_unknown_cells;
     config.require_reachable_goal = params.runtime.require_reachable_goal;
     config.scoring_weights = params.scorer.weights;
     return config;
@@ -93,18 +128,21 @@ double distance_to_map_edge_m(
 }
 }  // 命名空间
 
-FrontierGoalProvider::FrontierGoalProvider(const rclcpp::Logger & logger)
+FrontierGoalProvider::FrontierGoalProvider(
+    const rclcpp::Logger & logger,
+    std::shared_ptr<IFrontierRanker> ranker)
 : logger_(logger),
   map_costmap_(logger),
   global_costmap_(logger),
-  policy_(make_policy_config(params_))
+  ranker_(std::move(ranker)),
+  policy_(make_policy_config(params_), ranker_)
 {
 }
 
 void FrontierGoalProvider::configure(const FrontierStrategyParams & params)
 {
     params_ = params;
-    policy_ = FrontierStrategyPolicy(make_policy_config(params_));
+    policy_ = FrontierStrategyPolicy(make_policy_config(params_), ranker_);
 }
 
 bool FrontierGoalProvider::update_map(
@@ -118,6 +156,16 @@ bool FrontierGoalProvider::update_map(
     map_msg_ = msg;
     const bool updated = map_costmap_.updateFromOccupancyGrid(*msg);
     if (updated) {
+        const auto fingerprint = map_fingerprint(*msg);
+        if (!has_map_fingerprint_ || fingerprint != map_fingerprint_) {
+            map_fingerprint_ = fingerprint;
+            ++map_revision_;
+            stable_no_frontier_cycles_ = 0;
+            // 地图发生实质变化后，旧地图上的失败目标允许重新评估。
+            policy_.clear_blacklist();
+            consecutive_frontier_failures_ = 0U;
+        }
+        has_map_fingerprint_ = true;
         last_map_update_time_ = stamp;
     }
     return updated;
@@ -285,6 +333,7 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
     const rclcpp::Time & now,
     std::size_t max_candidates)
 {
+    const auto started = std::chrono::steady_clock::now();
     FrontierCandidatesResult result;
     result.blacklist_count = static_cast<uint32_t>(policy_.blacklisted_goals().size());
     result.visualization.blacklisted_goals = policy_.blacklisted_goals();
@@ -385,18 +434,54 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
         robot_grid_.value(),
         make_pruning_environment(map_costmap_, safety_costmap),
         reachability_check);
+    result.diagnostics = evaluation.diagnostics;
+    result.cleanup_mode = evaluation.cleanup_mode;
+    result.detection_ms = evaluation.detection_ms;
+    result.pruning_ms = evaluation.pruning_ms;
+    result.ranking_ms = evaluation.ranking_ms;
+    result.map_revision = map_revision_;
+    result.total_ms = std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - started).count();
+    RCLCPP_DEBUG(
+        logger_,
+        "Frontier decision timing: detection=%.3fms pruning=%.3fms ranking=%.3fms total=%.3fms "
+        "raw_cells=%zu clusters=%zu candidates=%zu",
+        result.detection_ms,
+        result.pruning_ms,
+        result.ranking_ms,
+        result.total_ms,
+        result.diagnostics.raw_frontier_cells,
+        result.diagnostics.raw_clusters,
+        result.diagnostics.generated_candidates);
     const auto & clusters = evaluation.clusters;
     const auto & scored_candidates = evaluation.scored_candidates;
-    result.raw_frontier_count = static_cast<uint32_t>(clusters.size());
+    result.raw_frontier_count = static_cast<uint32_t>(evaluation.diagnostics.raw_frontier_cells);
     result.visualization.raw_clusters = clusters;
 
     RCLCPP_INFO(
         logger_,
-        "检测 frontier：raw_clusters=%zu，min_cluster_size=%zu",
+        "检测 frontier：raw_cells=%zu，raw_clusters=%zu，min_cluster_size=%zu",
+        evaluation.diagnostics.raw_frontier_cells,
         clusters.size(),
         params_.pruner.min_cluster_size);
 
-    if (evaluation.decision.type == exploration_core::ExplorationDecisionType::COMPLETED) {
+    if (evaluation.clusters.empty()) {
+        if (no_frontier_revision_ != map_revision_) {
+            no_frontier_revision_ = map_revision_;
+            stable_no_frontier_cycles_ = 0;
+        }
+        ++stable_no_frontier_cycles_;
+        result.stable_no_frontier_cycles = stable_no_frontier_cycles_;
+        if (stable_no_frontier_cycles_ < params_.runtime.stable_no_frontier_cycles) {
+            result.reason_code = kReasonNoFrontier;
+            result.reason_text = "WAITING_FOR_STABLE_NO_FRONTIER";
+            result.exploration_complete = false;
+            result.recoverable = true;
+            result.state = ExplorationStatus::RUNNING;
+            result.state_detail = result.reason_text;
+            result.visualization.clear_candidate_markers = true;
+            return result;
+        }
         result.reason_code = kReasonNoFrontier;
         result.reason_text = "NO_FRONTIER_FOUND";
         result.exploration_complete = true;
@@ -406,6 +491,10 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
         result.visualization.clear_candidate_markers = true;
         return result;
     }
+
+    // 重新看到 frontier 后，上一轮无 frontier 的稳定计数失效。
+    stable_no_frontier_cycles_ = 0;
+    no_frontier_revision_ = map_revision_;
 
     result.candidate_count = static_cast<uint32_t>(scored_candidates.size());
     result.blacklist_count = static_cast<uint32_t>(policy_.blacklisted_goals().size());
@@ -425,9 +514,12 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
         result.reason_text = policy_.blacklisted_goals().empty() ?
             "NO_VALID_FRONTIER" : "ALL_FRONTIERS_BLACKLISTED";
         result.exploration_complete = false;
-        result.recoverable = false;
-        result.state = ExplorationStatus::STUCK;
-        result.state_detail = result.reason_text;
+        const bool retry_limit_reached = consecutive_frontier_failures_ >=
+            static_cast<std::size_t>(std::max(1, params_.runtime.max_frontier_failures));
+        result.recoverable = !retry_limit_reached;
+        result.state = retry_limit_reached ? ExplorationStatus::STUCK : ExplorationStatus::RUNNING;
+        result.state_detail = retry_limit_reached ?
+            result.reason_text : "WAITING_FOR_FRONTIER_RETRY";
         return result;
     }
 
@@ -461,6 +553,7 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
         candidate_result.distance_m = static_cast<float>(scored.candidate.distance_m);
         candidate_result.clearance_m = static_cast<float>(scored.candidate.clearance_m);
         candidate_result.unknown_ratio = static_cast<float>(scored.candidate.unknown_ratio);
+        candidate_result.information_gain = static_cast<float>(scored.candidate.information_gain);
         candidate_result.cluster_size = static_cast<uint32_t>(scored.candidate.cluster_size);
         candidate_result.retry_count = static_cast<uint32_t>(
             std::max(0, scored.candidate.retry_count));

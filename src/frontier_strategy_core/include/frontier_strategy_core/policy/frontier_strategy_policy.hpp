@@ -2,14 +2,17 @@
 
 #include <cstddef>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <vector>
 
-#include "exploration_core/policy/exploration_policy.hpp"
 #include "frontier_strategy_core/detector/frontier_detector.hpp"
+#include "frontier_strategy_core/scoring/frontier_ranker.hpp"
 #include "frontier_strategy_core/scoring/frontier_scoring_weights.hpp"
 #include "frontier_strategy_core/selector/filters/frontier_pruner.hpp"
 #include "frontier_strategy_core/selector/frontier_selection_policy.hpp"
+#include "exploration_core/types/exploration_decision.hpp"
+#include "exploration_core/types/exploration_outcome.hpp"
 
 namespace frontier_strategy
 {
@@ -27,6 +30,17 @@ struct FrontierStrategyPolicyConfig
     double max_unknown_ratio{0.4};
     bool defer_small_clusters{true};
     std::size_t small_cluster_size_threshold{3U};
+    bool cleanup_enabled{true};
+    std::size_t cleanup_min_cluster_size{1U};
+    int cleanup_trigger_no_candidate_cycles{3};
+    bool cleanup_trigger_only_small_clusters{true};
+    double cleanup_max_unknown_ratio{0.4};
+    double sensor_range_m{0.0};
+    std::vector<double> viewpoint_retreat_distances_m{0.25, 0.4};
+    std::vector<double> viewpoint_sample_radii_m{0.35, 0.55};
+    double viewpoint_angle_step_deg{30.0};
+    double information_gain_ray_step_cells{1.0};
+    std::size_t minimum_visible_unknown_cells{0U};
     bool require_reachable_goal{false};
     FrontierScoringWeights scoring_weights{};
 };
@@ -38,21 +52,24 @@ struct FrontierStrategyEvaluation
     std::vector<FrontierCluster> clusters;
     std::vector<GridCell> failed_cluster_ids;
     std::vector<ScoredFrontierCandidate> scored_candidates;
+    FrontierDecisionDiagnostics diagnostics;
+    bool cleanup_mode{false};
+    double detection_ms{0.0};
+    double pruning_ms{0.0};
+    double ranking_ms{0.0};
 };
 
-/// @brief 使用 Frontier 算法实现探索行为的策略。
+/// @brief 使用 Frontier 算法完成候选目标检测、筛选和排序的策略组合器。
 ///
-/// 这个类明确表达“Frontier 是策略、探索是行为”：它实现 exploration_core 的策略接口，
-/// 但不把探索执行器、ROS 通信或 Nav2 类型带进算法核心。
-class FrontierStrategyPolicy final : public exploration_core::IExplorationPolicy
+/// 该类只编排 Frontier 算法和纯 C++ 约束，不负责探索执行器、ROS 通信或 Nav2 类型。
+class FrontierStrategyPolicy final
 {
 public:
     explicit FrontierStrategyPolicy(
-        FrontierStrategyPolicyConfig config = FrontierStrategyPolicyConfig{});
+        FrontierStrategyPolicyConfig config = FrontierStrategyPolicyConfig{},
+        std::shared_ptr<IFrontierRanker> ranker = {});
 
-    void reset() override;
-    exploration_core::ExplorationDecision decide(
-        const exploration_core::ExplorationObservation & observation) override;
+    void reset();
 
     /// 使用适配层提供的安全和可达性回调完成一次完整策略评估。
     FrontierStrategyEvaluation evaluate(
@@ -61,7 +78,7 @@ public:
         const FrontierPruningEnvironment & environment,
         const FrontierSelectionPolicy::ReachabilityCheck & reachability_check = {});
 
-    void on_outcome(const exploration_core::ExplorationOutcome & outcome) override;
+    void on_outcome(const exploration_core::ExplorationOutcome & outcome);
 
     void mark_goal_failed(const GridCell & goal);
     void mark_goal_succeeded(const GridCell & goal);
@@ -71,10 +88,14 @@ public:
     std::size_t clear_blacklist();
 
 private:
+    bool should_enter_cleanup(const std::vector<FrontierCluster> & clusters) const;
+
     FrontierStrategyPolicyConfig config_;
     FrontierDetector detector_;
     FrontierPruner pruner_;
     FrontierSelectionPolicy selection_policy_;
+    bool cleanup_mode_{false};
+    int no_candidate_cycles_{0};
 };
 
 }  // namespace frontier_strategy

@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(grid_map_core CONFIG REQUIRED)
+find_dependency(robot_geometry_core CONFIG REQUIRED)
+include("${CMAKE_CURRENT_LIST_DIR}/navigation_coreTargets.cmake")
+
+check_required_components(navigation_core)

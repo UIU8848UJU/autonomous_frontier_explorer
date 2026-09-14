@@ -618,6 +618,11 @@ void NavigationNode::handle_check_goal_feasibility(
         return;
     }
 
+    {
+        std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
+        response->costmap_revision = footprint_costmap_.revision();
+    }
+
     std::string footprint_reason;
     double footprint_cost = 0.0;
     const bool footprint_valid =

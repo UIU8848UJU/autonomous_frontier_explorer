@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -38,6 +39,28 @@ FrontierCandidate make_candidate(
     return candidate;
 }
 
+class RecordingRanker final : public IFrontierRanker
+{
+public:
+    std::vector<ScoredFrontierCandidate> rank(
+        const std::vector<FrontierCandidate> & candidates,
+        const std::optional<GridCell> &) const override
+    {
+        ++call_count;
+        std::vector<ScoredFrontierCandidate> ranked;
+        ranked.reserve(candidates.size());
+        for (const auto & candidate : candidates) {
+            ScoredFrontierCandidate scored;
+            scored.candidate = candidate;
+            scored.total_score = static_cast<double>(ranked.size());
+            ranked.push_back(scored);
+        }
+        return ranked;
+    }
+
+    mutable int call_count{0};
+};
+
 TEST(GridMapSelectionCoreTest, ConvertsCoordinatesAndComputesClearance)
 {
     auto map = make_grid_map(6U, 6U);
@@ -56,6 +79,22 @@ TEST(GridMapSelectionCoreTest, ConvertsCoordinatesAndComputesClearance)
     const auto clearance = map.distanceToNearestObstacle(GridCell{2, 2}, 3);
     ASSERT_TRUE(clearance.has_value());
     EXPECT_DOUBLE_EQ(clearance.value(), 2.0);
+}
+
+TEST(GridMapSelectionCoreTest, EstimatesVisibleUnknownCellsAndStopsAtObstacles)
+{
+    auto map = make_grid_map(7U, 7U);
+    map.data[3U * map.width + 4U] = -1;
+    map.data[3U * map.width + 5U] = -1;
+
+    EXPECT_EQ(
+        estimate_visible_unknown_cells(map, GridCell{3, 3}, 4.0, 1.0, 90.0),
+        2U);
+
+    map.data[3U * map.width + 4U] = 100;
+    EXPECT_EQ(
+        estimate_visible_unknown_cells(map, GridCell{3, 3}, 4.0, 1.0, 90.0),
+        0U);
 }
 
 TEST(FrontierPrunerSelectionCoreTest, UsesPureMapAndInjectedPlatformChecks)
@@ -107,6 +146,40 @@ TEST(FrontierPrunerSelectionCoreTest, UsesPureMapAndInjectedPlatformChecks)
         }));
 }
 
+TEST(FrontierPrunerSelectionCoreTest, ReportsCandidateRejectionReasons)
+{
+    auto map = make_grid_map(5U, 5U);
+    map.data[2U * map.width + 2U] = -1;
+    // 第二个 cluster 的邻域含未知格；将阈值设为零，确保该门禁稳定触发。
+    FrontierPruner pruner(0.5, 2, 3, 2U, 2, 1, 0.0);
+    FrontierDecisionDiagnostics diagnostics;
+
+    const std::vector<FrontierCluster> clusters{
+        FrontierCluster{{GridCell{1, 1}}, GridCell{1, 1}},
+        FrontierCluster{{GridCell{2, 1}, GridCell{2, 2}}, GridCell{2, 1}}};
+
+    FrontierPruningEnvironment environment;
+    environment.frontier_map = &map;
+    environment.safety_check = [](const GridCell &) { return true; };
+
+    const auto candidates = pruner.prune_clusters(
+        clusters,
+        GridCell{4, 4},
+        1.0,
+        environment,
+        FrontierPruningContext{},
+        nullptr,
+        &diagnostics);
+
+    EXPECT_TRUE(candidates.empty());
+    EXPECT_EQ(
+        diagnostics.rejection_count(FrontierRejectionReason::CLUSTER_TOO_SMALL),
+        1U);
+    EXPECT_GT(
+        diagnostics.rejection_count(FrontierRejectionReason::UNKNOWN_RATIO_TOO_HIGH),
+        0U);
+}
+
 TEST(FrontierSelectionPolicyTest, DefersSmallPoolAndKeepsReachabilityReason)
 {
     FrontierSelectionCoreConfig config;
@@ -137,6 +210,42 @@ TEST(FrontierSelectionPolicyTest, DefersSmallPoolAndKeepsReachabilityReason)
     ASSERT_EQ(ranked.size(), 2U);
     EXPECT_EQ(ranked.front().candidate.cluster_size, 3U);
     EXPECT_EQ(ranked.back().candidate.cluster_size, 2U);
+}
+
+TEST(FrontierSelectionPolicyTest, AppliesReachabilityAfterInjectedRanker)
+{
+    FrontierSelectionCoreConfig config;
+    config.defer_small_clusters = false;
+    config.require_reachable_goal = true;
+    auto ranker = std::make_shared<RecordingRanker>();
+    FrontierSelectionPolicy policy(config, FrontierScoringWeights{}, ranker);
+
+    const std::vector<FrontierCandidate> candidates{
+        make_candidate(GridCell{4, 10}, GridCell{4, 10}, 3U, 10.0),
+        make_candidate(GridCell{4, 2}, GridCell{4, 2}, 2U, 2.0)};
+    int reachability_call_count = 0;
+    const auto selected = policy.choose_best_candidate(
+        candidates,
+        [&reachability_call_count](FrontierCandidate & candidate) {
+            ++reachability_call_count;
+            FrontierReachabilityResult result;
+            result.checked = true;
+            result.reachable = candidate.goal.col < 10;
+            result.reason = result.reachable ? "reachable" : "blocked";
+            return result;
+        });
+
+    ASSERT_TRUE(selected.has_value());
+    EXPECT_EQ(selected->candidate.goal, (GridCell{4, 2}));
+    EXPECT_EQ(ranker->call_count, 1);
+    EXPECT_EQ(reachability_call_count, 2);
+    ASSERT_EQ(policy.last_scored_candidates().size(), 2U);
+    EXPECT_EQ(
+        policy.last_scored_candidates().front().candidate.reachability_reason,
+        "blocked");
+    EXPECT_EQ(
+        policy.last_scored_candidates().back().candidate.reachability_reason,
+        "reachable");
 }
 
 TEST(FrontierSelectionPolicyTest, ClearsFailuresWithoutClearingLastGoal)
