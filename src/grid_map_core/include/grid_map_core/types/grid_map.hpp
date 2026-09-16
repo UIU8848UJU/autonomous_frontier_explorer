@@ -59,7 +59,9 @@ struct GridMap
 
     bool isObstacle(unsigned int col, unsigned int row) const
     {
-        return value(col, row) > 50;
+        // GridMap 保存的是 OccupancyGrid 的 0~100 占用概率，只有 100
+        // 才表示确定的致命障碍；中间值仍然是已知但未达到致命阈值的代价。
+        return value(col, row) >= 100;
     }
 
     /// @brief 将栅格坐标转换为栅格中心的世界坐标。

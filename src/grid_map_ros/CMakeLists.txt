@@ -52,4 +52,21 @@ ament_export_dependencies(
   rclcpp
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_costmap_adapter
+    test/test_costmap_adapter.cpp
+  )
+  target_link_libraries(test_costmap_adapter
+    ${PROJECT_NAME}
+    grid_map_core::grid_map_core
+  )
+  ament_target_dependencies(test_costmap_adapter
+    nav2_costmap_2d
+    nav_msgs
+    rclcpp
+  )
+endif()
+
 ament_package()

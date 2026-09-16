@@ -148,4 +148,19 @@ ament_export_dependencies(
   ${navigation_node_DEPS}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+
+  ament_add_gtest(test_navigation_converters
+    test/test_navigation_converters.cpp
+  )
+  target_link_libraries(test_navigation_converters
+    navigation_node_lib
+  )
+  configure_exploration_nodes_target(
+    test_navigation_converters
+    nav2_costmap_2d
+  )
+endif()
+
 ament_package()

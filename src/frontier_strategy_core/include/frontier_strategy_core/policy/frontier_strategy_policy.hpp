@@ -32,6 +32,10 @@ struct FrontierStrategyPolicyConfig
     std::size_t small_cluster_size_threshold{3U};
     bool cleanup_enabled{true};
     std::size_t cleanup_min_cluster_size{1U};
+    // 收尾阶段允许目标更靠近机器人，以处理机器人附近残留的小区域。
+    double cleanup_min_goal_distance_m{0.0};
+    // 收尾阶段默认不再向机器人方向内缩，避免把唯一观测点推离残留 frontier。
+    int cleanup_goal_inset_cells{0};
     int cleanup_trigger_no_candidate_cycles{3};
     bool cleanup_trigger_only_small_clusters{true};
     double cleanup_max_unknown_ratio{0.4};

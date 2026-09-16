@@ -17,6 +17,7 @@ grid_map_core::GridMap make_map()
     map.origin_y = 2.0;
     map.data.assign(map.width * map.height, static_cast<std::int8_t>(0));
     map.data[1U] = 100;
+    map.data[2U] = 60;
     map.data[8U] = -1;
     return map;
 }
@@ -51,10 +52,10 @@ TEST(GridMapCoreTest, ClassifiesCellsAndFindsObstacleDistance)
     const auto map = make_map();
     EXPECT_TRUE(map.isFree(0U, 0U));
     EXPECT_TRUE(map.isObstacle(1U, 0U));
+    EXPECT_FALSE(map.isObstacle(2U, 0U));
     EXPECT_TRUE(map.isUnknown(0U, 2U));
 
     const auto distance = map.distanceToNearestObstacle(grid_map_core::GridCell{0, 0}, 2);
     ASSERT_TRUE(distance.has_value());
     EXPECT_DOUBLE_EQ(distance.value(), 0.5);
 }
-

@@ -247,21 +247,23 @@ const nav2_costmap_2d::Costmap2D & CostmapAdapter::getCostmap() const
 
 unsigned char CostmapAdapter::interpretOccupancyValue(int8_t occupancy) const
 {
+    // OccupancyGrid 的有效代价范围是 0~100；global costmap 发布的膨胀代价
+    // 也会落在这个范围内，不能把大于 50 的值直接当成致命障碍。
     if (occupancy < 0) {
         return nav2_costmap_2d::NO_INFORMATION;
     }
     if (occupancy == 0) {
         return nav2_costmap_2d::FREE_SPACE;
     }
-    if (occupancy > 50) {
+    if (occupancy >= 100) {
         return nav2_costmap_2d::LETHAL_OBSTACLE;
     }
     return static_cast<unsigned char>(std::clamp(
         static_cast<int>(std::round(
-            static_cast<double>(occupancy) / 50.0 *
-            static_cast<double>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1))),
+            static_cast<double>(occupancy) / 99.0 *
+            static_cast<double>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE))),
         1,
-        static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1)));
+        static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)));
 }
 
 }  // namespace grid_map_ros

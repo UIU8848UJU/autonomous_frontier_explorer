@@ -45,12 +45,17 @@ robot_geometry_core::Footprint toCoreFootprint(
 
 std::int8_t occupancyThresholdFromNav2Cost(unsigned char cost)
 {
+    // Nav2 的 Costmap2D 发布为 OccupancyGrid 时使用 0~100 表示代价：
+    // 0 表示空闲，99 表示 inscribed/inflated obstacle，100 表示致命障碍。
+    // 这里必须和 grid_map_ros::CostmapAdapter 的转换保持同一量纲，不能再
+    // 把阈值压缩到 0~50，否则 path_cost_threshold=253 会错误地变成 51。
     if (cost >= nav2_costmap_2d::LETHAL_OBSTACLE) {
-        return 51;
+        return 100;
     }
     const auto threshold = static_cast<int>(std::ceil(
-        static_cast<double>(cost) * 50.0 / 252.0));
-    return static_cast<std::int8_t>(std::clamp(threshold, 1, 100));
+        static_cast<double>(cost) * 99.0 /
+        static_cast<double>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)));
+    return static_cast<std::int8_t>(std::clamp(threshold, 1, 99));
 }
 
 }  // 命名空间 adapters

@@ -136,6 +136,12 @@ void FrontierStrategyNode::declare_params()
         "frontier_decision.cleanup_min_cluster_size",
         static_cast<int>(params_.pruner.cleanup_min_cluster_size));
     this->declare_parameter<double>(
+        "frontier_decision.cleanup_min_goal_distance_m",
+        params_.pruner.cleanup_min_goal_distance_m);
+    this->declare_parameter<int>(
+        "frontier_decision.cleanup_goal_inset_cells",
+        params_.pruner.cleanup_goal_inset_cells);
+    this->declare_parameter<double>(
         "frontier_decision.cleanup_candidate_max_unknown_ratio",
         params_.pruner.cleanup_candidate_max_unknown_ratio);
     this->declare_parameter<double>(
@@ -240,6 +246,10 @@ void FrontierStrategyNode::load_params()
         this->get_parameter("frontier_decision.cleanup_trigger_only_small_clusters").as_bool();
     params_.pruner.cleanup_min_cluster_size = static_cast<std::size_t>(
         this->get_parameter("frontier_decision.cleanup_min_cluster_size").as_int());
+    params_.pruner.cleanup_min_goal_distance_m =
+        this->get_parameter("frontier_decision.cleanup_min_goal_distance_m").as_double();
+    params_.pruner.cleanup_goal_inset_cells =
+        this->get_parameter("frontier_decision.cleanup_goal_inset_cells").as_int();
     params_.pruner.cleanup_candidate_max_unknown_ratio =
         this->get_parameter("frontier_decision.cleanup_candidate_max_unknown_ratio").as_double();
     params_.pruner.sensor_range_m =

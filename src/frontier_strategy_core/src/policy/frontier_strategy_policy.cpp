@@ -120,12 +120,12 @@ FrontierStrategyEvaluation FrontierStrategyPolicy::evaluate(
     if (candidates.empty() && should_enter_cleanup(evaluation.clusters)) {
         cleanup_mode_ = true;
         FrontierPruner cleanup_pruner(
-            config_.min_goal_distance_m,
+            config_.cleanup_min_goal_distance_m,
             config_.max_retry_count,
             config_.max_cluster_retry_count,
             config_.cleanup_min_cluster_size,
             config_.unknown_margin_cells,
-            config_.goal_inset_cells,
+            config_.cleanup_goal_inset_cells,
             config_.cleanup_max_unknown_ratio,
             config_.viewpoint_retreat_distances_m,
             config_.viewpoint_sample_radii_m,

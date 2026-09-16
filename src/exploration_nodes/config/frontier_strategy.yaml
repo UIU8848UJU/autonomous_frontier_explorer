@@ -23,6 +23,8 @@ frontier_strategy_node:
       cleanup_trigger_no_candidate_cycles: 3
       cleanup_trigger_only_small_clusters: true
       cleanup_min_cluster_size: 1
+      cleanup_min_goal_distance_m: 0.0
+      cleanup_goal_inset_cells: 0
       cleanup_candidate_max_unknown_ratio: 0.40
       # 未确认具体传感器量程前保持关闭；部署时按实际传感器填写即可启用射线信息增益。
       sensor_range_m: 0.0

@@ -70,6 +70,10 @@ struct FrontierPrunerConfig
     double min_goal_distance_m{0.45};
     std::size_t min_cluster_size{1U};
     std::size_t cleanup_min_cluster_size{1U};
+    /// @brief 收尾阶段允许的最小目标距离，单位 m。
+    double cleanup_min_goal_distance_m{0.0};
+    /// @brief 收尾阶段目标向机器人方向内缩的栅格数。
+    int cleanup_goal_inset_cells{0};
     int candidate_unknown_margin_cells{2};
     int candidate_goal_inset_cells{2};
     double candidate_max_unknown_ratio{0.4};

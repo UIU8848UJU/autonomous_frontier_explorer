@@ -57,6 +57,8 @@ FrontierStrategyPolicyConfig make_policy_config(const FrontierStrategyParams & p
     config.small_cluster_size_threshold = params.selection.small_cluster_size_threshold;
     config.cleanup_enabled = params.runtime.cleanup_enabled;
     config.cleanup_min_cluster_size = params.pruner.cleanup_min_cluster_size;
+    config.cleanup_min_goal_distance_m = params.pruner.cleanup_min_goal_distance_m;
+    config.cleanup_goal_inset_cells = params.pruner.cleanup_goal_inset_cells;
     config.cleanup_trigger_no_candidate_cycles =
         params.runtime.cleanup_trigger_no_candidate_cycles;
     config.cleanup_trigger_only_small_clusters =
