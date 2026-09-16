@@ -1,19 +1,7 @@
 uint32 max_candidates
 ---
 bool success
-geometry_msgs/PoseStamped[] goals
-float32[] scores
-float32[] distance_m
-float32[] clearance_m
-float32[] unknown_ratio
-float32[] information_gain
-uint32[] cluster_sizes
-uint32[] retry_counts
-bool[] used_fallback
-bool[] goal_inset_applied
-bool[] reachability_checked
-bool[] reachable
-float32[] path_length_m
+FrontierCandidate[] candidates
 uint16 reason_code
 string reason_text
 uint32 raw_frontier_count

@@ -4,7 +4,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "frontier_strategy_ros/costmap/costmap_adapter.hpp"
+#include "grid_map_ros/costmap_adapter.hpp"
 #include "frontier_strategy_core/detector/frontier_detector.hpp"
 #include "frontier_strategy_ros/frontier_goal_provider.hpp"
 #include "frontier_strategy_ros/reachability/frontier_reachability_checker.hpp"
@@ -15,6 +15,8 @@
 
 namespace frontier_strategy
 {
+using grid_map_ros::CostmapAdapter;
+
 namespace
 {
 

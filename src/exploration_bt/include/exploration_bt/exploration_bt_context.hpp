@@ -14,6 +14,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "robot_interfaces/action/navigate_to_pose.hpp"
+#include "robot_interfaces/msg/frontier_candidate.hpp"
 #include "robot_interfaces/srv/check_goal_feasibility.hpp"
 #include "robot_interfaces/srv/get_frontier_candidates.hpp"
 #include "robot_interfaces/srv/mark_frontier_failed.hpp"
@@ -30,25 +31,8 @@ struct ExplorationBtContext
     using NavigateToPose = robot_interfaces::action::NavigateToPose;
     using GoalHandleNavigateToPose = rclcpp_action::ClientGoalHandle<NavigateToPose>;
 
-    /// @brief: BT 层缓存的前沿候选目标
-    struct FrontierCandidate
-    {
-        geometry_msgs::msg::PoseStamped goal;
-        float score{0.0F};
-        float distance_m{0.0F};
-        float clearance_m{0.0F};
-        float unknown_ratio{0.0F};
-        float information_gain{0.0F};
-        uint32_t cluster_size{0U};
-        uint32_t retry_count{0U};
-        bool reachable{false};
-        bool reachability_checked{false};
-        bool feasible{false};
-        bool footprint_valid{false};
-        float path_length_m{0.0F};
-        float footprint_cost{0.0F};
-        std::string feasibility_detail;
-    };
+    /// @brief: BT 缓存直接使用 ROS 公共候选消息，避免再次定义平行数据模型。
+    using FrontierCandidate = robot_interfaces::msg::FrontierCandidate;
 
     /// @brief 可行性服务结果的短期缓存；缓存只在同一地图和机器人起点区域内复用。
     struct CachedFeasibilityResult

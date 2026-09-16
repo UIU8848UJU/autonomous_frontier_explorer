@@ -685,35 +685,7 @@ void FrontierStrategyNode::handle_get_frontier_candidates(
     response->exploration_complete = result.exploration_complete;
     response->recoverable = result.recoverable;
 
-    response->goals.reserve(result.candidates.size());
-    response->scores.reserve(result.candidates.size());
-    response->distance_m.reserve(result.candidates.size());
-    response->clearance_m.reserve(result.candidates.size());
-    response->unknown_ratio.reserve(result.candidates.size());
-    response->information_gain.reserve(result.candidates.size());
-    response->cluster_sizes.reserve(result.candidates.size());
-    response->retry_counts.reserve(result.candidates.size());
-    response->used_fallback.reserve(result.candidates.size());
-    response->goal_inset_applied.reserve(result.candidates.size());
-    response->reachability_checked.reserve(result.candidates.size());
-    response->reachable.reserve(result.candidates.size());
-    response->path_length_m.reserve(result.candidates.size());
-
-    for (const auto & candidate : result.candidates) {
-        response->goals.push_back(candidate.goal);
-        response->scores.push_back(candidate.score);
-        response->distance_m.push_back(candidate.distance_m);
-        response->clearance_m.push_back(candidate.clearance_m);
-        response->unknown_ratio.push_back(candidate.unknown_ratio);
-        response->information_gain.push_back(candidate.information_gain);
-        response->cluster_sizes.push_back(candidate.cluster_size);
-        response->retry_counts.push_back(candidate.retry_count);
-        response->used_fallback.push_back(candidate.used_fallback);
-        response->goal_inset_applied.push_back(candidate.goal_inset_applied);
-        response->reachability_checked.push_back(candidate.reachability_checked);
-        response->reachable.push_back(candidate.reachable);
-        response->path_length_m.push_back(candidate.path_length_m);
-    }
+    response->candidates = result.candidates;
 
     if (result.exploration_complete) {
         if (marker_publisher_) {

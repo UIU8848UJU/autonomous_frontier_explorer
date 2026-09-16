@@ -536,7 +536,7 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
         scored_candidates.size() : std::min(max_candidates, scored_candidates.size());
     for (std::size_t index = 0; index < limit; ++index) {
         const auto & scored = scored_candidates[index];
-        FrontierCandidateResult candidate_result;
+        robot_interfaces::msg::FrontierCandidate candidate_result;
         candidate_result.goal.header.frame_id = map_frame;
         candidate_result.goal.header.stamp = now;
         map_costmap_.mapToWorld(
@@ -549,6 +549,12 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
             map_costmap_,
             scored.candidate.goal,
             scored.candidate.cluster_centroid);
+        candidate_result.goal_row = scored.candidate.goal.row;
+        candidate_result.goal_col = scored.candidate.goal.col;
+        candidate_result.cluster_centroid_row = scored.candidate.cluster_centroid.row;
+        candidate_result.cluster_centroid_col = scored.candidate.cluster_centroid.col;
+        candidate_result.source_cluster_index = static_cast<uint32_t>(
+            scored.candidate.source_cluster_index);
         candidate_result.score = static_cast<float>(scored.total_score);
         candidate_result.distance_m = static_cast<float>(scored.candidate.distance_m);
         candidate_result.clearance_m = static_cast<float>(scored.candidate.clearance_m);
@@ -562,7 +568,8 @@ FrontierCandidatesResult FrontierGoalProvider::compute_frontier_candidates(
         candidate_result.reachability_checked = scored.candidate.reachability_checked;
         candidate_result.reachable = scored.candidate.reachable;
         candidate_result.path_length_m = static_cast<float>(scored.candidate.path_length_m);
-        candidate_result.goal_cell = scored.candidate.goal;
+        candidate_result.reachability_reason = scored.candidate.reachability_reason;
+        candidate_result.information_gain_valid = scored.candidate.information_gain_valid;
         result.candidates.push_back(candidate_result);
     }
 

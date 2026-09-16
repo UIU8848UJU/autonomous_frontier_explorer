@@ -5,7 +5,8 @@
 当前探索系统按“核心能力 + ROS 适配 + BT 编排”分层：
 
 - `frontier_strategy_core` 是纯 C++ 算法核心，负责检测、剪枝、排序和策略决策等可迁移能力。
-- `frontier_strategy_ros` 是 ROS 数据和 Nav2 适配层，承载 `FrontierGoalProvider` 等 ROS 侧组合能力。
+- `grid_map_ros` 是通用地图 ROS 适配层，负责 `OccupancyGrid`、`GridMap` 和 Nav2 costmap 转换。
+- `frontier_strategy_ros` 是 Frontier 的 ROS 侧组合能力层，承载 `FrontierGoalProvider`，不再拥有地图适配实现。
 - `exploration_nodes` 只提供 FrontierStrategyNode、NavigationNode 等 ROS 能力节点。
 - `exploration_bt` 是唯一探索决策编排层，负责 BT XML、插件和流程状态发布。
 - retry / blacklist 仍由 frontier 能力层内部维护，对外只暴露失败事件接口。
@@ -38,6 +39,8 @@ flowchart TD
     NN -->|NavigateToPose| NAV2N[Nav2 Navigator]
     NN -->|read| GCM[/global_costmap/costmap/]
     FEN -->|read| MAP[/map/]
+    FEN -->|OccupancyGrid conversion| GMR[grid_map_ros]
+    NN -->|CostmapAdapter| GMR
     FEN -->|TF map <- base_link| TF[TF2]
 ```
 
@@ -50,6 +53,7 @@ TaskManagerNode
   -> behavior_trees/exploration_tree.xml
   -> ComputeFrontierCandidates
       -> /frontier_strategy_node/get_frontier_candidates
+      -> robot_interfaces/msg/FrontierCandidate[]
   -> SelectFeasibleFrontier
       -> /navigation_node/check_goal_feasibility
   -> NavigateToFrontier
@@ -88,11 +92,12 @@ TaskManagerNode
 
 `FrontierGoalProvider` 是 ROS 适配侧的可单测 C++ 能力类，负责：
 
-- 维护 `CostmapAdapter`。
+- 使用 `grid_map_ros::CostmapAdapter` 访问地图和安全 costmap；地图格式转换不属于 Frontier Strategy。
 - 调用 `FrontierStrategyPolicy`，由策略 Core 统一完成检测、剪枝、排序和选择。
-- 计算下一个 frontier goal。
+- 生成按分数排序的 frontier 候选列表。
 - 接收 map frame 下的机器人位姿，不直接订阅 `/odom`，避免把漂移的 odom frame 当作 map frame 使用。
 - 输出按分数排序的 frontier candidates；默认不在 provider 内部做 Nav2 planner 可达性过滤。
+- 服务输出使用 `robot_interfaces/msg/FrontierCandidate[]`，候选字段以对象形式保持一致，不再使用并行数组。
 - 维护 retry / blacklist 的内部数据结构和更新规则。
 - 返回 marker 发布所需的可视化快照。
 - 不创建 ROS service、topic、timer 或 action client。

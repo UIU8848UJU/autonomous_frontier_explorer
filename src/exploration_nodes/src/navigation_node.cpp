@@ -18,7 +18,6 @@
 namespace exploration
 {
 
-using namespace frontier_strategy;
 namespace
 {
 constexpr uint16_t kResultSucceeded = 0U;

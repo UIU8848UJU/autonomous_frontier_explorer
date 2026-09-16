@@ -1,4 +1,4 @@
-#include "frontier_strategy_ros/costmap/costmap_adapter.hpp"
+#include "grid_map_ros/costmap_adapter.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -7,7 +7,7 @@
 
 #include "nav2_costmap_2d/cost_values.hpp"
 
-namespace frontier_strategy
+namespace grid_map_ros
 {
 
 CostmapAdapter::CostmapAdapter(const rclcpp::Logger & logger)
@@ -35,7 +35,7 @@ bool CostmapAdapter::updateFromOccupancyGrid(const nav_msgs::msg::OccupancyGrid 
         return false;
     }
 
-    const auto expected_size = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
+    const auto expected_size = static_cast<std::size_t>(width) * height;
     if (map_msg.data.size() != expected_size) {
         RCLCPP_WARN(
             logger_,
@@ -116,20 +116,7 @@ bool CostmapAdapter::worldToMap(
         RCLCPP_DEBUG(logger_, "worldToMap failed because costmap is not ready.");
         return false;
     }
-
-    const bool converted = costmap_->worldToMap(wx, wy, mx, my);
-    if (!converted) {
-        RCLCPP_DEBUG(
-            logger_,
-            "worldToMap failed: wx=%.3f, wy=%.3f, origin=(%.3f, %.3f), size=(%u, %u)",
-            wx,
-            wy,
-            getOriginX(),
-            getOriginY(),
-            getSizeInCellsX(),
-            getSizeInCellsY());
-    }
-    return converted;
+    return costmap_->worldToMap(wx, wy, mx, my);
 }
 
 void CostmapAdapter::mapToWorld(
@@ -144,7 +131,6 @@ void CostmapAdapter::mapToWorld(
         RCLCPP_DEBUG(logger_, "mapToWorld requested before costmap is ready.");
         return;
     }
-
     costmap_->mapToWorld(mx, my, wx, wy);
 }
 
@@ -153,15 +139,12 @@ unsigned char CostmapAdapter::getCost(unsigned int mx, unsigned int my) const
     if (!isReady() || !inBounds(static_cast<int>(mx), static_cast<int>(my))) {
         return nav2_costmap_2d::NO_INFORMATION;
     }
-
     return costmap_->getCost(mx, my);
 }
 
 bool CostmapAdapter::inBounds(int mx, int my) const
 {
-    return isReady() &&
-        mx >= 0 &&
-        my >= 0 &&
+    return isReady() && mx >= 0 && my >= 0 &&
         mx < static_cast<int>(costmap_->getSizeInCellsX()) &&
         my < static_cast<int>(costmap_->getSizeInCellsY());
 }
@@ -188,25 +171,18 @@ bool CostmapAdapter::hasUnknownNeighbor(unsigned int mx, unsigned int my) const
     if (!isReady()) {
         return false;
     }
-
     for (int dy = -1; dy <= 1; ++dy) {
         for (int dx = -1; dx <= 1; ++dx) {
             if (dx == 0 && dy == 0) {
                 continue;
             }
-
             const int nx = static_cast<int>(mx) + dx;
             const int ny = static_cast<int>(my) + dy;
-            if (!inBounds(nx, ny)) {
-                continue;
-            }
-
-            if (isUnknown(static_cast<unsigned int>(nx), static_cast<unsigned int>(ny))) {
+            if (inBounds(nx, ny) && isUnknown(static_cast<unsigned int>(nx), static_cast<unsigned int>(ny))) {
                 return true;
             }
         }
     }
-
     return false;
 }
 
@@ -216,32 +192,23 @@ std::optional<double> CostmapAdapter::distanceToNearestObstacle(
     int max_search_radius_cells) const
 {
     if (!isReady() || !inBounds(static_cast<int>(mx), static_cast<int>(my))) {
-        RCLCPP_DEBUG(logger_, "Clearance query failed because cell is unavailable.");
         return std::nullopt;
     }
-
     const int radius = std::max(0, max_search_radius_cells);
     std::optional<double> best_distance;
     for (int dy = -radius; dy <= radius; ++dy) {
         for (int dx = -radius; dx <= radius; ++dx) {
             const int nx = static_cast<int>(mx) + dx;
             const int ny = static_cast<int>(my) + dy;
-            if (!inBounds(nx, ny)) {
+            if (!inBounds(nx, ny) || !isObstacle(static_cast<unsigned int>(nx), static_cast<unsigned int>(ny))) {
                 continue;
             }
-
-            if (!isObstacle(static_cast<unsigned int>(nx), static_cast<unsigned int>(ny))) {
-                continue;
-            }
-
-            const double distance =
-                std::hypot(static_cast<double>(dx), static_cast<double>(dy)) * getResolution();
+            const double distance = std::hypot(static_cast<double>(dx), static_cast<double>(dy)) * getResolution();
             if (!best_distance.has_value() || distance < best_distance.value()) {
                 best_distance = distance;
             }
         }
     }
-
     return best_distance;
 }
 
@@ -283,25 +250,18 @@ unsigned char CostmapAdapter::interpretOccupancyValue(int8_t occupancy) const
     if (occupancy < 0) {
         return nav2_costmap_2d::NO_INFORMATION;
     }
-
     if (occupancy == 0) {
         return nav2_costmap_2d::FREE_SPACE;
     }
-
     if (occupancy > 50) {
         return nav2_costmap_2d::LETHAL_OBSTACLE;
     }
-
-    // 当前 frontier 检测只需要 free / unknown / lethal 三类语义。
-    // 1..50 的中间概率暂按比例映射为非致命 cost，保留旧逻辑中 >50 才视为障碍的取舍。
-    return static_cast<unsigned char>(
-        std::clamp(
-            static_cast<int>(
-                std::round(
-                    static_cast<double>(occupancy) / 50.0 *
-                    static_cast<double>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1))),
-            1,
-            static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1)));
+    return static_cast<unsigned char>(std::clamp(
+        static_cast<int>(std::round(
+            static_cast<double>(occupancy) / 50.0 *
+            static_cast<double>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1))),
+        1,
+        static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE - 1)));
 }
 
-}  // 命名空间 frontier_strategy
+}  // namespace grid_map_ros

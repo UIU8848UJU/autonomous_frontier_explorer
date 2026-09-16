@@ -24,6 +24,7 @@ TaskManagerNode
 - `ExplorationBtOrchestratorNode`：位于独立的 `exploration_bt` 包，是唯一探索编排入口，负责按 BT 请求候选、选择可执行目标、导航、失败重选、完成判断。
 - `NavigationNode`：导航能力中间层，负责 footprint 落脚检查、path safety 检查和 Nav2 `NavigateToPose` 桥接。
 - `FrontierGoalProvider`：纯 C++ 能力类，复用 detector / pruner / scorer / selector，不直接发送导航 goal。
+- `grid_map_ros`：独立的 OccupancyGrid、GridMap 和 Nav2 Costmap2D 转换适配包，Frontier 与 Navigation 共同复用。
 
 完整架构图见 [探索架构说明](doc/exploration_architecture.md)。
 
@@ -48,6 +49,8 @@ Frontier 能力节点：
 /frontier_strategy_node/clear_frontier_blacklist
 /frontier_strategy_node/get_exploration_state
 ```
+
+`get_frontier_candidates` 的响应使用 `robot_interfaces/msg/FrontierCandidate[]`，不再使用并行数组。
 
 导航能力节点：
 

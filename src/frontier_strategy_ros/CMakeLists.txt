@@ -17,6 +17,8 @@ find_package(geometry_msgs REQUIRED)
 find_package(frontier_strategy_core CONFIG REQUIRED)
 find_package(exploration_core CONFIG REQUIRED)
 find_package(robot_geometry_core CONFIG REQUIRED)
+find_package(grid_map_ros CONFIG REQUIRED)
+find_package(robot_interfaces REQUIRED)
 
 set(frontier_strategy_ros_DEPS
   rclcpp
@@ -25,11 +27,12 @@ set(frontier_strategy_ros_DEPS
   geometry_msgs
   exploration_core
   robot_geometry_core
+  grid_map_ros
+  robot_interfaces
 )
 
 add_library(${PROJECT_NAME} SHARED
   src/frontier_goal_provider.cpp
-  src/costmap/costmap_adapter.cpp
   src/utils/map_utils.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
@@ -39,6 +42,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_link_libraries(${PROJECT_NAME}
   frontier_strategy_core::frontier_strategy_core
   robot_geometry_core::robot_geometry_core
+  grid_map_ros::grid_map_ros
 )
 ament_target_dependencies(${PROJECT_NAME}
   ${frontier_strategy_ros_DEPS}
@@ -56,7 +60,7 @@ install(DIRECTORY include/
 
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
 ament_export_include_directories(include)
-ament_export_dependencies(${frontier_strategy_ros_DEPS} frontier_strategy_core exploration_core robot_geometry_core)
+ament_export_dependencies(${frontier_strategy_ros_DEPS} frontier_strategy_core exploration_core robot_geometry_core grid_map_ros)
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
@@ -66,6 +70,7 @@ if(BUILD_TESTING)
   )
   target_link_libraries(test_frontier_ros
     ${PROJECT_NAME}
+    grid_map_ros::grid_map_ros
   )
   ament_target_dependencies(test_frontier_ros
     ${frontier_strategy_ros_DEPS}

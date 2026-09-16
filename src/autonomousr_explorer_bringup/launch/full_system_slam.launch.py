@@ -1,5 +1,6 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription, TimerAction
+from launch.actions import IncludeLaunchDescription, RegisterEventHandler
+from launch.event_handlers import OnProcessIO
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -73,12 +74,41 @@ def generate_launch_description():
         parameters=[map_lifecycle_params],
     )
 
+    readiness_gate = Node(
+        package="autonomousr_explorer_bringup",
+        executable="readiness_gate.py",
+        prefix="python3",
+        name="bringup_readiness_gate",
+        output="screen",
+        arguments=[
+            "--topic", "/map",
+            "--topic", "/global_costmap/costmap",
+            "--service", "/frontier_strategy_node/get_frontier_candidates",
+            "--service", "/navigation_node/check_goal_feasibility",
+            "--service", "/lifecycle_manager_navigation/manage_nodes",
+            "--timeout-sec", "120.0",
+        ],
+    )
+
+    launch_after_readiness = {"started": False}
+
+    def start_runtime_nodes(event, _context):
+        text = event.text.decode(errors="replace") if isinstance(event.text, bytes) else str(event.text)
+        if launch_after_readiness["started"] or "READINESS_GATE_READY" not in text:
+            return []
+        launch_after_readiness["started"] = True
+        return [exploration_bt_orchestrator_node, task_node, map_lifecycle_node]
+
     return LaunchDescription([
-        TimerAction(period=8.0, actions=[nav2_launch]),
-        TimerAction(period=10.0, actions=[rviz_node]),
-        TimerAction(period=12.0, actions=[frontier_node]),
-        TimerAction(period=12.5, actions=[navigation_node]),
-        TimerAction(period=13.0, actions=[exploration_bt_orchestrator_node]),
-        TimerAction(period=14.0, actions=[task_node]),
-        TimerAction(period=14.0, actions=[map_lifecycle_node]),
+        nav2_launch,
+        rviz_node,
+        frontier_node,
+        navigation_node,
+        readiness_gate,
+        RegisterEventHandler(
+            OnProcessIO(
+                target_action=readiness_gate,
+                on_stdout=start_runtime_nodes,
+            )
+        ),
     ])

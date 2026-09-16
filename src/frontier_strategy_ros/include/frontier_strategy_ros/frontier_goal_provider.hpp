@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "frontier_strategy_ros/costmap/costmap_adapter.hpp"
+#include "grid_map_ros/costmap_adapter.hpp"
 #include "frontier_strategy_core/policy/frontier_strategy_policy.hpp"
 #include "frontier_strategy_ros/reachability/frontier_reachability_checker.hpp"
 #include "frontier_strategy_core/selector/candidates/frontier_decision_types.hpp"
@@ -18,11 +18,13 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "frontier_strategy_ros/types/frontier_strategy_params.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "robot_interfaces/msg/frontier_candidate.hpp"
 
 namespace frontier_strategy
 {
 
 using exploration_core::ExplorationStatus;
+using CostmapAdapter = grid_map_ros::CostmapAdapter;
 
 /// @brief: frontier marker 发布所需的可视化快照
 struct FrontierGoalVisualization
@@ -37,30 +39,11 @@ struct FrontierGoalVisualization
     bool clear_candidate_markers{false};
 };
 
-/// @brief: 单个 frontier 候选目标的服务输出数据
-struct FrontierCandidateResult
-{
-    geometry_msgs::msg::PoseStamped goal;
-    float score{0.0F};
-    float distance_m{0.0F};
-    float clearance_m{0.0F};
-    float unknown_ratio{0.0F};
-    float information_gain{0.0F};
-    uint32_t cluster_size{0U};
-    uint32_t retry_count{0U};
-    bool used_fallback{false};
-    bool goal_inset_applied{false};
-    bool reachability_checked{false};
-    bool reachable{true};
-    float path_length_m{0.0F};
-    GridCell goal_cell;
-};
-
 /// @brief: 计算 frontier 候选列表的结果结构
 struct FrontierCandidatesResult
 {
     bool success{false};
-    std::vector<FrontierCandidateResult> candidates;
+    std::vector<robot_interfaces::msg::FrontierCandidate> candidates;
     uint16_t reason_code{0};
     std::string reason_text;
     uint32_t raw_frontier_count{0U};

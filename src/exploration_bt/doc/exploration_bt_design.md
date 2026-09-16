@@ -28,7 +28,10 @@ lib/libexploration_bt_nodes.so
         <Fallback name="SelectNavigateOrBlacklist">
           <Sequence name="SelectAndNavigate">
             <SelectFeasibleFrontier/>
-            <NavigateToFrontier/>
+            <Parallel name="NavigateAndPrefetch" success_threshold="2" failure_threshold="1">
+              <NavigateToFrontier/>
+              <PrefetchFrontierCandidates/>
+            </Parallel>
           </Sequence>
           <MarkFrontierFailed/>
         </Fallback>
@@ -42,6 +45,7 @@ lib/libexploration_bt_nodes.so
 
 - `IsExplorationComplete`：如果上下文已标记探索完成，返回 `SUCCESS`。
 - `ComputeFrontierCandidates`：调用 frontier 能力服务，请求按分数排序的候选目标列表。
+- `PrefetchFrontierCandidates`：导航进行时异步请求下一轮候选，减少机器人到达后等待计算的空窗。
 - `SelectFeasibleFrontier`：逐个调用 NavigationNode 可执行性服务，在检查窗口内选择综合 frontier score 和 path length 后最优的可执行候选。
 - `NavigateToFrontier`：将目标发送给 NavigationNode `NavigateToPose`。
 - `MarkFrontierFailed`：导航失败后通知 frontier 能力节点处理失败事件。
@@ -58,7 +62,8 @@ BT 不直接维护 retry / blacklist。`retry_count`、`blacklisted`、goal blac
 
 | BT 节点 | 类型 | 依赖接口 | 职责 |
 | --- | --- | --- | --- |
-| `ComputeFrontierCandidates` | StatefulAction | `robot_interfaces/srv/GetFrontierCandidates` | 请求 frontier 候选列表 |
+| `ComputeFrontierCandidates` | StatefulAction | `robot_interfaces/srv/GetFrontierCandidates` | 请求 `FrontierCandidate[]` 候选列表 |
+| `PrefetchFrontierCandidates` | StatefulAction | `robot_interfaces/srv/GetFrontierCandidates` | 导航期间预取下一轮候选 |
 | `SelectFeasibleFrontier` | StatefulAction | `robot_interfaces/srv/CheckGoalFeasibility` | 在候选窗口内选择综合 score 和 path length 最优的可执行目标 |
 | `NavigateToFrontier` | StatefulAction | `robot_interfaces/action/NavigateToPose` | 导航到当前 frontier goal |
 | `MarkFrontierFailed` | StatefulAction | `robot_interfaces/srv/MarkFrontierFailed` | 通知 frontier 能力节点处理导航失败事件 |

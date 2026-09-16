@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -13,8 +13,6 @@ def generate_launch_description():
 
     episode_id = LaunchConfiguration("episode_id")
     dataset_output_dir = LaunchConfiguration("dataset_output_dir")
-    recorder_start_delay = LaunchConfiguration("recorder_start_delay")
-
     full_system = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(full_system_launch)
     )
@@ -65,11 +63,7 @@ def generate_launch_description():
             default_value="0.0",
             description="Initial robot yaw reserved for future dataset launch wiring.",
         ),
-        DeclareLaunchArgument(
-            "recorder_start_delay",
-            default_value="15.0",
-            description="Seconds to wait before starting DatasetRecorderNode.",
-        ),
         full_system,
-        TimerAction(period=recorder_start_delay, actions=[dataset_recorder]),
+        # 记录器可以先启动并等待数据，不依赖固定秒数；系统就绪后会自动收到各类消息。
+        dataset_recorder,
     ])

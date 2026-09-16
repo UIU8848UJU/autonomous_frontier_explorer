@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "frontier_strategy_ros/costmap/costmap_adapter.hpp"
+#include "grid_map_ros/costmap_adapter.hpp"
 #include "frontier_strategy_core/selector/candidates/frontier_decision_types.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "frontier_strategy_core/types/frontier_types.hpp"
@@ -15,6 +15,7 @@ namespace exploration
 {
 
 using namespace frontier_strategy;
+using grid_map_ros::CostmapAdapter;
 
 /// @brief: Frontier RViz marker 发布器，集中负责 raw frontier、候选、评分、目标和黑名单的可视化
 class FrontierMarkerPublisher

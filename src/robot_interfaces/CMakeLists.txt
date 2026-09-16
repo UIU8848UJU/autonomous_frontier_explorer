@@ -11,6 +11,7 @@ set(MSG_FILES
   "msg/ExplorationState.msg"
   "msg/MapLifecycleState.msg"
   "msg/TaskManagerState.msg"
+  "msg/FrontierCandidate.msg"
 )
 
 set(SRV_FILES

@@ -36,6 +36,7 @@ NavigationNode
 
 - ROS 2 Humble
 - Nav2 `nav2_costmap_2d::Costmap2D`
+- `grid_map_ros::CostmapAdapter`
 - `nav_msgs/msg/OccupancyGrid`
 - TF2，查询 `map <- base_link` 机器人位姿
 - `visualization_msgs/msg/MarkerArray`
@@ -46,6 +47,7 @@ NavigationNode
 | --- | --- | --- | --- |
 | `/map` | `nav_msgs/msg/OccupancyGrid` | 订阅 | frontier 检测、unknown 语义和候选基础合法性判断。 |
 | `/global_costmap/costmap` | `nav_msgs/msg/OccupancyGrid` | 订阅 | safety costmap 来源，用于 clearance 评分、fallback 候选落脚硬约束和 NavigationNode footprint/path safety 检查。 |
+| `/frontier_strategy_node/get_frontier_candidates` | `robot_interfaces/srv/GetFrontierCandidates` | 服务 | 返回 `FrontierCandidate[]` 及本轮检测统计和完成标志。 |
 | `map <- base_link` | TF | 查询 | 获取 map frame 下的机器人位姿，用于转换为地图栅格坐标。 |
 | `/frontier/raw_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | 原始 frontier cluster 点云。 |
 | `/frontier/candidate_markers` | `visualization_msgs/msg/MarkerArray` | 发布 | pruner/scorer 后仍参与评分的候选点。 |
@@ -68,7 +70,7 @@ NavigationNode
 4. `FrontierDetector` 从 `/map` 中检测 frontier cell 并聚类。
 5. `FrontierStrategyPolicy` 调用 pruner/ranker，使用 `/map` 生成候选，使用 global costmap 计算 clearance 软评分。
 6. 返回候选列表、Top 5 评分文本、blacklist 和 selected goal 所需的可视化快照。
-7. 将每个候选 grid 转换为 `PoseStamped` 并填充服务响应。
+7. 将每个候选 grid 转换为 `robot_interfaces/msg/FrontierCandidate` 并填充服务响应。
 
 BT 默认使用 `get_frontier_candidates` 获取候选列表，再由 `SelectFeasibleFrontier`
 通过 NavigationNode 检查 footprint 和 path safety 后选择最终导航目标。
@@ -80,7 +82,7 @@ BT 默认使用 `get_frontier_candidates` 获取候选列表，再由 `SelectFea
 
 ### 4.1 CostmapAdapter
 
-`CostmapAdapter` 是地图访问适配层，内部使用 Nav2 `Costmap2D`，统一处理：
+`grid_map_ros::CostmapAdapter` 是独立的地图访问适配层，内部使用 Nav2 `Costmap2D`，统一处理：
 
 - `OccupancyGrid` 到 `Costmap2D` 的 cost 转换；
 - `worldToMap` / `mapToWorld` 坐标转换；
@@ -147,7 +149,7 @@ frontier_decision.candidate_unknown_margin_cells
 通过硬约束后的 unknown ratio 仍会写入候选事实数据，供
 `UnknownRiskPenaltyScore` 做风险扣分。
 
-`clearance_m` 已接入 `CostmapAdapter::distanceToNearestObstacle()`。
+`clearance_m` 已接入 `grid_map_ros::CostmapAdapter::distanceToNearestObstacle()`。
 当 `use_global_costmap_for_safety: true` 且 global costmap 已就绪时，pruner 会把
 候选点从 `/map` 栅格转换到世界坐标，再转换到 global costmap 栅格，计算最近障碍距离。
 如果 global costmap 不可用，则回退到 `/map` adapter。

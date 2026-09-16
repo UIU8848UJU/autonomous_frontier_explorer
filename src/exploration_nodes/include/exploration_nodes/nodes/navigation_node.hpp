@@ -7,7 +7,7 @@
 #include <thread>
 #include <vector>
 
-#include "frontier_strategy_ros/costmap/costmap_adapter.hpp"
+#include "grid_map_ros/costmap_adapter.hpp"
 #include "navigation_core/footprint_goal_validator.hpp"
 #include "navigation_core/path_safety_checker.hpp"
 #include "navigation_core/single_goal_gate.hpp"
@@ -24,8 +24,6 @@
 
 namespace exploration
 {
-
-using namespace frontier_strategy;
 
 /// @brief: NavigationNode 封装 Nav2 NavigateToPose，对探索 BT 暴露稳定导航 action 能力
 class NavigationNode : public rclcpp::Node
@@ -139,7 +137,7 @@ private:
 
 private:
     rclcpp::Logger logger_;
-    CostmapAdapter footprint_costmap_;
+    grid_map_ros::CostmapAdapter footprint_costmap_;
     navigation::navigation_core::FootprintGoalValidator footprint_validator_;
     navigation::navigation_core::PathSafetyChecker path_safety_checker_;
     std::string nav2_action_name_;

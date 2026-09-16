@@ -27,6 +27,7 @@ find_package(robot_interfaces REQUIRED)
 find_package(frontier_strategy_ros REQUIRED)
 find_package(navigation_core REQUIRED)
 find_package(robot_geometry_core REQUIRED)
+find_package(grid_map_ros REQUIRED)
 
 set(frontier_strategy_node_DEPS
   rclcpp
@@ -40,6 +41,7 @@ set(frontier_strategy_node_DEPS
   robot_interfaces
   tf2
   tf2_ros
+  grid_map_ros
   frontier_strategy_ros
 )
 
@@ -52,7 +54,7 @@ set(navigation_node_DEPS
   geometry_msgs
   std_msgs
   robot_interfaces
-  frontier_strategy_ros
+  grid_map_ros
 )
 
 function(configure_exploration_nodes_target target_name)
@@ -102,6 +104,7 @@ configure_exploration_nodes_target(
 target_link_libraries(navigation_node_lib
   navigation_core::navigation_core
   robot_geometry_core::robot_geometry_core
+  grid_map_ros::grid_map_ros
 )
 
 add_executable(navigation_node

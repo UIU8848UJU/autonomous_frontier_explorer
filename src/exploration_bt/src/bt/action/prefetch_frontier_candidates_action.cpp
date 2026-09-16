@@ -4,8 +4,6 @@
 #include <utility>
 #include <cmath>
 
-#include "exploration_bt/bt/frontier_candidate_conversion.hpp"
-
 namespace exploration
 {
 
@@ -82,7 +80,7 @@ BT::NodeStatus PrefetchFrontierCandidatesAction::onRunning()
             if (prefetch_success_) {
                 std::lock_guard<std::mutex> lock(context_->mutex);
                 if (response->map_revision >= context_->latest_map_revision) {
-                    auto candidates = convert_frontier_candidates(*response);
+                    auto candidates = response->candidates;
                     if (context_->enable_active_goal_replacement &&
                         context_->navigation_active &&
                         context_->goal_switch_count <
@@ -153,7 +151,7 @@ BT::NodeStatus PrefetchFrontierCandidatesAction::onRunning()
                 context_->logger,
                 "Frontier prefetch finished: success=%s candidates=%zu map_revision=%llu",
                 prefetch_success_ ? "true" : "false",
-                response->goals.size(),
+                response->candidates.size(),
                 static_cast<unsigned long long>(response->map_revision));
         }
     }

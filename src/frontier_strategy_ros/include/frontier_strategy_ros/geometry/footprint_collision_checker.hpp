@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <vector>
 
-#include "frontier_strategy_ros/costmap/costmap_adapter.hpp"
+#include "grid_map_ros/costmap_adapter.hpp"
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/pose.hpp"
 #include "nav2_costmap_2d/cost_values.hpp"
@@ -48,7 +48,7 @@ public:
     }
 
     static FootprintCollisionCheckResult checkPose(
-        const CostmapAdapter & costmap,
+        const grid_map_ros::CostmapAdapter & costmap,
         const geometry_msgs::msg::Pose & pose,
         const FootprintCollisionCheckerConfig & config)
     {
@@ -61,7 +61,7 @@ public:
     }
 
     static FootprintCollisionCheckResult checkWorldPoint(
-        const CostmapAdapter & costmap,
+        const grid_map_ros::CostmapAdapter & costmap,
         double x,
         double y,
         double yaw,

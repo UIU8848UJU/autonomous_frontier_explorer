@@ -9,6 +9,7 @@ namespace exploration
 {
 
 using namespace frontier_strategy;
+using grid_map_ros::CostmapAdapter;
 
 namespace
 {

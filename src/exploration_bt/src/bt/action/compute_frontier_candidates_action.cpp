@@ -2,8 +2,6 @@
 
 #include <mutex>
 
-#include "exploration_bt/bt/frontier_candidate_conversion.hpp"
-
 namespace exploration
 {
 
@@ -74,7 +72,7 @@ BT::NodeStatus ComputeFrontierCandidatesAction::onRunning()
         request_sent_ = false;
 
         if (last_response_->success) {
-            auto candidates = convert_frontier_candidates(*last_response_);
+            const auto candidates = last_response_->candidates;
 
             std::lock_guard<std::mutex> lock(context_->mutex);
             if (last_response_->map_revision != context_->latest_map_revision) {
