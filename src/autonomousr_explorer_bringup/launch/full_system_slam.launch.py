@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import IncludeLaunchDescription, RegisterEventHandler
-from launch.event_handlers import OnProcessIO
+from launch.event_handlers import OnProcessExit
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
@@ -90,13 +90,10 @@ def generate_launch_description():
         ],
     )
 
-    launch_after_readiness = {"started": False}
-
     def start_runtime_nodes(event, _context):
-        text = event.text.decode(errors="replace") if isinstance(event.text, bytes) else str(event.text)
-        if launch_after_readiness["started"] or "READINESS_GATE_READY" not in text:
+        # 只有 gate 正常退出才继续启动运行时节点，超时或异常时保持失败状态。
+        if event.returncode != 0:
             return []
-        launch_after_readiness["started"] = True
         return [exploration_bt_orchestrator_node, task_node, map_lifecycle_node]
 
     return LaunchDescription([
@@ -106,9 +103,9 @@ def generate_launch_description():
         navigation_node,
         readiness_gate,
         RegisterEventHandler(
-            OnProcessIO(
+            OnProcessExit(
                 target_action=readiness_gate,
-                on_stdout=start_runtime_nodes,
+                on_exit=start_runtime_nodes,
             )
         ),
     ])

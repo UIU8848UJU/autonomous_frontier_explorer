@@ -24,10 +24,12 @@ class ReadinessGate(Node):
     def missing_items(self):
         """返回当前尚未就绪的 topic/service，便于超时日志定位。"""
         topic_names = {
-            name for name, _ in self.get_topic_names_and_types(no_demangle=True)
+            # 使用 ROS 图中的逻辑名称；no_demangle=True 会返回 DDS 内部的 rt/* 名称。
+            name for name, _ in self.get_topic_names_and_types()
         }
         service_names = {
-            name for name, _ in self.get_service_names_and_types(no_demangle=True)
+            # Humble 的 rclpy 服务图接口不接受 no_demangle 参数。
+            name for name, _ in self.get_service_names_and_types()
         }
 
         missing_topics = [
@@ -42,12 +44,16 @@ class ReadinessGate(Node):
 
 
 def parse_args():
+    """解析编排参数，忽略 ROS 2 launch 自动追加的参数。"""
     parser = argparse.ArgumentParser(description="ROS bringup readiness gate")
     parser.add_argument("--topic", dest="topics", action="append", default=[])
     parser.add_argument("--service", dest="services", action="append", default=[])
     parser.add_argument("--timeout-sec", type=float, default=120.0)
     parser.add_argument("--poll-period-sec", type=float, default=0.2)
-    return parser.parse_args()
+    # launch_ros 会在命令行末尾追加 --ros-args 及重映射参数。
+    # 这些参数由 rclpy.init() 处理，不能让业务参数解析器拦截。
+    args, _ = parser.parse_known_args()
+    return args
 
 
 def main():
@@ -65,9 +71,6 @@ def main():
             missing_topics, missing_services = gate.missing_items()
             if not missing_topics and not missing_services:
                 print("READINESS_GATE_READY", flush=True)
-                # 保持进程存活，避免 launch 在能力节点运行期间误判 gate 已退出。
-                while rclpy.ok():
-                    rclpy.spin_once(gate, timeout_sec=1.0)
                 return 0
 
             if time.monotonic() >= deadline:
