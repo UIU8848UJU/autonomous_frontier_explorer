@@ -10,3 +10,5 @@ datasets/
 compile_commands.json
 __pycache__/
 *.pyc
+.skillmatrix/
+development/
