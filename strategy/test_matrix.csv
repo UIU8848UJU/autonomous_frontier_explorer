@@ -1,0 +1,23 @@
+stage,slice_id,behavior,level,fixture_or_environment,real_boundary,minimum_oracle,gate
+A,A-01,diagnostics invariance,Component,fixed GridMap plus fake safety/planner,Ubuntu replay confirms no runtime side effect,candidate decision and side effects identical,A
+A,A-02,rejection reason uniqueness,Unit,parameterized tiny maps and contexts,none,reason enum and count conservation,A
+A,A-03,trace timing/order,Component,controlled scheduler and fake clients,Ubuntu trace clock,monotonic sequence and correlated durations,A
+A,A-04,收尾问题复现,Integration/E2E,Ubuntu scene or rosbag replay,SLAM/Nav2/TF,raw debug plus unknown-area evidence,A
+B,B-01,edge frontier detection,Unit/Property,edge and minimum-size GridMap,none,expected frontier set and no out-of-bounds,B
+B,B-02,map-outside versus obstacle,Component,edge obstacle variants,real costmap integration,inside obstacle rejects and outside sampling does not,B
+B,B-03,NORMAL CLEANUP transitions,Unit state machine,scripted cycles revisions progress,none,transition table and reason,B
+B,B-04,single-cell cleanup safety,Component,normal/cleanup same fixture,real footprint/path safety,cleanup only relaxes size/unknown policy,B
+B,B-05,ray visibility gain,Unit/Property,occlusion/range/angle fixtures,real sensor/costmap replay,visible unknown oracle set,B
+B,B-06,failure semantic separation,Component,fake generation/planner/navigation outcomes,real NavigationNode integration,only matching counter changes,B
+B,B-07,blacklist lifecycle,Unit/Component,centroid drift TTL revision fixtures,Ubuntu map replay,identity and invalidation truth table,B
+B,B-08,completion state machine,Unit/Component,stable/change/reachable/classified matrix,Ubuntu map update integration,no premature COMPLETED and distinct STUCK/WAIT/NO_VALID,B
+B,B-09,recoverable map costmap TF,ROS Integration,invalid/stale/recovered messages,real TF/costmap,old candidate invalidated and state recoverable,B
+B,B-10,收尾场景回归,E2E,edge/single-cell/narrow-door/enclosed/unreachable,real SLAM/Nav2,processed or classified residual area,B
+C,C-01,Top-K and early accept,Component,ranked list > K plus scripted utility,real planner integration,checked indices/count and checked feasible only,C
+C,C-02,batch fallback,Component,K failures then later feasible,fake plus planner integration,later batch selected and bounded,C
+C,C-03,feasibility cache,Unit/Component,key and invalidation matrix,real costmap revision integration,call count exact,C
+C,C-04,prefetch freshness,Component,controlled map pose costmap updates,Ubuntu executor,stale prefetch never sent,C
+C,C-05,stop/failure fallback,Component/Integration,cancel timeout late callback,real NavigationNode action,normal sync fallback and no stale write,C
+C,C-06,single active navigation,Property/Integration,concurrent tick and prefetch fake action server,real NavigationNode/Nav2,active goal count <= 1,C
+C,C-07,callback race,TSan/Stress,permuted callback schedule repeated,Ubuntu Linux runtime,no race and invariants,C
+C,C-08,gap and coverage performance,Performance/E2E,same scene hardware >=30 transitions x3,real SLAM/Nav2,report P50/P95 calls coverage cancel/re-goal,C

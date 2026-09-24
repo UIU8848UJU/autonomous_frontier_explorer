@@ -18,6 +18,7 @@
 
 以下文档用于解释设计背景，不代表当前代码仍存在其中列出的全部问题：
 
+- [探索重构测试策略归档](../strategy/README.md)
 - [多核心架构重构与训练系统建设计划](refactoring/archive/2026-09-04-multi-core-architecture-plan.md)
 - [探索架构收敛修复计划](refactoring/archive/2026-09-12-exploration-architecture-fix-plan.md)
 - [探索收尾与选点性能分析](refactoring/archive/2026-09-12-exploration-tail-analysis.md)

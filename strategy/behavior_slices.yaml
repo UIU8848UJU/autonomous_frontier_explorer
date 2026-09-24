@@ -1,0 +1,179 @@
+version: 1
+principle: 每个切片必须有独立输入、可观察输出、明确 oracle 和最小证据等级
+slices:
+  - id: A-01
+    stage: A
+    behavior: 诊断开关只记录信息，不改变候选序列和决策
+    layer: Component
+    input: 固定 GridMap、costmap、pose、参数；diagnostics on/off
+    oracle: 候选 goal cell/order/score、decision type/detail、blacklist side effect 完全相同
+    evidence: L1
+    gate: A
+  - id: A-02
+    stage: A
+    behavior: 每个候选尝试得到唯一稳定拒绝原因
+    layer: Unit
+    input: 空地图、无效地图、单格、边缘、goal too close、unknown、safety、blacklist、retry、duplicate
+    oracle: reason enum 可序列化；同一输入计数可重复；成功与终态拒绝计数守恒
+    evidence: L1
+    gate: A
+  - id: A-03
+    stage: A
+    behavior: Detector/pruner/ranker/planner/navigation 事件顺序可关联
+    layer: Component
+    input: scripted service/action latencies
+    oracle: trace sequence 单调；request/goal/revision 关联正确；gap 非负且边界定义一致
+    evidence: L2
+    gate: A
+  - id: A-04
+    stage: A
+    behavior: 收尾问题可被固定场景重复复现
+    layer: Integration/E2E
+    input: Ubuntu 场景或 rosbag replay、版本化 YAML、地图/costmap hash
+    oracle: raw debug、拒绝统计、planner 耗时、gap、剩余未知位置齐全
+    evidence: L4
+    gate: A
+  - id: B-01
+    stage: B
+    behavior: 地图边缘 free cell 邻接地图内 unknown 时被检测
+    layer: Unit/Property
+    input: 边缘各方向、最小宽高地图、不同 obstacle radius
+    oracle: 只检查地图内邻居；不越界；无地图内障碍时不因地图外采样拒绝
+    evidence: L1
+    gate: B
+  - id: B-02
+    stage: B
+    behavior: 地图内障碍仍拒绝 frontier/goal
+    layer: Unit/Component
+    input: edge frontier + obstacle in safety neighborhood; obstacle only outside map
+    oracle: 地图内障碍拒绝；地图外区域不等价于 obstacle
+    evidence: L1
+    gate: B
+  - id: B-03
+    stage: B
+    behavior: NORMAL/CLEANUP 模式切换有滞回和原因
+    layer: Unit/State-machine
+    input: no candidate cycles、only small clusters、progress、new region、map revision
+    oracle: exact transition table；cleanup success/progress 可回 NORMAL；无抖动
+    evidence: L1
+    gate: B
+  - id: B-04
+    stage: B
+    behavior: CLEANUP 接受单格 cluster 但不放宽安全边界
+    layer: Component
+    input: same single-cell cluster in normal/cleanup; footprint/path safety variants
+    oracle: normal reject/cleanup candidate；footprint、obstacle、path unsafe 始终 reject
+    evidence: L2
+    gate: B
+  - id: B-05
+    stage: B
+    behavior: viewpoint/ray visibility 计算信息增益
+    layer: Unit/Property
+    input: range boundary、ray step、occluding obstacle、multiple radii/angles
+    oracle: visible unknown cell set equals reference oracle；遮挡未知格不计入；候选朝向连通域
+    evidence: L1
+    gate: B
+  - id: B-06
+    stage: B
+    behavior: 候选生成失败不增加导航失败计数
+    layer: Unit/Component
+    input: no free viewpoint、footprint reject、planner unreachable、navigation fail
+    oracle: 四类计数/状态独立；只有对应事件改变对应 retry/blacklist
+    evidence: L2
+    gate: B
+  - id: B-07
+    stage: B
+    behavior: cluster/goal blacklist 按 revision/TTL/区域身份失效
+    layer: Unit/Component
+    input: centroid drift、map substantive update、TTL expiry、same region
+    oracle: same region preserves only when intended；new revision/TTL permits re-evaluation
+    evidence: L2
+    gate: B
+  - id: B-08
+    stage: B
+    behavior: completion 只在稳定、无可达 frontier、cleanup 无候选且未知域已分类时成立
+    layer: State-machine/Component
+    input: empty clusters once/repeated、map changing、reachable cleanup、unreachable/obstacle/boundary/noise classes
+    oracle: truth table distinguishes COMPLETED/STUCK/NO_VALID/WAIT；any reachable min-gain viewpoint blocks completion
+    evidence: L2
+    gate: B
+  - id: B-09
+    stage: B
+    behavior: map/costmap/TF 暂时不可用可恢复，不污染完成状态
+    layer: ROS Integration
+    input: stale map、invalid update、TF timeout、costmap recovery
+    oracle: recoverable detail/state；恢复后重新评估；无旧候选执行
+    evidence: L3
+    gate: B
+  - id: B-10
+    stage: B
+    behavior: 旧收尾场景不再假完成且能处理小区域
+    layer: E2E/Replay
+    input: original reproduction scene plus nine planned cases
+    oracle: no reachable unknown -> COMPLETED false positive；single-cell/narrow-door/edge area actually visited or classified
+    evidence: L4
+    gate: B
+  - id: C-01
+    stage: C
+    behavior: 默认只检查 Top-K，阈值满足可早停
+    layer: Unit/Component
+    input: ranked candidates >K, scripted feasibility and utility
+    oracle: exact checked indices/order/count；unchecked never selected
+    evidence: L2
+    gate: C
+  - id: C-02
+    stage: C
+    behavior: Top-K 全失败后按批次检查后续候选
+    layer: Component
+    input: K failures then later feasible candidate
+    oracle: later candidate checked and selected；no unbounded loop
+    evidence: L2
+    gate: C
+  - id: C-03
+    stage: C
+    behavior: feasibility cache 命中/失效正确
+    layer: Unit/Component
+    input: same key; map/costmap revision, start region, planner id, TTL, prior failure changes
+    oracle: hit only when all key/TTL conditions valid；miss otherwise；call count exact
+    evidence: L2
+    gate: C
+  - id: C-04
+    stage: C
+    behavior: prefetch 只保存带 revision/pose 的候选并在发送前复核
+    layer: State-machine/Component
+    input: navigation active, map update, pose move, costmap update, near completion
+    oracle: stale prefetch never sent；latest safety/reachability check precedes send
+    evidence: L2
+    gate: C
+  - id: C-05
+    stage: C
+    behavior: stop/navigation failure/goal cancel 使 prefetch 失效并回退同步流程
+    layer: Component/Integration
+    input: stop, active nav failure, service unavailable, planner timeout, late callback
+    oracle: no stale write/send；current goal canceled；normal synchronous selection resumes
+    evidence: L3
+    gate: C
+  - id: C-06
+    stage: C
+    behavior: 任意时刻最多一个活动 NavigateToPose goal
+    layer: Property/Integration
+    input: repeated tick, concurrent prefetch, cancel/re-goal race
+    oracle: active_navigation_count <= 1；每个 accepted goal exactly one terminal result
+    evidence: L3
+    gate: C
+  - id: C-07
+    stage: C
+    behavior: 预取回调无数据竞争且不会覆盖新状态
+    layer: TSan/Stress
+    input: controlled callback permutations repeated many times
+    oracle: no TSan race; state machine invariants hold for all schedules exercised
+    evidence: L3
+    gate: C
+  - id: C-08
+    stage: C
+    behavior: gap 降低且覆盖/安全不退化
+    layer: Performance/E2E
+    input: same Ubuntu scene/config/hardware; baseline vs C
+    oracle: >=30 transitions across 3 runs; compare P50/P95 gap, planner calls, coverage, false completion, cancel/re-goal
+    evidence: L4
+    gate: C

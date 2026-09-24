@@ -1,0 +1,94 @@
+version: 1
+status: ARCHIVED
+note: 2026-09-12 制定的测试先行顺序；部分能力已在后续提交实现，但因缺少逐 Cycle 的独立验收记录，本归档不追溯标记 DONE
+cycles:
+  - id: T-A1
+    stage: A
+    title: 冻结诊断不变量与 golden fixture
+    depends_on: []
+    scope: A-01,A-02
+    entry: 计划已批准且保留当前工作树；确定 fixture map/config 和输出规范化字段
+    exit: diagnostics on/off golden comparison passed; reason/count contract documented
+    evidence_level: L1-L2
+    gate: A
+  - id: T-A2
+    stage: A
+    title: 建立结构化 trace 与时序接缝
+    depends_on: [T-A1]
+    scope: A-03
+    entry: A-01/A-02 观测字段稳定
+    exit: controlled scheduler trace correlates request/goal/revision and all required durations
+    evidence_level: L2
+    gate: A
+  - id: T-A3
+    stage: A
+    title: Ubuntu 收尾问题基线
+    depends_on: [T-A2]
+    scope: A-04
+    entry: Ubuntu workspace and ROS/Nav2 versions available
+    exit: reproducible scene evidence package with raw inputs and residual unknown area
+    evidence_level: L4
+    gate: A
+  - id: T-B1
+    stage: B
+    title: Detector 边界与安全邻域
+    depends_on: [T-A3]
+    scope: B-01,B-02
+    entry: Gate A provides rejection and boundary evidence
+    exit: all edge/obstacle truth tables pass without out-of-bounds access
+    evidence_level: L1-L3
+    gate: B
+  - id: T-B2
+    stage: B
+    title: NORMAL/CLEANUP 与失败语义
+    depends_on: [T-B1]
+    scope: B-03,B-04,B-06,B-07
+    entry: detector semantics stable and cleanup defaults based on A data
+    exit: single-cell cleanup works; safety unchanged; generation/planner/navigation state separated
+    evidence_level: L2-L3
+    gate: B
+  - id: T-B3
+    stage: B
+    title: 信息增益与 completion state machine
+    depends_on: [T-B2]
+    scope: B-05,B-08,B-09
+    entry: mode and failure lifecycle are observable
+    exit: truth table and recovery tests pass; no premature completion
+    evidence_level: L2-L3
+    gate: B
+  - id: T-B4
+    stage: B
+    title: 收尾场景回归
+    depends_on: [T-B3]
+    scope: B-10
+    entry: Core and adapter state tests pass
+    exit: original reproduction and planned edge/small/enclosed/unreachable scenes produce expected process/classification evidence
+    evidence_level: L4
+    gate: B
+  - id: T-C1
+    stage: C
+    title: Top-K、批次和 cache
+    depends_on: [T-B4]
+    scope: C-01,C-02,C-03
+    entry: Gate B passed and candidate pool contract separates upstream cap from feasibility K
+    exit: exact call counts, checked-only selection, and invalidation truth table pass
+    evidence_level: L2-L3
+    gate: C
+  - id: T-C2
+    stage: C
+    title: Prefetch lifecycle and single-goal safety
+    depends_on: [T-C1]
+    scope: C-04,C-05,C-06
+    entry: cache and revision identity stable
+    exit: stale/stop/failure paths safe; active navigation count never exceeds one
+    evidence_level: L2-L3
+    gate: C
+  - id: T-C3
+    stage: C
+    title: Concurrency stress and performance comparison
+    depends_on: [T-C2]
+    scope: C-07,C-08
+    entry: lifecycle component tests pass
+    exit: TSan/stress clean; >=30 transitions x3 runs; gap improves without B regression
+    evidence_level: L3-L4
+    gate: C
