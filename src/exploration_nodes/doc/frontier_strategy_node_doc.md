@@ -185,7 +185,30 @@ total_score =
 - `RetryPenaltyScore`
 - `UnknownRiskPenaltyScore`
 - `ClearanceScore`，基于 `/global_costmap/costmap` 或 `/map` 的最近障碍距离做软评分
-- `InformationGainScore`，当前以 `unknown_ratio` 作为轻量代理，默认未启用
+- `InformationGainScore`，使用候选观测位姿在传感器量程内、经过障碍遮挡检查后可见的未知面积，默认启用
+
+Information Gain 的输入和输出语义为：
+
+```text
+GridMap + 候选观测位姿 + sensor_range_m
+  -> 可见性检查
+  -> visible_unknown_area_m2
+  -> 饱和归一化
+  -> information_gain_score
+```
+
+没有有效可见性估计时该分项严格为零，不会再用 `unknown_ratio` 或 cluster size
+冒充信息增益。相关参数集中在：
+
+```yaml
+frontier_decision:
+  information_gain:
+    enabled: true
+    sensor_range_m: 3.0
+    minimum_area_m2: 0.0
+    saturation_area_m2: 1.0
+    weight: 0.4
+```
 
 ### 4.5 FrontierStrategyPolicy
 
@@ -263,19 +286,25 @@ full system 通过 launch 加载本包 config 目录下的配置。
 
 | 参数 | 当前默认 | 说明 |
 | --- | --- | --- |
-| `obstacle_search_radius_cells` | 1 | frontier cell 周围障碍检查半径。 |
-| `min_frontier_cluster_size` | 2 | pruner 的最小 cluster size；过小会引入噪声，过大会漏掉末期小边界。 |
+| `obstacle_search_radius_cells` | 1 | frontier cell 周围障碍检查半径；关闭地图自适应时生效。 |
+| `min_frontier_cluster_size` | 2 | pruner 的最小 cluster size；关闭地图自适应时生效。 |
 | `min_goal_distance_m` | 0.45 | 目标点离机器人过近时跳过，避免 Nav2 立即判定成功。 |
 | `max_retry_count` | 2 | 单个 goal 失败达到阈值后加入黑名单。 |
 | `frontier_decision.max_cluster_retry_count` | 3 | cluster 连续失败达到阈值后加入 cluster blacklist。 |
 | `frontier_decision.defer_small_clusters` | true | 是否把小 cluster 延后到兜底阶段选择。 |
-| `frontier_decision.small_cluster_size_threshold` | 5 | 小 cluster 阈值，低于该值时视为兜底候选。 |
-| `frontier_decision.candidate_unknown_margin_cells` | 2 | 局部 unknown ratio 统计窗口半径。 |
-| `frontier_decision.candidate_goal_inset_cells` | 3 | 将 frontier 候选目标沿目标到机器人方向向已知 free space 内缩的 cell 数，避免目标贴 unknown 边界。 |
+| `frontier_decision.small_cluster_size_threshold` | 5 | 小 cluster 阈值；关闭地图自适应时生效。 |
+| `frontier_decision.candidate_unknown_margin_cells` | 2 | 局部 unknown ratio 统计窗口半径；关闭地图自适应时生效。 |
+| `frontier_decision.candidate_goal_inset_cells` | 3 | 候选目标内缩 cell 数；关闭地图自适应时生效。 |
 | `frontier_decision.candidate_max_unknown_ratio` | 0.25 | 候选点局部 unknown 比例硬约束。 |
+| `frontier_decision.map_adaptation.enabled` | true | 是否按地图分辨率把米制几何参数换算为 cell 参数。 |
+| `frontier_decision.map_adaptation.obstacle_clearance_m` | 0.05 | frontier 周围障碍搜索半径。 |
+| `frontier_decision.map_adaptation.min_frontier_length_m` | 0.10 | 正常 frontier cluster 的最小近似长度。 |
+| `frontier_decision.map_adaptation.small_frontier_length_m` | 0.25 | 小 frontier cluster 的近似长度阈值。 |
+| `frontier_decision.map_adaptation.candidate_unknown_margin_m` | 0.10 | 局部 unknown 比例统计半径。 |
+| `frontier_decision.map_adaptation.candidate_goal_inset_m` | 0.15 | 正常候选点向已知区域内缩距离。 |
+| `frontier_decision.map_adaptation.cleanup_goal_inset_m` | 0.0 | 收尾候选点向已知区域内缩距离。 |
 | `map_stale_timeout_ms` | 5000 | 地图长时间不更新时进入 STUCK。 |
 | `max_frontier_failures` | 3 | 连续找不到目标后进入 STUCK。 |
-| `edge_tolerance_m` | 0.3 | 判断机器人是否靠近 map 边缘。 |
 | `map_topic` | `/map` | 用于 frontier 检测的 OccupancyGrid topic。 |
 | `global_costmap_topic` | `/global_costmap/costmap` | 用于 clearance 评分的 global costmap topic。 |
 | `use_global_costmap_for_safety` | true | 是否订阅 global costmap 并将其作为 clearance 评分和候选落脚安全约束来源。 |
@@ -393,7 +422,7 @@ ros2 topic info /frontier/blacklist_markers -v
 
 ## 10. 后续 TODO
 
-- 将 information gain 从当前 `unknown_ratio` 代理升级为更稳定的窗口信息量估计。
+- 根据实机传感器水平视场和实际有效量程建立独立 profile；当前阶段按 360° 二维地图可见性估计。
 - 后续可以把 rejected candidate 拆成更细的拒绝原因 topic 或文本，但不建议默认全部打开，避免 RViz 过载。
 - 如果需要更强解释性，可以增加一个低频 debug topic，发布完整候选评分表，替代 RViz 上的大量文本。
 - 将普通探索和末期 cleanup exploration 拆成两套策略参数，解决单格 unknown 收尾和主策略稳定性互相牵制的问题。

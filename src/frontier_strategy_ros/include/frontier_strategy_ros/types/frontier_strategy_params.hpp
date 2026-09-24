@@ -22,10 +22,6 @@ struct FrontierStrategyRuntimeConfig
     std::chrono::milliseconds map_stale_timeout{std::chrono::milliseconds(5000)};
     /// @brief: 连续 frontier 选择失败阈值
     int max_frontier_failures{3};
-    /// @brief: 接近地图边缘的判定距离，单位 m
-    double edge_tolerance_m{0.3};
-    /// @brief: 单个导航目标认为已经接近到达的距离，单位 m
-    double goal_reached_tolerance_m{0.05};
     /// @brief: 用于 unknown frontier 检测的 OccupancyGrid topic
     std::string map_topic{"/map"};
     /// @brief: 用于目标安全检查和 clearance 查询的 global costmap topic
@@ -78,22 +74,20 @@ struct FrontierPrunerConfig
     int candidate_goal_inset_cells{2};
     double candidate_max_unknown_ratio{0.4};
     double cleanup_candidate_max_unknown_ratio{0.4};
-    /// @brief 观测位姿的传感器量程；设为 0 时关闭射线信息增益估计。
-    double sensor_range_m{0.0};
+    /// @brief 是否启用真实可见未知面积估计与对应评分。
+    bool enable_information_gain{true};
+    /// @brief 信息增益估计使用的传感器量程，单位 m。
+    double information_gain_sensor_range_m{3.0};
     /// @brief 远离 frontier 的候选观测距离，单位 m。
     std::vector<double> viewpoint_retreat_distances_m{0.25, 0.4};
     /// @brief 围绕 frontier 采样的候选观测半径，单位 m。
     std::vector<double> viewpoint_sample_radii_m{0.35, 0.55};
-    /// @brief 候选观测射线的角度间隔，单位 degree。
+    /// @brief 环形候选观测位姿的角度间隔，单位 degree。
     double viewpoint_angle_step_deg{30.0};
-    /// @brief 射线步长，单位栅格。
-    double information_gain_ray_step_cells{1.0};
-    /// @brief 观测位姿至少需要看到的未知栅格数；0 表示不设该门槛。
-    std::size_t minimum_visible_unknown_cells{0U};
+    /// @brief 候选至少需要看到的未知面积，单位 m²；0 表示不设该门槛。
+    double minimum_information_gain_m2{0.0};
     bool enable_footprint_filter{true};
     bool allow_unknown_footprint{false};
-    double robot_radius{0.1};
-    double footprint_padding{0.0};
     int footprint_cost_threshold{static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE)};
 };
 
@@ -112,12 +106,31 @@ struct FrontierSelectionPolicyConfig
     std::size_t small_cluster_size_threshold{3U};
 };
 
+// 地图分辨率自适应参数：只换算几何尺度，不动态放宽安全门禁。
+struct FrontierMapAdaptationConfig
+{
+    bool enabled{true};
+    /// @brief frontier 周围障碍搜索半径，单位 m
+    double obstacle_clearance_m{0.05};
+    /// @brief 正常 frontier cluster 的最小近似长度，单位 m
+    double min_frontier_length_m{0.10};
+    /// @brief 小 frontier cluster 的近似长度阈值，单位 m
+    double small_frontier_length_m{0.25};
+    /// @brief 候选点周围 unknown 比例统计半径，单位 m
+    double candidate_unknown_margin_m{0.10};
+    /// @brief 正常候选点向已知区域内缩距离，单位 m
+    double candidate_goal_inset_m{0.15};
+    /// @brief 收尾候选点向已知区域内缩距离，单位 m
+    double cleanup_goal_inset_m{0.0};
+};
+
 struct FrontierStrategyParams
 {
     FrontierStrategyRuntimeConfig runtime{};
     FrontierPrunerConfig pruner{};
     FrontierScoringConfig scorer{};
     FrontierSelectionPolicyConfig selection{};
+    FrontierMapAdaptationConfig map_adaptation{};
 };
 
 }  // 命名空间 frontier_strategy

@@ -28,6 +28,9 @@ install(TARGETS ${PROJECT_NAME}
 install(DIRECTORY include/
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
+install(FILES README.md
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}
+)
 install(EXPORT ${PROJECT_NAME}Targets
   FILE ${PROJECT_NAME}Targets.cmake
   NAMESPACE ${PROJECT_NAME}::
@@ -57,4 +60,11 @@ if(BUILD_TESTING)
   add_executable(test_robot_geometry_core test/test_robot_geometry_core.cpp)
   target_link_libraries(test_robot_geometry_core PRIVATE ${PROJECT_NAME} GTest::gtest_main)
   gtest_discover_tests(test_robot_geometry_core)
+
+  add_test(
+    NAME robot_geometry_core_no_ros_dependencies
+    COMMAND ${CMAKE_COMMAND}
+      -DCORE_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/no_ros_dependencies.cmake
+  )
 endif()

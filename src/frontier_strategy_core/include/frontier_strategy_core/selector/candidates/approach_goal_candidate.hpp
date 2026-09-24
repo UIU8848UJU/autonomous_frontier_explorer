@@ -27,6 +27,8 @@ struct ApproachGoalCandidate
     bool reachable{true};
     double path_length_m{0.0};
     std::string reachability_reason;
+    double information_gain{0.0};
+    bool information_gain_valid{false};
 
     ApproachGoalCandidate() = default;
 
@@ -44,7 +46,9 @@ struct ApproachGoalCandidate
       reachability_checked(candidate.reachability_checked),
       reachable(candidate.reachable),
       path_length_m(candidate.path_length_m),
-      reachability_reason(candidate.reachability_reason)
+      reachability_reason(candidate.reachability_reason),
+      information_gain(candidate.information_gain),
+      information_gain_valid(candidate.information_gain_valid)
     {
     }
 
@@ -64,7 +68,9 @@ struct ApproachGoalCandidate
             reachability_checked,
             reachable,
             path_length_m,
-            reachability_reason};
+            reachability_reason,
+            information_gain,
+            information_gain_valid};
     }
 };
 

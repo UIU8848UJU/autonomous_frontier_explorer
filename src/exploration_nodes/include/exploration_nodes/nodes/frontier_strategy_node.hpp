@@ -5,6 +5,7 @@
 #include <mutex>
 #include <string>
 
+#include "exploration_nodes/adapters/robot_geometry_parameter_adapter.hpp"
 #include "frontier_strategy_ros/frontier_goal_provider.hpp"
 #include "frontier_strategy_core/types/frontier_types.hpp"
 #include "exploration_core/types/exploration_status.hpp"
@@ -131,6 +132,9 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 
     FrontierStrategyParams params_;
+    adapters::RobotGeometryParameters robot_geometry_params_;
+    std::shared_ptr<const robot_geometry_core::IRobotGeometryProvider>
+        robot_geometry_provider_;
     FrontierGoalProvider goal_provider_;
     std::unique_ptr<FrontierMarkerPublisher> marker_publisher_;
 

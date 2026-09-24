@@ -18,6 +18,7 @@
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "frontier_strategy_ros/types/frontier_strategy_params.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "robot_geometry_core/robot_geometry_provider.hpp"
 #include "robot_interfaces/msg/frontier_candidate.hpp"
 
 namespace frontier_strategy
@@ -86,9 +87,13 @@ public:
         const rclcpp::Logger & logger,
         std::shared_ptr<IFrontierRanker> ranker = {});
 
-    /// @brief: 应用参数并重建 detector/selector
+    /// @brief: 应用参数、机器人几何来源并重建 detector/selector
     /// @param params frontier 策略参数
-    void configure(const FrontierStrategyParams & params);
+    /// @param robot_geometry_provider 机器人碰撞几何来源，不可为空
+    void configure(
+        const FrontierStrategyParams & params,
+        std::shared_ptr<const robot_geometry_core::IRobotGeometryProvider>
+        robot_geometry_provider);
 
     /// @brief: 更新用于 frontier 检测的地图
     /// @param msg OccupancyGrid 地图消息
@@ -143,11 +148,9 @@ private:
     /// @return: true 表示机器人坐标可用
     bool update_robot_grid_position();
 
-    /// @brief: 判断栅格是否接近地图边界
-    /// @param cell 待判断栅格
-    /// @param tolerance_m 边界距离阈值，单位 m
-    /// @return: true 表示接近地图边界
-    bool near_map_edge(const GridCell & cell, double tolerance_m) const;
+    /// @brief 根据有效地图分辨率刷新 Core 使用的 cell 参数。
+    /// @param map_resolution 地图分辨率，单位 m/cell
+    void refresh_policy_for_map_resolution(double map_resolution);
 
     FrontierPruningEnvironment make_pruning_environment(
         const CostmapAdapter & frontier_costmap,
@@ -155,12 +158,15 @@ private:
 
 private:
     rclcpp::Logger logger_;
+    FrontierStrategyParams base_params_;
     FrontierStrategyParams params_;
     CostmapAdapter map_costmap_;
     CostmapAdapter global_costmap_;
     std::shared_ptr<IFrontierRanker> ranker_;
     FrontierStrategyPolicy policy_;
     std::shared_ptr<FrontierReachabilityChecker> reachability_checker_;
+    std::shared_ptr<const robot_geometry_core::IRobotGeometryProvider>
+        robot_geometry_provider_;
     nav_msgs::msg::OccupancyGrid::SharedPtr map_msg_;
     std::optional<geometry_msgs::msg::PoseStamped> robot_pose_;
     std::optional<GridCell> robot_grid_;
@@ -170,6 +176,7 @@ private:
     uint64_t no_frontier_revision_{0U};
     int stable_no_frontier_cycles_{0};
     bool has_map_fingerprint_{false};
+    std::optional<double> policy_map_resolution_;
     std::size_t consecutive_frontier_failures_{0U};
 };
 

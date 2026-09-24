@@ -32,6 +32,7 @@ set(frontier_strategy_ros_DEPS
 )
 
 add_library(${PROJECT_NAME} SHARED
+  src/adaptation/frontier_map_parameter_adapter.cpp
   src/frontier_goal_provider.cpp
   src/utils/map_utils.cpp
 )

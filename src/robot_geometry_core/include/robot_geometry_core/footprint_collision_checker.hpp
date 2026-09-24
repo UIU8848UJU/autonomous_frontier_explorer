@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,29 @@ inline Footprint makeCircularFootprint(double robot_radius, double padding)
         const double angle = 2.0 * kPi * static_cast<double>(index) /
             static_cast<double>(kPointCount);
         footprint.points.push_back(Point2D{radius * std::cos(angle), radius * std::sin(angle)});
+    }
+    return footprint;
+}
+
+/// 用外包正多边形近似圆，保证任意方向上的边界都不小于指定安全半径。
+inline Footprint makeConservativeCircularFootprint(
+    double clearance_radius,
+    std::size_t point_count = 32U)
+{
+    constexpr double kPi = 3.14159265358979323846;
+    point_count = std::max<std::size_t>(8U, point_count);
+    if (!std::isfinite(clearance_radius) || clearance_radius <= 0.0) {
+        throw std::invalid_argument("clearance radius must be positive and finite");
+    }
+    const double safe_radius = clearance_radius;
+    const double vertex_radius = safe_radius / std::cos(kPi / static_cast<double>(point_count));
+    Footprint footprint;
+    footprint.points.reserve(point_count);
+    for (std::size_t index = 0U; index < point_count; ++index) {
+        const double angle = 2.0 * kPi * static_cast<double>(index) /
+            static_cast<double>(point_count);
+        footprint.points.push_back(
+            Point2D{vertex_radius * std::cos(angle), vertex_radius * std::sin(angle)});
     }
     return footprint;
 }

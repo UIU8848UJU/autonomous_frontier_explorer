@@ -3,6 +3,7 @@
 
 #include "frontier_strategy_core/scoring/frontier_ranker.hpp"
 #include "frontier_strategy_core/scoring/frontier_scorer.hpp"
+#include "frontier_strategy_core/scoring/components/information_gain_score.hpp"
 #include "gtest/gtest.h"
 
 namespace frontier_strategy
@@ -49,6 +50,43 @@ TEST(FrontierScoringCore, ReturnsEmptyForEmptyCandidateSet)
 {
     const FrontierScorer scorer;
     EXPECT_TRUE(scorer.score_candidates({}, std::nullopt).empty());
+}
+
+TEST(InformationGainScoreTest, ReturnsZeroWithoutAValidVisibilityEstimate)
+{
+    FrontierCandidate candidate = make_candidate(GridCell{2, 2}, 1.0, 80U);
+    candidate.unknown_ratio = 1.0;
+    candidate.information_gain = 0.0;
+    candidate.information_gain_valid = false;
+
+    // 未运行真实可见性估计时，不得用 cluster 或 unknown_ratio 冒充信息增益。
+    EXPECT_DOUBLE_EQ(InformationGainScore{}.score(candidate), 0.0);
+}
+
+TEST(FrontierScoringCore, RanksHigherMeasuredInformationGainFirst)
+{
+    FrontierScoringWeights weights;
+    weights.weight_distance = 0.0;
+    weights.weight_cluster_size = 0.0;
+    weights.weight_retry_penalty = 0.0;
+    weights.weight_information_gain = 1.0;
+    weights.enable_clearance_score = false;
+    weights.enable_unknown_risk_penalty = false;
+    weights.enable_information_gain_score = true;
+
+    auto lower_gain = make_candidate(GridCell{1, 1}, 1.0, 10U);
+    lower_gain.information_gain = 0.25;
+    lower_gain.information_gain_valid = true;
+    auto higher_gain = make_candidate(GridCell{2, 2}, 1.0, 10U);
+    higher_gain.information_gain = 1.0;
+    higher_gain.information_gain_valid = true;
+
+    const auto scored = FrontierScorer(weights, 2).score_candidates(
+        {lower_gain, higher_gain}, std::nullopt);
+
+    ASSERT_EQ(scored.size(), 2U);
+    EXPECT_GT(scored[1].information_gain_score, scored[0].information_gain_score);
+    EXPECT_GT(scored[1].total_score, scored[0].total_score);
 }
 
 TEST(FrontierScoringCore, RanksCandidatesWithoutApplyingNavigationConstraints)

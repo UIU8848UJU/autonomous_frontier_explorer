@@ -68,6 +68,17 @@ function(configure_exploration_nodes_target target_name)
   )
 endfunction()
 
+add_library(robot_geometry_parameter_adapter_lib
+  src/adapters/robot_geometry_parameter_adapter.cpp
+)
+configure_exploration_nodes_target(
+  robot_geometry_parameter_adapter_lib
+  rclcpp
+)
+target_link_libraries(robot_geometry_parameter_adapter_lib
+  robot_geometry_core::robot_geometry_core
+)
+
 add_library(frontier_strategy_node_lib
   src/frontier_strategy_node.cpp
   src/nav2_planner_reachability_checker.cpp
@@ -77,6 +88,10 @@ add_library(frontier_strategy_node_lib
 configure_exploration_nodes_target(
   frontier_strategy_node_lib
   ${frontier_strategy_node_DEPS}
+)
+target_link_libraries(frontier_strategy_node_lib
+  robot_geometry_parameter_adapter_lib
+  robot_geometry_core::robot_geometry_core
 )
 
 add_executable(frontier_strategy_node
@@ -102,6 +117,7 @@ configure_exploration_nodes_target(
   ${navigation_node_DEPS}
 )
 target_link_libraries(navigation_node_lib
+  robot_geometry_parameter_adapter_lib
   navigation_core::navigation_core
   robot_geometry_core::robot_geometry_core
   grid_map_ros::grid_map_ros
@@ -121,6 +137,7 @@ configure_exploration_nodes_target(
 )
 
 install(TARGETS
+  robot_geometry_parameter_adapter_lib
   frontier_strategy_node_lib
   navigation_node_lib
   ARCHIVE DESTINATION lib
@@ -146,6 +163,7 @@ ament_export_include_directories(include)
 ament_export_dependencies(
   ${frontier_strategy_node_DEPS}
   ${navigation_node_DEPS}
+  robot_geometry_core
 )
 
 if(BUILD_TESTING)
@@ -160,6 +178,17 @@ if(BUILD_TESTING)
   configure_exploration_nodes_target(
     test_navigation_converters
     nav2_costmap_2d
+  )
+
+  ament_add_gtest(test_robot_geometry_parameter_adapter
+    test/test_robot_geometry_parameter_adapter.cpp
+  )
+  target_link_libraries(test_robot_geometry_parameter_adapter
+    robot_geometry_parameter_adapter_lib
+  )
+  configure_exploration_nodes_target(
+    test_robot_geometry_parameter_adapter
+    rclcpp
   )
 endif()
 

@@ -23,9 +23,8 @@ FrontierStrategyPolicy::FrontierStrategyPolicy(
       config_.viewpoint_retreat_distances_m,
       config_.viewpoint_sample_radii_m,
       config_.viewpoint_angle_step_deg,
-      config_.sensor_range_m,
-      config_.information_gain_ray_step_cells,
-      config_.minimum_visible_unknown_cells),
+      config_.information_gain_sensor_range_m,
+      config_.minimum_information_gain_m2),
   selection_policy_(
       FrontierSelectionCoreConfig{
           config_.max_retry_count,
@@ -130,9 +129,8 @@ FrontierStrategyEvaluation FrontierStrategyPolicy::evaluate(
             config_.viewpoint_retreat_distances_m,
             config_.viewpoint_sample_radii_m,
             config_.viewpoint_angle_step_deg,
-            config_.sensor_range_m,
-            config_.information_gain_ray_step_cells,
-            config_.minimum_visible_unknown_cells);
+            config_.information_gain_sensor_range_m,
+            config_.minimum_information_gain_m2);
         std::vector<GridCell> cleanup_failed_cluster_ids;
         candidates = cleanup_pruner.prune_clusters(
             evaluation.clusters,

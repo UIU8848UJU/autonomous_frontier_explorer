@@ -30,6 +30,7 @@ flowchart TD
     FGP --> POL[FrontierStrategyPolicy]
     POL --> DET[FrontierDetector]
     POL --> PRN[FrontierPruner]
+    PRN --> IG[InformationGainEstimator<br/>visible unknown area m²]
     POL --> SCR[RuleBasedFrontierRanker]
     FEN -->|state / marker| RVIZ[RViz / State Topics]
 
@@ -94,6 +95,7 @@ TaskManagerNode
 
 - 使用 `grid_map_ros::CostmapAdapter` 访问地图和安全 costmap；地图格式转换不属于 Frontier Strategy。
 - 调用 `FrontierStrategyPolicy`，由策略 Core 统一完成检测、剪枝、排序和选择。
+- 将地图和候选观测位姿交给纯 Core 的 `InformationGainEstimator`，输出受量程与障碍遮挡约束的可见未知面积。
 - 生成按分数排序的 frontier 候选列表。
 - 接收 map frame 下的机器人位姿，不直接订阅 `/odom`，避免把漂移的 odom frame 当作 map frame 使用。
 - 输出按分数排序的 frontier candidates；默认不在 provider 内部做 Nav2 planner 可达性过滤。
@@ -190,6 +192,11 @@ exploration_bt_orchestrator_node:
 
 navigation_node:
   ros__parameters:
+    robot_geometry:
+      shape: circle
+      frame_id: base_link
+      source: configured_simulation_profile
+      revision: 1
     navigation_action: ~/navigate_to_pose
     check_pose_reachability_service: ~/check_pose_reachability
     check_goal_feasibility_service: ~/check_goal_feasibility
@@ -208,6 +215,12 @@ navigation_node:
     nav2_server_timeout_ms: 1000
     reachability_timeout_ms: 2000
 ```
+
+`FrontierStrategyNode` 和 `NavigationNode` 都通过同一个机器人几何参数适配器创建
+`IRobotGeometryProvider`。旧的 `robot_radius` / `footprint_padding` 参数仍作为兼容输入；
+Frontier 使用 Provider 的保守外接圆做方向无关粗筛，Navigation 使用完整 footprint 与目标 yaw
+做精确检查。实机靠墙标定只需要切换为 `robot_geometry.shape: polygon` 并更新标定点集，
+不需要修改两条业务链路。
 
 ## 启动
 

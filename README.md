@@ -109,7 +109,7 @@ mk_nav2/
 ├── src/
 │   ├── autonomousr_explorer_bringup/    # 统一 launch/config/rviz
 │   ├── grid_map_core/                    # 通用栅格地图领域模型
-│   ├── exploration_core/                 # 探索行为协议与策略接口
+│   ├── exploration_core/                 # 探索行为决策与结果数据
 │   ├── robot_geometry_core/              # 通用机器人二维几何核心
 │   ├── navigation_core/                  # 纯路径与目标安全核心
 │   ├── frontier_strategy_core/           # Frontier 检测、评分与选择策略
@@ -157,7 +157,6 @@ TaskManagerNode
 提供高层任务入口，负责把建图、探索、导航状态串起来：
 
 - `/start_mapping`
-- `/start_navigation`
 - `/stop_all`
 - `/task_manager_state`
 

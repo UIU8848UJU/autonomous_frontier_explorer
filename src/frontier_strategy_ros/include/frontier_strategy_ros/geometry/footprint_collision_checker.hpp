@@ -36,6 +36,13 @@ public:
     {
         const auto core_footprint = robot_geometry_core::makeCircularFootprint(
             robot_radius, footprint_padding);
+        return toRosFootprint(core_footprint);
+    }
+
+    /// 将纯 Core footprint 转为 ROS Point 数组。
+    static std::vector<geometry_msgs::msg::Point> toRosFootprint(
+        const robot_geometry_core::Footprint & core_footprint)
+    {
         std::vector<geometry_msgs::msg::Point> footprint;
         footprint.reserve(core_footprint.points.size());
         for (const auto & point : core_footprint.points) {

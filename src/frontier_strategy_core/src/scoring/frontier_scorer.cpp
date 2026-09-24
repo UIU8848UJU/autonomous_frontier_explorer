@@ -10,7 +10,8 @@ FrontierScorer::FrontierScorer(
     int max_retry_count)
 : weights_(weights),
   retry_penalty_score_(max_retry_count),
-  unknown_risk_penalty_score_(weights.unknown_risk_threshold)
+  unknown_risk_penalty_score_(weights.unknown_risk_threshold),
+  information_gain_score_(weights.information_gain_saturation_area_m2)
 {
 }
 

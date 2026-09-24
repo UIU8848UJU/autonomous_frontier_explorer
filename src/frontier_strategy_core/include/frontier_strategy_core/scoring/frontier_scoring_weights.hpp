@@ -14,6 +14,8 @@ struct FrontierScoringWeights
     double weight_retry_penalty{1.0};
     double weight_unknown_risk_penalty{1.0};
     double weight_information_gain{0.4};
+    // 信息增益达到该未知面积时，分数约为 1-exp(-1)。
+    double information_gain_saturation_area_m2{1.0};
     double unknown_risk_threshold{0.4};
 
     bool enable_clearance_score{false};

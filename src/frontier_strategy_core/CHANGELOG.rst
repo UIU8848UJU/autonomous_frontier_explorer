@@ -1,3 +1,11 @@
+0.0.6 (2026-09-12)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+* Make ``IFrontierRanker`` the only replaceable ranking seam; keep safety and
+  reachability checks in the stable selection layer.
+* Consolidate detection, scoring, selection and policy implementation into the
+  single ``frontier_strategy_core`` library target.
+
 0.0.5 (2026-09-08)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

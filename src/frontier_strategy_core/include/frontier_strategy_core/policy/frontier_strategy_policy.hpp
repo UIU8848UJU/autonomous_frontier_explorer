@@ -39,12 +39,12 @@ struct FrontierStrategyPolicyConfig
     int cleanup_trigger_no_candidate_cycles{3};
     bool cleanup_trigger_only_small_clusters{true};
     double cleanup_max_unknown_ratio{0.4};
-    double sensor_range_m{0.0};
+    // 信息增益可见性估计使用的传感器量程，单位 m；0 表示显式关闭。
+    double information_gain_sensor_range_m{0.0};
     std::vector<double> viewpoint_retreat_distances_m{0.25, 0.4};
     std::vector<double> viewpoint_sample_radii_m{0.35, 0.55};
     double viewpoint_angle_step_deg{30.0};
-    double information_gain_ray_step_cells{1.0};
-    std::size_t minimum_visible_unknown_cells{0U};
+    double minimum_information_gain_m2{0.0};
     bool require_reachable_goal{false};
     FrontierScoringWeights scoring_weights{};
 };

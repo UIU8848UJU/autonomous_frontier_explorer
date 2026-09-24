@@ -11,6 +11,8 @@
 
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "exploration_nodes/adapters/navigation_converters.hpp"
+#include "exploration_nodes/adapters/robot_geometry_parameter_adapter.hpp"
+#include "navigation_core/footprint_goal_validator.hpp"
 #include "navigation_core/path_utils.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "robot_geometry_core/footprint_collision_checker.hpp"
@@ -48,8 +50,8 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
     declare_parameter<bool>("allow_unknown_footprint", false);
     declare_parameter<bool>("enable_path_safety_check", true);
     declare_parameter<bool>("allow_unknown_path", false);
-    declare_parameter<double>("robot_radius", 0.1);
-    declare_parameter<double>("footprint_padding", 0.0);
+    adapters::declareRobotGeometryParameters(
+        *this, {"robot_radius", "footprint_padding"});
     declare_parameter<int>(
         "footprint_cost_threshold",
         static_cast<int>(nav2_costmap_2d::INSCRIBED_INFLATED_OBSTACLE));
@@ -63,14 +65,15 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
     compute_path_action_name_ = get_parameter("compute_path_to_pose_action").as_string();
     default_planner_id_ = get_parameter("reachability_planner_id").as_string();
     footprint_costmap_topic_ = get_parameter("footprint_costmap_topic").as_string();
-    const bool enable_footprint_collision_check =
+    footprint_collision_check_enabled_ =
         get_parameter("enable_footprint_collision_check").as_bool();
-    const bool allow_unknown_footprint = get_parameter("allow_unknown_footprint").as_bool();
+    allow_unknown_footprint_ = get_parameter("allow_unknown_footprint").as_bool();
     const bool enable_path_safety_check =
         get_parameter("enable_path_safety_check").as_bool();
     const bool allow_unknown_path = get_parameter("allow_unknown_path").as_bool();
-    const double robot_radius = std::max(0.01, get_parameter("robot_radius").as_double());
-    const double footprint_padding = std::max(0.0, get_parameter("footprint_padding").as_double());
+    const auto robot_geometry_params = adapters::loadRobotGeometryParameters(
+        *this, {"robot_radius", "footprint_padding"});
+    robot_geometry_provider_ = adapters::makeRobotGeometryProvider(robot_geometry_params);
     const unsigned char footprint_cost_threshold = static_cast<unsigned char>(
         std::clamp(
             static_cast<int>(get_parameter("footprint_cost_threshold").as_int()),
@@ -95,20 +98,24 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
         this,
         compute_path_action_name_,
         navigation_callback_group_);
-    robot_geometry_core::FootprintCollisionConfig footprint_config;
-    footprint_config.enabled = enable_footprint_collision_check;
-    footprint_config.allow_unknown = allow_unknown_footprint;
-    footprint_config.occupied_threshold =
+    footprint_occupied_threshold_ =
         adapters::occupancyThresholdFromNav2Cost(footprint_cost_threshold);
-    footprint_config.footprint = robot_geometry_core::makeCircularFootprint(
-        robot_radius, footprint_padding);
-    footprint_validator_.configure(footprint_config);
     navigation::navigation_core::PathSafetyCheckerConfig path_config;
     path_config.enabled = enable_path_safety_check;
     path_config.allow_unknown = allow_unknown_path;
     path_config.occupied_threshold =
         adapters::occupancyThresholdFromNav2Cost(path_cost_threshold);
     path_safety_checker_.configure(path_config);
+
+    const auto geometry = robot_geometry_provider_->collisionEnvelope();
+    RCLCPP_INFO(
+        logger_,
+        "机器人几何已加载：source=%s frame=%s revision=%llu radius=%.3f points=%zu",
+        geometry.source.c_str(),
+        geometry.frame_id.c_str(),
+        static_cast<unsigned long long>(geometry.revision),
+        geometry.circumscribed_radius,
+        geometry.footprint.points.size());
 
     action_server_ = rclcpp_action::create_server<NavigateToPose>(
         this,
@@ -149,7 +156,7 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
     navigation_debug_pub_ = create_publisher<std_msgs::msg::String>(
         "/navigation/navigation_result_debug_json",
         rclcpp::QoS(rclcpp::KeepLast(50)).reliable());
-    if ((enable_footprint_collision_check || enable_path_safety_check) &&
+    if ((footprint_collision_check_enabled_ || enable_path_safety_check) &&
         !footprint_costmap_topic_.empty())
     {
         rclcpp::SubscriptionOptions subscription_options;
@@ -172,7 +179,7 @@ NavigationNode::NavigationNode(const rclcpp::NodeOptions & options)
         get_parameter("check_pose_reachability_service").as_string().c_str(),
         get_parameter("check_goal_feasibility_service").as_string().c_str(),
         compute_path_action_name_.c_str(),
-        enable_footprint_collision_check ? "true" : "false",
+        footprint_collision_check_enabled_ ? "true" : "false",
         enable_path_safety_check ? "true" : "false");
 }
 
@@ -728,7 +735,16 @@ bool NavigationNode::is_goal_footprint_valid(
     double & footprint_cost) const
 {
     std::lock_guard<std::mutex> lock(footprint_costmap_mutex_);
-    return footprint_validator_.isGoalValid(
+    const auto geometry = robot_geometry_provider_->collisionEnvelope();
+    robot_geometry_core::FootprintCollisionConfig footprint_config;
+    footprint_config.enabled = footprint_collision_check_enabled_;
+    footprint_config.allow_unknown = allow_unknown_footprint_;
+    footprint_config.occupied_threshold = footprint_occupied_threshold_;
+    // Navigation 使用完整 footprint 和目标 yaw，不能退化成 Frontier 的外接圆粗筛。
+    footprint_config.footprint = geometry.footprint;
+    navigation::navigation_core::FootprintGoalValidator validator;
+    validator.configure(footprint_config);
+    return validator.isGoalValid(
         adapters::toCorePose(goal.pose),
         footprint_costmap_.gridMap(),
         reason,

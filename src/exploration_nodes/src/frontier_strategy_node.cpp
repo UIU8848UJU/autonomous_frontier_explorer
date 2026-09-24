@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <iomanip>
+#include <stdexcept>
 #include <sstream>
 
 #include "exploration_nodes/nodes/nav2_planner_reachability_checker.hpp"
@@ -69,12 +71,9 @@ void FrontierStrategyNode::declare_params()
     this->declare_parameter<bool>(
         "frontier_decision.allow_unknown_footprint",
         params_.pruner.allow_unknown_footprint);
-    this->declare_parameter<double>(
-        "frontier_decision.robot_radius",
-        params_.pruner.robot_radius);
-    this->declare_parameter<double>(
-        "frontier_decision.footprint_padding",
-        params_.pruner.footprint_padding);
+    adapters::declareRobotGeometryParameters(
+        *this,
+        {"frontier_decision.robot_radius", "frontier_decision.footprint_padding"});
     this->declare_parameter<int>(
         "frontier_decision.footprint_cost_threshold",
         params_.pruner.footprint_cost_threshold);
@@ -82,10 +81,6 @@ void FrontierStrategyNode::declare_params()
         "map_stale_timeout_ms", static_cast<int>(params_.runtime.map_stale_timeout.count()));
     this->declare_parameter<int>(
         "max_frontier_failures", params_.runtime.max_frontier_failures);
-    this->declare_parameter<double>("edge_tolerance_m", params_.runtime.edge_tolerance_m);
-    this->declare_parameter<double>(
-        "goal_reached_tolerance_m",
-        params_.runtime.goal_reached_tolerance_m);
     this->declare_parameter<std::string>("map_topic", params_.runtime.map_topic);
     this->declare_parameter<std::string>(
         "global_costmap_topic",
@@ -145,8 +140,11 @@ void FrontierStrategyNode::declare_params()
         "frontier_decision.cleanup_candidate_max_unknown_ratio",
         params_.pruner.cleanup_candidate_max_unknown_ratio);
     this->declare_parameter<double>(
-        "frontier_decision.sensor_range_m",
-        params_.pruner.sensor_range_m);
+        "frontier_decision.information_gain.sensor_range_m",
+        params_.pruner.information_gain_sensor_range_m);
+    this->declare_parameter<bool>(
+        "frontier_decision.information_gain.enabled",
+        params_.pruner.enable_information_gain);
     this->declare_parameter<std::vector<double>>(
         "frontier_decision.viewpoint_retreat_distances_m",
         params_.pruner.viewpoint_retreat_distances_m);
@@ -157,11 +155,35 @@ void FrontierStrategyNode::declare_params()
         "frontier_decision.viewpoint_angle_step_deg",
         params_.pruner.viewpoint_angle_step_deg);
     this->declare_parameter<double>(
-        "frontier_decision.information_gain_ray_step_cells",
-        params_.pruner.information_gain_ray_step_cells);
-    this->declare_parameter<int>(
-        "frontier_decision.minimum_visible_unknown_cells",
-        static_cast<int>(params_.pruner.minimum_visible_unknown_cells));
+        "frontier_decision.information_gain.minimum_area_m2",
+        params_.pruner.minimum_information_gain_m2);
+    this->declare_parameter<double>(
+        "frontier_decision.information_gain.saturation_area_m2",
+        params_.scorer.weights.information_gain_saturation_area_m2);
+    this->declare_parameter<double>(
+        "frontier_decision.information_gain.weight",
+        params_.scorer.weights.weight_information_gain);
+    this->declare_parameter<bool>(
+        "frontier_decision.map_adaptation.enabled",
+        params_.map_adaptation.enabled);
+    this->declare_parameter<double>(
+        "frontier_decision.map_adaptation.obstacle_clearance_m",
+        params_.map_adaptation.obstacle_clearance_m);
+    this->declare_parameter<double>(
+        "frontier_decision.map_adaptation.min_frontier_length_m",
+        params_.map_adaptation.min_frontier_length_m);
+    this->declare_parameter<double>(
+        "frontier_decision.map_adaptation.small_frontier_length_m",
+        params_.map_adaptation.small_frontier_length_m);
+    this->declare_parameter<double>(
+        "frontier_decision.map_adaptation.candidate_unknown_margin_m",
+        params_.map_adaptation.candidate_unknown_margin_m);
+    this->declare_parameter<double>(
+        "frontier_decision.map_adaptation.candidate_goal_inset_m",
+        params_.map_adaptation.candidate_goal_inset_m);
+    this->declare_parameter<double>(
+        "frontier_decision.map_adaptation.cleanup_goal_inset_m",
+        params_.map_adaptation.cleanup_goal_inset_m);
 }
 
 void FrontierStrategyNode::load_params()
@@ -190,10 +212,9 @@ void FrontierStrategyNode::load_params()
         this->get_parameter("frontier_decision.enable_footprint_filter").as_bool();
     params_.pruner.allow_unknown_footprint =
         this->get_parameter("frontier_decision.allow_unknown_footprint").as_bool();
-    params_.pruner.robot_radius =
-        this->get_parameter("frontier_decision.robot_radius").as_double();
-    params_.pruner.footprint_padding =
-        this->get_parameter("frontier_decision.footprint_padding").as_double();
+    robot_geometry_params_ = adapters::loadRobotGeometryParameters(
+        *this,
+        {"frontier_decision.robot_radius", "frontier_decision.footprint_padding"});
     params_.pruner.footprint_cost_threshold =
         static_cast<int>(this->get_parameter(
             "frontier_decision.footprint_cost_threshold").as_int());
@@ -201,10 +222,6 @@ void FrontierStrategyNode::load_params()
         std::chrono::milliseconds(this->get_parameter("map_stale_timeout_ms").as_int());
     params_.runtime.max_frontier_failures =
         this->get_parameter("max_frontier_failures").as_int();
-    params_.runtime.edge_tolerance_m =
-        this->get_parameter("edge_tolerance_m").as_double();
-    params_.runtime.goal_reached_tolerance_m =
-        this->get_parameter("goal_reached_tolerance_m").as_double();
     params_.runtime.map_topic =
         this->get_parameter("map_topic").as_string();
     params_.runtime.global_costmap_topic =
@@ -252,18 +269,36 @@ void FrontierStrategyNode::load_params()
         this->get_parameter("frontier_decision.cleanup_goal_inset_cells").as_int();
     params_.pruner.cleanup_candidate_max_unknown_ratio =
         this->get_parameter("frontier_decision.cleanup_candidate_max_unknown_ratio").as_double();
-    params_.pruner.sensor_range_m =
-        this->get_parameter("frontier_decision.sensor_range_m").as_double();
+    params_.pruner.enable_information_gain =
+        this->get_parameter("frontier_decision.information_gain.enabled").as_bool();
+    params_.pruner.information_gain_sensor_range_m =
+        this->get_parameter("frontier_decision.information_gain.sensor_range_m").as_double();
     params_.pruner.viewpoint_retreat_distances_m =
         this->get_parameter("frontier_decision.viewpoint_retreat_distances_m").as_double_array();
     params_.pruner.viewpoint_sample_radii_m =
         this->get_parameter("frontier_decision.viewpoint_sample_radii_m").as_double_array();
     params_.pruner.viewpoint_angle_step_deg =
         this->get_parameter("frontier_decision.viewpoint_angle_step_deg").as_double();
-    params_.pruner.information_gain_ray_step_cells =
-        this->get_parameter("frontier_decision.information_gain_ray_step_cells").as_double();
-    params_.pruner.minimum_visible_unknown_cells = static_cast<std::size_t>(
-        this->get_parameter("frontier_decision.minimum_visible_unknown_cells").as_int());
+    params_.pruner.minimum_information_gain_m2 =
+        this->get_parameter("frontier_decision.information_gain.minimum_area_m2").as_double();
+    params_.scorer.weights.information_gain_saturation_area_m2 =
+        this->get_parameter("frontier_decision.information_gain.saturation_area_m2").as_double();
+    params_.scorer.weights.weight_information_gain =
+        this->get_parameter("frontier_decision.information_gain.weight").as_double();
+    params_.map_adaptation.enabled = this->get_parameter(
+        "frontier_decision.map_adaptation.enabled").as_bool();
+    params_.map_adaptation.obstacle_clearance_m = this->get_parameter(
+        "frontier_decision.map_adaptation.obstacle_clearance_m").as_double();
+    params_.map_adaptation.min_frontier_length_m = this->get_parameter(
+        "frontier_decision.map_adaptation.min_frontier_length_m").as_double();
+    params_.map_adaptation.small_frontier_length_m = this->get_parameter(
+        "frontier_decision.map_adaptation.small_frontier_length_m").as_double();
+    params_.map_adaptation.candidate_unknown_margin_m = this->get_parameter(
+        "frontier_decision.map_adaptation.candidate_unknown_margin_m").as_double();
+    params_.map_adaptation.candidate_goal_inset_m = this->get_parameter(
+        "frontier_decision.map_adaptation.candidate_goal_inset_m").as_double();
+    params_.map_adaptation.cleanup_goal_inset_m = this->get_parameter(
+        "frontier_decision.map_adaptation.cleanup_goal_inset_m").as_double();
 
 }
 
@@ -277,10 +312,6 @@ void FrontierStrategyNode::apply_params()
         std::chrono::milliseconds(std::max<int64_t>(1000, params_.runtime.map_stale_timeout.count()));
     params_.runtime.max_frontier_failures =
         std::max(1, params_.runtime.max_frontier_failures);
-    params_.runtime.edge_tolerance_m =
-        std::max(0.05, params_.runtime.edge_tolerance_m);
-    params_.runtime.goal_reached_tolerance_m =
-        std::max(0.01, params_.runtime.goal_reached_tolerance_m);
     params_.runtime.robot_pose_timeout =
         std::chrono::milliseconds(std::max<int64_t>(10, params_.runtime.robot_pose_timeout.count()));
     params_.runtime.stable_no_frontier_cycles =
@@ -319,17 +350,43 @@ void FrontierStrategyNode::apply_params()
         1U, params_.pruner.cleanup_min_cluster_size);
     params_.pruner.cleanup_candidate_max_unknown_ratio = std::clamp(
         params_.pruner.cleanup_candidate_max_unknown_ratio, 0.0, 1.0);
-    params_.pruner.robot_radius =
-        std::max(0.01, params_.pruner.robot_radius);
-    params_.pruner.footprint_padding =
-        std::max(0.0, params_.pruner.footprint_padding);
     params_.pruner.footprint_cost_threshold =
         std::clamp(params_.pruner.footprint_cost_threshold, 1, 255);
-    params_.pruner.sensor_range_m = std::max(0.0, params_.pruner.sensor_range_m);
+    if (!std::isfinite(params_.pruner.information_gain_sensor_range_m) ||
+        !std::isfinite(params_.pruner.minimum_information_gain_m2) ||
+        !std::isfinite(params_.scorer.weights.information_gain_saturation_area_m2) ||
+        !std::isfinite(params_.scorer.weights.weight_information_gain))
+    {
+        throw std::invalid_argument("Information Gain 参数必须是有限数值");
+    }
+    if (params_.pruner.enable_information_gain &&
+        params_.pruner.information_gain_sensor_range_m <= 0.0)
+    {
+        throw std::invalid_argument("启用 Information Gain 时 sensor_range_m 必须大于 0");
+    }
+    params_.pruner.information_gain_sensor_range_m = std::max(
+        0.0, params_.pruner.information_gain_sensor_range_m);
+    params_.pruner.minimum_information_gain_m2 = std::max(
+        0.0, params_.pruner.minimum_information_gain_m2);
+    params_.scorer.weights.information_gain_saturation_area_m2 = std::max(
+        1e-6, params_.scorer.weights.information_gain_saturation_area_m2);
+    params_.scorer.weights.weight_information_gain = std::max(
+        0.0, params_.scorer.weights.weight_information_gain);
     params_.pruner.viewpoint_angle_step_deg = std::clamp(
         params_.pruner.viewpoint_angle_step_deg, 0.1, 360.0);
-    params_.pruner.information_gain_ray_step_cells = std::max(
-        0.1, params_.pruner.information_gain_ray_step_cells);
+    params_.map_adaptation.obstacle_clearance_m = std::max(
+        0.0, params_.map_adaptation.obstacle_clearance_m);
+    params_.map_adaptation.min_frontier_length_m = std::max(
+        0.0, params_.map_adaptation.min_frontier_length_m);
+    params_.map_adaptation.small_frontier_length_m = std::max(
+        params_.map_adaptation.min_frontier_length_m,
+        params_.map_adaptation.small_frontier_length_m);
+    params_.map_adaptation.candidate_unknown_margin_m = std::max(
+        0.0, params_.map_adaptation.candidate_unknown_margin_m);
+    params_.map_adaptation.candidate_goal_inset_m = std::max(
+        0.0, params_.map_adaptation.candidate_goal_inset_m);
+    params_.map_adaptation.cleanup_goal_inset_m = std::max(
+        0.0, params_.map_adaptation.cleanup_goal_inset_m);
     params_.pruner.viewpoint_retreat_distances_m.erase(
         std::remove_if(
             params_.pruner.viewpoint_retreat_distances_m.begin(),
@@ -349,7 +406,17 @@ void FrontierStrategyNode::apply_params()
         params_.pruner.min_cluster_size + 1U,
         params_.selection.small_cluster_size_threshold);
 
-    goal_provider_.configure(params_);
+    robot_geometry_provider_ = adapters::makeRobotGeometryProvider(robot_geometry_params_);
+    goal_provider_.configure(params_, robot_geometry_provider_);
+    const auto geometry = robot_geometry_provider_->collisionEnvelope();
+    RCLCPP_INFO(
+        this->get_logger(),
+        "机器人几何已加载：source=%s frame=%s revision=%llu radius=%.3f points=%zu",
+        geometry.source.c_str(),
+        geometry.frame_id.c_str(),
+        static_cast<unsigned long long>(geometry.revision),
+        geometry.circumscribed_radius,
+        geometry.footprint.points.size());
 }
 
 void FrontierStrategyNode::create_interfaces()

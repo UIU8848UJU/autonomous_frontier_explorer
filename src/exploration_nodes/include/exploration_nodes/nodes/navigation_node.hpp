@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -8,7 +9,6 @@
 #include <vector>
 
 #include "grid_map_ros/costmap_adapter.hpp"
-#include "navigation_core/footprint_goal_validator.hpp"
 #include "navigation_core/path_safety_checker.hpp"
 #include "navigation_core/single_goal_gate.hpp"
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
@@ -20,6 +20,7 @@
 #include "robot_interfaces/action/navigate_to_pose.hpp"
 #include "robot_interfaces/srv/check_goal_feasibility.hpp"
 #include "robot_interfaces/srv/check_pose_reachability.hpp"
+#include "robot_geometry_core/robot_geometry_provider.hpp"
 #include "std_msgs/msg/string.hpp"
 
 namespace exploration
@@ -138,8 +139,12 @@ private:
 private:
     rclcpp::Logger logger_;
     grid_map_ros::CostmapAdapter footprint_costmap_;
-    navigation::navigation_core::FootprintGoalValidator footprint_validator_;
     navigation::navigation_core::PathSafetyChecker path_safety_checker_;
+    std::shared_ptr<const robot_geometry_core::IRobotGeometryProvider>
+        robot_geometry_provider_;
+    bool footprint_collision_check_enabled_{true};
+    bool allow_unknown_footprint_{false};
+    std::int8_t footprint_occupied_threshold_{51};
     std::string nav2_action_name_;
     std::string compute_path_action_name_;
     std::string default_planner_id_;

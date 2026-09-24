@@ -7,11 +7,13 @@ namespace frontier_strategy
 {
 namespace
 {
-constexpr double kUsefulUnknownRatio = 0.35;
-constexpr double kClusterSizeSaturationCells = 40.0;
-constexpr double kMinimumClusterContribution = 0.25;
 constexpr double kInsetGoalPenalty = 0.95;
 constexpr double kFallbackGoalPenalty = 0.9;
+}
+
+InformationGainScore::InformationGainScore(double saturation_area_m2)
+: saturation_area_m2_(std::max(1e-6, saturation_area_m2))
+{
 }
 
 double InformationGainScore::score(const FrontierCandidate & candidate) const
@@ -20,37 +22,12 @@ double InformationGainScore::score(const FrontierCandidate & candidate) const
         return 0.0;
     }
 
-    // 新路径优先使用观测位姿的射线可见性结果；旧调用方没有地图时仍保留
-    // 原有方窗估计，避免纯 Core 使用者因未配置传感器参数而突然失去排序能力。
-    if (candidate.information_gain_valid) {
-        const double visible_gain = 1.0 - std::exp(
-            -candidate.information_gain / kClusterSizeSaturationCells);
-        double quality_factor = 1.0;
-        if (candidate.used_fallback) {
-            quality_factor *= kFallbackGoalPenalty;
-        }
-        if (candidate.goal_inset_applied) {
-            quality_factor *= kInsetGoalPenalty;
-        }
-        return std::clamp(visible_gain * quality_factor, 0.0, 1.0);
-    }
-
-    const double unknown_density = std::clamp(
-        candidate.unknown_ratio / kUsefulUnknownRatio,
-        0.0,
-        1.0);
-    if (unknown_density <= 0.0) {
+    if (!candidate.information_gain_valid || candidate.information_gain <= 0.0) {
         return 0.0;
     }
 
-    const double cluster_size = static_cast<double>(candidate.cluster_size);
-    const double cluster_gain = 1.0 - std::exp(
-        -cluster_size / kClusterSizeSaturationCells);
-    const double cluster_factor = std::clamp(
-        kMinimumClusterContribution +
-        (1.0 - kMinimumClusterContribution) * cluster_gain,
-        0.0,
-        1.0);
+    const double visible_gain = 1.0 - std::exp(
+        -candidate.information_gain / saturation_area_m2_);
 
     double quality_factor = 1.0;
     if (candidate.used_fallback) {
@@ -60,7 +37,7 @@ double InformationGainScore::score(const FrontierCandidate & candidate) const
         quality_factor *= kInsetGoalPenalty;
     }
 
-    return std::clamp(unknown_density * cluster_factor * quality_factor, 0.0, 1.0);
+    return std::clamp(visible_gain * quality_factor, 0.0, 1.0);
 }
 
 }  // namespace frontier_strategy

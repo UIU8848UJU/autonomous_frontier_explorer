@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "frontier_strategy_core/information_gain/information_gain_estimator.hpp"
 #include "frontier_strategy_core/selector/candidates/frontier_decision_types.hpp"
 #include "frontier_strategy_core/types/frontier_types.hpp"
 #include "grid_map_core/types/grid_map.hpp"
@@ -35,18 +36,6 @@ struct FrontierPruningEnvironment
     std::function<std::optional<double>(const GridCell &)> clearance_query;
 };
 
-/// @brief 用二维射线估算候选观测位姿能够触达的未知栅格数量。
-///
-/// 射线从已知自由候选点出发，遇到地图外或障碍停止；未知栅格只计一次，
-/// 这样同一未知区域不会因为多条射线重叠而被重复夸大。该函数只依赖地图，
-/// 不引入传感器、ROS 或 Nav2 类型。
-std::size_t estimate_visible_unknown_cells(
-    const grid_map_core::GridMap & map,
-    const GridCell & viewpoint,
-    double sensor_range_m,
-    double ray_step_cells,
-    double angle_step_deg);
-
 /// @brief 不依赖 ROS 的 Frontier 硬过滤器，负责候选生成、地图约束和回退处理。
 class FrontierPruner
 {
@@ -62,9 +51,8 @@ public:
         std::vector<double> retreat_distances_m = {0.25, 0.4},
         std::vector<double> sample_radii_m = {0.35, 0.55},
         double viewpoint_angle_step_deg = 30.0,
-        double sensor_range_m = 0.0,
-        double information_gain_ray_step_cells = 1.0,
-        std::size_t minimum_visible_unknown_cells = 0U);
+        double information_gain_sensor_range_m = 0.0,
+        double minimum_information_gain_m2 = 0.0);
 
     std::vector<FrontierCandidate> prune_clusters(
         const std::vector<FrontierCluster> & clusters,
@@ -117,9 +105,8 @@ private:
     std::vector<double> retreat_distances_m_;
     std::vector<double> sample_radii_m_;
     double viewpoint_angle_step_deg_{30.0};
-    double sensor_range_m_{0.0};
-    double information_gain_ray_step_cells_{1.0};
-    std::size_t minimum_visible_unknown_cells_{0U};
+    InformationGainEstimator information_gain_estimator_;
+    double minimum_information_gain_m2_{0.0};
 };
 
 }  // namespace frontier_strategy

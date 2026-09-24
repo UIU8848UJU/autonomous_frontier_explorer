@@ -1,11 +1,13 @@
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 #include "grid_map_ros/costmap_adapter.hpp"
 #include "frontier_strategy_core/detector/frontier_detector.hpp"
+#include "frontier_strategy_ros/adaptation/frontier_map_parameter_adapter.hpp"
 #include "frontier_strategy_ros/frontier_goal_provider.hpp"
 #include "frontier_strategy_ros/reachability/frontier_reachability_checker.hpp"
 #include "frontier_strategy_core/scoring/frontier_scorer.hpp"
@@ -52,6 +54,28 @@ CostmapAdapter make_costmap(const nav_msgs::msg::OccupancyGrid & grid)
     return adapter;
 }
 
+std::shared_ptr<const robot_geometry_core::IRobotGeometryProvider>
+make_robot_geometry_provider()
+{
+    return std::make_shared<robot_geometry_core::StaticRobotGeometryProvider>(
+        robot_geometry_core::makeCircularCollisionEnvelope(
+            0.1, 0.0, "base_link", "test", 1U));
+}
+
+class CountingRobotGeometryProvider final :
+    public robot_geometry_core::IRobotGeometryProvider
+{
+public:
+    robot_geometry_core::RobotCollisionEnvelope collisionEnvelope() const override
+    {
+        ++snapshot_calls;
+        return robot_geometry_core::makeCircularCollisionEnvelope(
+            0.1, 0.0, "base_link", "counting_test", 1U);
+    }
+
+    mutable std::size_t snapshot_calls{0U};
+};
+
 FrontierCluster make_cluster(const std::vector<GridCell> & cells, GridCell centroid)
 {
     FrontierCluster cluster;
@@ -65,7 +89,89 @@ bool contains_cell(const std::vector<GridCell> & cells, const GridCell & target)
     return std::find(cells.begin(), cells.end(), target) != cells.end();
 }
 
+FrontierCandidatesResult compute_candidates(
+    const nav_msgs::msg::OccupancyGrid & grid,
+    const FrontierStrategyParams & params)
+{
+    FrontierGoalProvider provider(rclcpp::get_logger("frontier_goal_provider_parameter_test"));
+    provider.configure(params, make_robot_geometry_provider());
+    auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>(grid);
+    EXPECT_TRUE(provider.update_map(map, rclcpp::Time(1, 0)));
+
+    geometry_msgs::msg::PoseStamped pose;
+    pose.header.frame_id = "map";
+    pose.pose.position.x = 1.5;
+    pose.pose.position.y = 1.5;
+    provider.update_robot_pose(pose);
+    return provider.compute_frontier_candidates(rclcpp::Time(2, 0));
+}
+
 }  // 命名空间
+
+TEST(FrontierMapParameterAdapterTest, ConvertsMetricParametersUsingMapResolution)
+{
+    FrontierStrategyParams params;
+    params.runtime.obstacle_search_radius_cells = 9;
+    params.runtime.min_frontier_cluster_size = 9;
+    params.selection.small_cluster_size_threshold = 9U;
+    params.pruner.candidate_unknown_margin_cells = 9;
+    params.pruner.candidate_goal_inset_cells = 9;
+    params.pruner.cleanup_goal_inset_cells = 9;
+    params.map_adaptation.enabled = true;
+    params.map_adaptation.obstacle_clearance_m = 0.05;
+    params.map_adaptation.min_frontier_length_m = 0.10;
+    params.map_adaptation.small_frontier_length_m = 0.25;
+    params.map_adaptation.candidate_unknown_margin_m = 0.10;
+    params.map_adaptation.candidate_goal_inset_m = 0.15;
+    params.map_adaptation.cleanup_goal_inset_m = 0.0;
+
+    const auto adapted = adapt_strategy_params_to_map_resolution(params, 0.05);
+
+    EXPECT_EQ(adapted.runtime.obstacle_search_radius_cells, 1);
+    EXPECT_EQ(adapted.runtime.min_frontier_cluster_size, 2);
+    EXPECT_EQ(adapted.selection.small_cluster_size_threshold, 5U);
+    EXPECT_EQ(adapted.pruner.candidate_unknown_margin_cells, 2);
+    EXPECT_EQ(adapted.pruner.candidate_goal_inset_cells, 3);
+    EXPECT_EQ(adapted.pruner.cleanup_goal_inset_cells, 0);
+    EXPECT_EQ(adapted.pruner.min_cluster_size, 2U);
+
+    const auto coarser_map = adapt_strategy_params_to_map_resolution(params, 0.10);
+    EXPECT_EQ(coarser_map.runtime.obstacle_search_radius_cells, 1);
+    EXPECT_EQ(coarser_map.runtime.min_frontier_cluster_size, 1);
+    EXPECT_EQ(coarser_map.selection.small_cluster_size_threshold, 3U);
+    EXPECT_EQ(coarser_map.pruner.candidate_unknown_margin_cells, 1);
+    EXPECT_EQ(coarser_map.pruner.candidate_goal_inset_cells, 2);
+}
+
+TEST(FrontierMapParameterAdapterTest, KeepsCellParametersWhenAdaptationIsDisabled)
+{
+    FrontierStrategyParams params;
+    params.map_adaptation.enabled = false;
+    params.runtime.obstacle_search_radius_cells = 4;
+    params.runtime.min_frontier_cluster_size = 6;
+    params.pruner.min_cluster_size = 6U;
+    params.pruner.candidate_goal_inset_cells = 7;
+
+    const auto adapted = adapt_strategy_params_to_map_resolution(params, 0.05);
+
+    EXPECT_EQ(adapted.runtime.obstacle_search_radius_cells, 4);
+    EXPECT_EQ(adapted.runtime.min_frontier_cluster_size, 6);
+    EXPECT_EQ(adapted.pruner.min_cluster_size, 6U);
+    EXPECT_EQ(adapted.pruner.candidate_goal_inset_cells, 7);
+}
+
+TEST(FrontierMapParameterAdapterTest, KeepsCellParametersForInvalidResolution)
+{
+    FrontierStrategyParams params;
+    params.map_adaptation.enabled = true;
+    params.runtime.obstacle_search_radius_cells = 3;
+    params.pruner.candidate_unknown_margin_cells = 4;
+
+    const auto adapted = adapt_strategy_params_to_map_resolution(params, 0.0);
+
+    EXPECT_EQ(adapted.runtime.obstacle_search_radius_cells, 3);
+    EXPECT_EQ(adapted.pruner.candidate_unknown_margin_cells, 4);
+}
 
 TEST(CostmapAdapterTest, ConvertsOccupancyGridAndCoordinates)
 {
@@ -308,9 +414,11 @@ TEST(FrontierGoalProviderTest, RunsMapDetectorAndSelectorPath)
 
     FrontierGoalProvider provider(rclcpp::get_logger("frontier_goal_provider_test"));
     auto params = FrontierStrategyParams{};
+    params.map_adaptation.enabled = false;
     params.runtime.obstacle_search_radius_cells = 0;
     params.runtime.enable_reachability_filter = false;
-    provider.configure(params);
+    const auto geometry_provider = std::make_shared<CountingRobotGeometryProvider>();
+    provider.configure(params, geometry_provider);
 
     auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>(grid);
     ASSERT_TRUE(provider.update_map(map, rclcpp::Time(1, 0)));
@@ -328,6 +436,110 @@ TEST(FrontierGoalProviderTest, RunsMapDetectorAndSelectorPath)
     EXPECT_GT(result.raw_frontier_count, 0U);
     EXPECT_GT(result.candidate_count, 0U);
     EXPECT_FALSE(result.candidates.empty());
+    EXPECT_GT(geometry_provider->snapshot_calls, 0U);
+
+    bool saw_positive_gain = false;
+    for (const auto & message_candidate : result.candidates) {
+        const auto core_candidate = std::find_if(
+            result.visualization.scored_candidates.begin(),
+            result.visualization.scored_candidates.end(),
+            [&message_candidate](const ScoredFrontierCandidate & candidate) {
+                return candidate.candidate.goal.row == message_candidate.goal_row &&
+                       candidate.candidate.goal.col == message_candidate.goal_col;
+            });
+        ASSERT_NE(core_candidate, result.visualization.scored_candidates.end());
+        EXPECT_EQ(
+            message_candidate.information_gain_valid,
+            core_candidate->candidate.information_gain_valid);
+        EXPECT_NEAR(
+            message_candidate.information_gain,
+            core_candidate->candidate.information_gain,
+            1e-6);
+        saw_positive_gain |= message_candidate.information_gain_valid &&
+            message_candidate.information_gain > 0.0F;
+    }
+    EXPECT_TRUE(saw_positive_gain);
+}
+
+TEST(FrontierGoalProviderTest, AppliesAllInformationGainParametersToProductionPath)
+{
+    auto grid = make_filled_grid(10, 10, 1.0F, 0);
+    grid.data[5U * 10U + 5U] = -1;
+    grid.header.frame_id = "map";
+
+    auto base = FrontierStrategyParams{};
+    base.map_adaptation.enabled = false;
+    base.runtime.obstacle_search_radius_cells = 0;
+    base.runtime.enable_reachability_filter = false;
+    base.pruner.minimum_information_gain_m2 = 0.0;
+
+    auto disabled = base;
+    disabled.pruner.enable_information_gain = false;
+    const auto disabled_result = compute_candidates(grid, disabled);
+    ASSERT_FALSE(disabled_result.candidates.empty());
+    EXPECT_TRUE(std::all_of(
+        disabled_result.candidates.begin(),
+        disabled_result.candidates.end(),
+        [](const auto & candidate) {
+            return !candidate.information_gain_valid && candidate.information_gain == 0.0F;
+        }));
+
+    auto short_range = base;
+    short_range.pruner.enable_information_gain = true;
+    short_range.pruner.information_gain_sensor_range_m = 0.5;
+    const auto short_range_result = compute_candidates(grid, short_range);
+    ASSERT_FALSE(short_range_result.candidates.empty());
+    EXPECT_TRUE(std::all_of(
+        short_range_result.candidates.begin(),
+        short_range_result.candidates.end(),
+        [](const auto & candidate) {
+            return candidate.information_gain_valid && candidate.information_gain == 0.0F;
+        }));
+
+    auto zero_weight = base;
+    zero_weight.pruner.information_gain_sensor_range_m = 3.0;
+    zero_weight.scorer.weights.weight_information_gain = 0.0;
+    const auto zero_weight_result = compute_candidates(grid, zero_weight);
+    ASSERT_FALSE(zero_weight_result.candidates.empty());
+
+    auto weighted = zero_weight;
+    weighted.scorer.weights.weight_information_gain = 1.0;
+    weighted.scorer.weights.information_gain_saturation_area_m2 = 1.0;
+    const auto weighted_result = compute_candidates(grid, weighted);
+    ASSERT_FALSE(weighted_result.candidates.empty());
+
+    const auto weighted_candidate = std::find_if(
+        weighted_result.candidates.begin(),
+        weighted_result.candidates.end(),
+        [](const auto & candidate) {return candidate.information_gain > 0.0F;});
+    ASSERT_NE(weighted_candidate, weighted_result.candidates.end());
+    const auto zero_weight_candidate = std::find_if(
+        zero_weight_result.candidates.begin(),
+        zero_weight_result.candidates.end(),
+        [&weighted_candidate](const auto & candidate) {
+            return candidate.goal_row == weighted_candidate->goal_row &&
+                   candidate.goal_col == weighted_candidate->goal_col;
+        });
+    ASSERT_NE(zero_weight_candidate, zero_weight_result.candidates.end());
+    EXPECT_GT(weighted_candidate->score, zero_weight_candidate->score);
+
+    auto faster_saturation = weighted;
+    faster_saturation.scorer.weights.information_gain_saturation_area_m2 = 0.1;
+    const auto faster_saturation_result = compute_candidates(grid, faster_saturation);
+    const auto faster_candidate = std::find_if(
+        faster_saturation_result.candidates.begin(),
+        faster_saturation_result.candidates.end(),
+        [&weighted_candidate](const auto & candidate) {
+            return candidate.goal_row == weighted_candidate->goal_row &&
+                   candidate.goal_col == weighted_candidate->goal_col;
+        });
+    ASSERT_NE(faster_candidate, faster_saturation_result.candidates.end());
+    EXPECT_GT(faster_candidate->score, weighted_candidate->score);
+
+    auto hard_minimum = weighted;
+    hard_minimum.pruner.minimum_information_gain_m2 = 1000.0;
+    const auto hard_minimum_result = compute_candidates(grid, hard_minimum);
+    EXPECT_TRUE(hard_minimum_result.candidates.empty());
 }
 
 TEST(FrontierGoalProviderTest, RequiresStableNoFrontierCyclesBeforeCompletion)
@@ -337,10 +549,11 @@ TEST(FrontierGoalProviderTest, RequiresStableNoFrontierCyclesBeforeCompletion)
 
     FrontierGoalProvider provider(rclcpp::get_logger("frontier_goal_provider_stable_test"));
     auto params = FrontierStrategyParams{};
+    params.map_adaptation.enabled = false;
     params.runtime.obstacle_search_radius_cells = 0;
     params.runtime.enable_reachability_filter = false;
     params.runtime.stable_no_frontier_cycles = 3;
-    provider.configure(params);
+    provider.configure(params, make_robot_geometry_provider());
 
     auto map = std::make_shared<nav_msgs::msg::OccupancyGrid>(grid);
     ASSERT_TRUE(provider.update_map(map, rclcpp::Time(1, 0)));

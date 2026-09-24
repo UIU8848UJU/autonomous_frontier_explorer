@@ -90,7 +90,7 @@ struct FrontierCandidate
     bool reachable{true};
     double path_length_m{0.0};
     std::string reachability_reason;
-    // 由候选观测位姿发出的二维射线预计能看到的未知栅格数。
+    // 候选观测位姿在传感器量程与障碍遮挡约束下可见的未知面积，单位 m²。
     double information_gain{0.0};
     // true 表示本轮已完成射线估计；估计值为零时也必须保留零分，而不是退回旧估计。
     bool information_gain_valid{false};

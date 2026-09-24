@@ -12,6 +12,7 @@ float32 score
 float32 distance_m
 float32 clearance_m
 float32 unknown_ratio
+# 候选位姿可见的未知地图面积，单位 m²。
 float32 information_gain
 bool information_gain_valid
 bool used_fallback

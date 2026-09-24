@@ -5,16 +5,17 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
-#include <limits>
+#include <stdexcept>
 #include <utility>
 
+#include "frontier_strategy_ros/adaptation/frontier_map_parameter_adapter.hpp"
 #include "frontier_strategy_ros/geometry/footprint_collision_checker.hpp"
 
 namespace frontier_strategy
 {
 namespace
 {
-constexpr double kEpsilon = 1e-6;
+constexpr double kResolutionComparisonEpsilon = 1e-9;
 constexpr uint16_t kReasonOk = 0U;
 constexpr uint16_t kReasonWaitingForMap = 1U;
 constexpr uint16_t kReasonWaitingForRobotPose = 2U;
@@ -64,14 +65,16 @@ FrontierStrategyPolicyConfig make_policy_config(const FrontierStrategyParams & p
     config.cleanup_trigger_only_small_clusters =
         params.runtime.cleanup_trigger_only_small_clusters;
     config.cleanup_max_unknown_ratio = params.pruner.cleanup_candidate_max_unknown_ratio;
-    config.sensor_range_m = params.pruner.sensor_range_m;
+    config.information_gain_sensor_range_m = params.pruner.enable_information_gain ?
+        params.pruner.information_gain_sensor_range_m : 0.0;
     config.viewpoint_retreat_distances_m = params.pruner.viewpoint_retreat_distances_m;
     config.viewpoint_sample_radii_m = params.pruner.viewpoint_sample_radii_m;
     config.viewpoint_angle_step_deg = params.pruner.viewpoint_angle_step_deg;
-    config.information_gain_ray_step_cells = params.pruner.information_gain_ray_step_cells;
-    config.minimum_visible_unknown_cells = params.pruner.minimum_visible_unknown_cells;
+    config.minimum_information_gain_m2 = params.pruner.minimum_information_gain_m2;
     config.require_reachable_goal = params.runtime.require_reachable_goal;
     config.scoring_weights = params.scorer.weights;
+    config.scoring_weights.enable_information_gain_score =
+        params.pruner.enable_information_gain;
     return config;
 }
 
@@ -105,29 +108,6 @@ geometry_msgs::msg::Quaternion orientation_toward_centroid(
     return quaternion_from_yaw(std::atan2(centroid_y - goal_y, centroid_x - goal_x));
 }
 
-double distance_to_map_edge_m(
-    const nav_msgs::msg::OccupancyGrid & map,
-    const GridCell & cell)
-{
-    if (map.info.width == 0 || map.info.height == 0) {
-        return std::numeric_limits<double>::infinity();
-    }
-
-    const int max_row = static_cast<int>(map.info.height) - 1;
-    const int max_col = static_cast<int>(map.info.width) - 1;
-
-    const int dist_top = std::max(0, cell.row);
-    const int dist_bottom = std::max(0, max_row - cell.row);
-    const int dist_left = std::max(0, cell.col);
-    const int dist_right = std::max(0, max_col - cell.col);
-
-    const int min_cells = std::min(std::min(dist_top, dist_bottom), std::min(dist_left, dist_right));
-    if (min_cells < 0) {
-        return 0.0;
-    }
-
-    return static_cast<double>(min_cells) * map.info.resolution;
-}
 }  // 命名空间
 
 FrontierGoalProvider::FrontierGoalProvider(
@@ -141,10 +121,59 @@ FrontierGoalProvider::FrontierGoalProvider(
 {
 }
 
-void FrontierGoalProvider::configure(const FrontierStrategyParams & params)
+void FrontierGoalProvider::configure(
+    const FrontierStrategyParams & params,
+    std::shared_ptr<const robot_geometry_core::IRobotGeometryProvider>
+    robot_geometry_provider)
 {
-    params_ = params;
+    if (!robot_geometry_provider) {
+        throw std::invalid_argument("robot geometry provider must not be null");
+    }
+    robot_geometry_provider_ = std::move(robot_geometry_provider);
+    base_params_ = params;
+    params_ = base_params_;
+    policy_map_resolution_.reset();
+    if (map_costmap_.isReady()) {
+        params_ = adapt_strategy_params_to_map_resolution(
+            base_params_, map_costmap_.getResolution());
+        policy_map_resolution_ = map_costmap_.getResolution();
+    }
     policy_ = FrontierStrategyPolicy(make_policy_config(params_), ranker_);
+}
+
+void FrontierGoalProvider::refresh_policy_for_map_resolution(double map_resolution)
+{
+    if (!std::isfinite(map_resolution) || map_resolution <= 0.0) {
+        return;
+    }
+    if (policy_map_resolution_.has_value() &&
+        std::abs(policy_map_resolution_.value() - map_resolution) <=
+        kResolutionComparisonEpsilon)
+    {
+        return;
+    }
+
+    const bool resolution_changed = policy_map_resolution_.has_value();
+    params_ = adapt_strategy_params_to_map_resolution(base_params_, map_resolution);
+    policy_ = FrontierStrategyPolicy(make_policy_config(params_), ranker_);
+    policy_map_resolution_ = map_resolution;
+
+    if (resolution_changed) {
+        RCLCPP_WARN(
+            logger_,
+            "地图分辨率发生变化，已重建 frontier 策略并清空旧地图上的重试状态");
+    }
+    RCLCPP_INFO(
+        logger_,
+        "Frontier 参数已适配地图：resolution=%.4f obstacle_radius=%d "
+        "min_cluster=%d small_cluster=%zu unknown_margin=%d goal_inset=%d cleanup_inset=%d",
+        map_resolution,
+        params_.runtime.obstacle_search_radius_cells,
+        params_.runtime.min_frontier_cluster_size,
+        params_.selection.small_cluster_size_threshold,
+        params_.pruner.candidate_unknown_margin_cells,
+        params_.pruner.candidate_goal_inset_cells,
+        params_.pruner.cleanup_goal_inset_cells);
 }
 
 bool FrontierGoalProvider::update_map(
@@ -158,6 +187,7 @@ bool FrontierGoalProvider::update_map(
     map_msg_ = msg;
     const bool updated = map_costmap_.updateFromOccupancyGrid(*msg);
     if (updated) {
+        refresh_policy_for_map_resolution(msg->info.resolution);
         const auto fingerprint = map_fingerprint(*msg);
         if (!has_map_fingerprint_ || fingerprint != map_fingerprint_) {
             map_fingerprint_ = fingerprint;
@@ -228,24 +258,23 @@ bool FrontierGoalProvider::update_robot_grid_position()
     return true;
 }
 
-bool FrontierGoalProvider::near_map_edge(const GridCell & cell, double tolerance_m) const
-{
-    if (!map_msg_ || tolerance_m <= kEpsilon) {
-        return false;
-    }
-
-    const double distance = distance_to_map_edge_m(*map_msg_, cell);
-    return std::isfinite(distance) && distance <= tolerance_m;
-}
-
 FrontierPruningEnvironment FrontierGoalProvider::make_pruning_environment(
     const CostmapAdapter & frontier_costmap,
     const CostmapAdapter * safety_costmap) const
 {
     FrontierPruningEnvironment environment;
+    robot_geometry_core::Footprint coarse_footprint;
+    if (robot_geometry_provider_) {
+        const auto geometry = robot_geometry_provider_->collisionEnvelope();
+        coarse_footprint = robot_geometry_core::makeConservativeCircularFootprint(
+            geometry.circumscribed_radius);
+    }
+    const auto coarse_ros_footprint =
+        FootprintCollisionChecker::toRosFootprint(coarse_footprint);
     environment.frontier_map = &frontier_costmap.gridMap();
     environment.safety_check =
-        [this, &frontier_costmap, safety_costmap](const GridCell & cell) {
+        [this, &frontier_costmap, safety_costmap, coarse_ros_footprint](
+        const GridCell & cell) {
             if (safety_costmap == nullptr || !safety_costmap->isReady()) {
                 return true;
             }
@@ -275,9 +304,7 @@ FrontierPruningEnvironment FrontierGoalProvider::make_pruning_environment(
             footprint_config.allow_unknown = params_.pruner.allow_unknown_footprint;
             footprint_config.cost_threshold = static_cast<unsigned char>(std::clamp(
                 params_.pruner.footprint_cost_threshold, 1, 255));
-            footprint_config.footprint = FootprintCollisionChecker::makeCircularFootprint(
-                params_.pruner.robot_radius,
-                params_.pruner.footprint_padding);
+            footprint_config.footprint = coarse_ros_footprint;
             const auto footprint_result = FootprintCollisionChecker::checkWorldPoint(
                 *safety_costmap,
                 world_x,

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(frontier_strategy_core VERSION 0.0.5 LANGUAGES CXX)
+project(frontier_strategy_core VERSION 0.0.6 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -19,6 +19,7 @@ find_package(exploration_core CONFIG REQUIRED)
 # 检测、评分、筛选和策略仍按目录与类分层，但保持一个稳定的库边界。
 add_library(frontier_strategy_core SHARED
   src/detector/frontier_detector.cpp
+  src/information_gain/information_gain_estimator.cpp
   src/scoring/frontier_ranker.cpp
   src/scoring/frontier_scorer.cpp
   src/scoring/components/clearance_score.cpp

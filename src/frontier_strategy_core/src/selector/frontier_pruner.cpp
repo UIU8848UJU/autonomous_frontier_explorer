@@ -4,7 +4,6 @@
 #include <array>
 #include <cmath>
 #include <limits>
-#include <unordered_set>
 #include <utility>
 
 #include "frontier_strategy_core/utils/frontier_selector_utils.hpp"
@@ -17,65 +16,6 @@ constexpr double kPi = 3.14159265358979323846;
 constexpr double kDegreesToRadians = kPi / 180.0;
 }  // 命名空间
 
-std::size_t estimate_visible_unknown_cells(
-    const grid_map_core::GridMap & map,
-    const GridCell & viewpoint,
-    double sensor_range_m,
-    double ray_step_cells,
-    double angle_step_deg)
-{
-    if (!map.isReady() || !map.inBounds(viewpoint.col, viewpoint.row) ||
-        !map.isFree(
-            static_cast<unsigned int>(viewpoint.col),
-            static_cast<unsigned int>(viewpoint.row)) ||
-        sensor_range_m <= 0.0 || ray_step_cells <= 0.0 || angle_step_deg <= 0.0)
-    {
-        return 0U;
-    }
-
-    const int ray_count = static_cast<int>(std::ceil(360.0 / angle_step_deg));
-    const int step_count = static_cast<int>(std::ceil(
-        sensor_range_m / (ray_step_cells * map.resolution)));
-    std::unordered_set<GridCell, GridCellHash> visible_unknown;
-    double viewpoint_x = 0.0;
-    double viewpoint_y = 0.0;
-    if (!map.mapToWorld(viewpoint, viewpoint_x, viewpoint_y)) {
-        return 0U;
-    }
-
-    for (int ray_index = 0; ray_index < ray_count; ++ray_index) {
-        const double angle =
-            static_cast<double>(ray_index) * angle_step_deg * kDegreesToRadians;
-        const double direction_x = std::cos(angle);
-        const double direction_y = std::sin(angle);
-        for (int step = 1; step <= step_count; ++step) {
-            GridCell cell;
-            const double distance_m =
-                static_cast<double>(step) * ray_step_cells * map.resolution;
-            if (!map.worldToMap(
-                    viewpoint_x + direction_x * distance_m,
-                    viewpoint_y + direction_y * distance_m,
-                    cell))
-            {
-                break;
-            }
-            if (map.isObstacle(
-                    static_cast<unsigned int>(cell.col),
-                    static_cast<unsigned int>(cell.row)))
-            {
-                break;
-            }
-            if (map.isUnknown(
-                    static_cast<unsigned int>(cell.col),
-                    static_cast<unsigned int>(cell.row)))
-            {
-                visible_unknown.insert(cell);
-            }
-        }
-    }
-    return visible_unknown.size();
-}
-
 FrontierPruner::FrontierPruner(
     double min_goal_distance_m,
     int max_retry_count,
@@ -87,9 +27,8 @@ FrontierPruner::FrontierPruner(
     std::vector<double> retreat_distances_m,
     std::vector<double> sample_radii_m,
     double viewpoint_angle_step_deg,
-    double sensor_range_m,
-    double information_gain_ray_step_cells,
-    std::size_t minimum_visible_unknown_cells)
+    double information_gain_sensor_range_m,
+    double minimum_information_gain_m2)
 : min_goal_distance_m_(min_goal_distance_m),
   max_retry_count_(max_retry_count),
   max_cluster_retry_count_(max_cluster_retry_count),
@@ -100,9 +39,8 @@ FrontierPruner::FrontierPruner(
   retreat_distances_m_(std::move(retreat_distances_m)),
   sample_radii_m_(std::move(sample_radii_m)),
   viewpoint_angle_step_deg_(std::clamp(viewpoint_angle_step_deg, 0.1, 360.0)),
-  sensor_range_m_(std::max(0.0, sensor_range_m)),
-  information_gain_ray_step_cells_(std::max(0.1, information_gain_ray_step_cells)),
-  minimum_visible_unknown_cells_(minimum_visible_unknown_cells)
+  information_gain_estimator_(information_gain_sensor_range_m),
+  minimum_information_gain_m2_(std::max(0.0, minimum_information_gain_m2))
 {
     retreat_distances_m_.erase(
         std::remove_if(
@@ -456,26 +394,27 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
                     }
                 }
 
-                const auto visible_unknown_cells = environment.frontier_map != nullptr ?
-                    estimate_visible_unknown_cells(
-                        *environment.frontier_map,
-                        candidate,
-                        sensor_range_m_,
-                        information_gain_ray_step_cells_,
-                        viewpoint_angle_step_deg_) : 0U;
-                if (environment.frontier_map != nullptr && sensor_range_m_ > 0.0 &&
-                    visible_unknown_cells < minimum_visible_unknown_cells_)
-                {
+                if (emitted_goals.count(candidate) > 0U) {
                     if (diagnostics != nullptr) {
-                        diagnostics->record_rejection(
-                            FrontierRejectionReason::INFORMATION_GAIN_TOO_LOW);
+                        diagnostics->record_rejection(FrontierRejectionReason::DUPLICATE_GOAL);
                     }
                     return false;
                 }
 
-                if (emitted_goals.count(candidate) > 0U) {
+                // 信息增益估计比普通门禁昂贵，必须放在重复候选检查之后。
+                const auto information_gain = environment.frontier_map != nullptr ?
+                    information_gain_estimator_.estimate(
+                        *environment.frontier_map,
+                        candidate) : InformationGainEstimate{};
+                const bool information_gain_required =
+                    information_gain_estimator_.enabled() && minimum_information_gain_m2_ > 0.0;
+                if ((information_gain_required && !information_gain.valid) ||
+                    (information_gain.valid &&
+                    information_gain.visible_unknown_area_m2 < minimum_information_gain_m2_))
+                {
                     if (diagnostics != nullptr) {
-                        diagnostics->record_rejection(FrontierRejectionReason::DUPLICATE_GOAL);
+                        diagnostics->record_rejection(
+                            FrontierRejectionReason::INFORMATION_GAIN_TOO_LOW);
                     }
                     return false;
                 }
@@ -496,10 +435,9 @@ std::vector<FrontierCandidate> FrontierPruner::prune_clusters(
                     true,
                     0.0,
                     {},
-                    static_cast<double>(visible_unknown_cells)
+                    information_gain.visible_unknown_area_m2,
+                    information_gain.valid
                 };
-                generated_candidate.information_gain_valid =
-                    environment.frontier_map != nullptr && sensor_range_m_ > 0.0;
                 valid_candidates.push_back(std::move(generated_candidate));
                 if (diagnostics != nullptr) {
                     ++diagnostics->generated_candidates;
